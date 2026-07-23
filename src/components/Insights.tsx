@@ -1,10 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, Clock, BookOpen, Headphones, MessageSquare, ImageIcon } from "lucide-react";
+import {
+  Star,
+  Clock,
+  BookOpen,
+  Headphones,
+  MessageSquare,
+  X,
+  Link2,
+  Play,
+  Pause,
+  ThumbsUp,
+  ArrowRight,
+  Eye,
+  Calendar,
+  User,
+  Copy,
+  Check,
+} from "lucide-react";
 
 type FilterKey = "all" | "featured" | "article" | "short" | "podcast";
+
+interface ContentBlock {
+  type: "paragraph" | "blockquote" | "code" | "heading" | "list";
+  text?: string;
+  items?: string[];
+  lang?: string;
+}
 
 interface InsightItem {
   id: number;
@@ -12,69 +36,276 @@ interface InsightItem {
   excerpt: string;
   image: string;
   type: FilterKey;
+  category: string;
   readTime?: string;
   listenTime?: string;
   isFeatured?: boolean;
+  date: string;
+  author: string;
+  views: string;
+  likes: number;
+  content: ContentBlock[];
 }
 
 const filters: { key: FilterKey; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "featured", label: "✦ 精选" },
   { key: "article", label: "图文长文" },
-  { key: "short", label: "核心短观点" },
+  { key: "short", label: "短观点" },
   { key: "podcast", label: "播客与音频" },
 ];
 
-const insights: InsightItem[] = [
+const insightsData: InsightItem[] = [
   {
     id: 1,
-    title: "AI 时代品牌叙事范式转移：从功能诉求到情感共生",
+    title: "从品牌战术到超级个体：AI 时代下 B2B 营销人的「第二曲线」",
     excerpt:
-      "当生成式 AI 让产品功能趋同，品牌如何通过叙事构建不可替代的情感护城河？本文深入解析 6 个先锋案例。",
-    image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&h=500&fit=crop",
+      "当 AI 工具爆发的当下，如何将传统品牌策略与自动化 Workflow 结合，重塑个人生产力，找到属于你的第二增长曲线。",
+    image:
+      "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1200&h=600&fit=crop",
     type: "article",
+    category: "✦ 深度长文",
     readTime: "5 min",
     isFeatured: true,
+    date: "2024.07.15",
+    author: "陈述中马 / 策略探索者",
+    views: "3,247",
+    likes: 186,
+    content: [
+      {
+        type: "paragraph",
+        text: "过去十年，B2B 营销人的核心能力是「信息差」——你知道客户不知道的渠道、工具和打法。但 AI 工具的爆发正在以前所未有的速度抹平这个差值。当你的客户也能用 ChatGPT 写出像样的品牌方案时，你的价值锚点在哪里？",
+      },
+      {
+        type: "blockquote",
+        text: "真正的壁垒不再是「知道什么」，而是「能把知道的东西系统化地执行出来」。",
+      },
+      {
+        type: "heading",
+        text: "第一曲线：品牌战术的存量价值",
+      },
+      {
+        type: "paragraph",
+        text: "传统品牌策略的核心是定位、视觉、传播三件套。这套体系不会失效，但它的边际收益正在递减。客户越来越不愿意为一份 PPT 付费，他们要的是「能落地的增长」。",
+      },
+      {
+        type: "heading",
+        text: "第二曲线：AI 工作流 + 超级个体",
+      },
+      {
+        type: "paragraph",
+        text: "我自己的实践路径是：把品牌策略的每个环节拆解成可自动化的 Workflow。竞品分析交给爬虫 Agent，内容初稿交给 LLM，数据监控交给自动化看板。人的精力聚焦在「判断」和「创意」这两个 AI 替代不了的环节。",
+      },
+      {
+        type: "code",
+        lang: "workflow",
+        text: "# 超级个体工作流示例\n竞品监控 Agent → 数据清洗 → 趋势分析 Agent\n    ↓\n内容生成 Agent → 人工审核 → 多平台分发\n    ↓\n效果追踪 Agent → ROI 报告 → 策略迭代",
+      },
+      {
+        type: "heading",
+        text: "落地建议",
+      },
+      {
+        type: "list",
+        items: [
+          "先选一个你最擅长的环节，用 AI 工具将其效率提升 3 倍以上",
+          "把节省的时间投入到客户关系和创意决策中，而非接更多项目",
+          "逐步搭建个人品牌资产，让「你」本身成为可被搜索到的品牌词",
+        ],
+      },
+      {
+        type: "blockquote",
+        text: "AI 不会取代营销人，但会用 AI 的营销人一定会取代不用的人。关键是：你愿意花多少时间把自己的工作流「拆解重装」？",
+      },
+    ],
   },
   {
     id: 2,
-    title: "短观点：硬件产品的「冷启动」需要热内容",
-    excerpt: "硬件创业不是技术竞赛，而是内容密度的较量。",
-    image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=300&fit=crop",
+    title: "为什么大部分「AI 硬件脑洞」都死在了伪需求与供应链？",
+    excerpt:
+      "从深圳硬件供应链视角与产品落地逻辑，拆解真正有价值的 AI 硬件切入点。不是加了 LLM 就是好产品。",
+    image:
+      "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&h=500&fit=crop",
     type: "short",
+    category: "短观点",
+    readTime: "2 min",
     isFeatured: true,
+    date: "2024.07.08",
+    author: "陈述中马 / 策略探索者",
+    views: "1,892",
+    likes: 143,
+    content: [
+      {
+        type: "paragraph",
+        text: "在深圳待了三年，见过太多 AI 硬件项目的起落。大部分「AI 硬件脑洞」的死法惊人地一致：PPT 阶段让人眼前一亮，打样阶段发现问题一堆，量产阶段供应链直接教你做人。",
+      },
+      {
+        type: "blockquote",
+        text: "AI 硬件的核心矛盾：软件可以快速迭代，但硬件一旦开模就是百万级的沉没成本。",
+      },
+      {
+        type: "heading",
+        text: "三种典型的伪需求",
+      },
+      {
+        type: "list",
+        items: [
+          "「加了语音助手的 XX」——如果没有解决交互效率问题，语音只是噱头",
+          "「AI 儿童/老人陪伴机器人」——情感需求很难被机器满足，复购率极低",
+          "「AI + 某个小家电」——用户只为功能付费，不为 AI 溢价买单",
+        ],
+      },
+      {
+        type: "heading",
+        text: "真正有价值的切入点",
+      },
+      {
+        type: "paragraph",
+        text: "好的 AI 硬件应该是「减少决策」而非「增加功能」。比如：能自动识别食材并推荐菜谱的智能秤，能根据睡眠数据自动调节温度的温控器。核心逻辑是——让 AI 在后台工作，用户感受到的是「更省心」而非「更智能」。",
+      },
+    ],
   },
   {
     id: 3,
-    title: "播客 EP.12 | 和硬件创业者聊聊 AI 产品的灵魂",
-    excerpt: "收听时长 32 分钟",
-    image: "https://images.unsplash.com/photo-1478737270239-2f02b77ac6d5?w=400&h=300&fit=crop",
+    title: "[Podcast Ep.04] 聊聊吉隆坡与大湾区：跨境出海的文化场与市场破局",
+    excerpt:
+      "15 分钟音频对话与文字整理摘要，探讨东南亚市场的真实机会、文化适配与渠道选择。",
+    image:
+      "https://images.unsplash.com/photo-1478737270239-2f02b77ac6d5?w=800&h=500&fit=crop",
     type: "podcast",
-    listenTime: "32 min",
+    category: "🎙️ 音频思考",
+    listenTime: "15 min",
     isFeatured: true,
+    date: "2024.06.28",
+    author: "陈述中马 / 策略探索者",
+    views: "967",
+    likes: 78,
+    content: [
+      {
+        type: "paragraph",
+        text: "这期播客录制于吉隆坡一间老茶室。和一位在东南亚做了 5 年跨境品牌的朋友聊了聊真实的出海体验——不是 PPT 上的「人口红利」，而是踩过坑之后的复盘。",
+      },
+      {
+        type: "blockquote",
+        text: "东南亚不是一个市场，是十个截然不同的市场。用一套打法通吃，是出海最大的幻觉。",
+      },
+      {
+        type: "heading",
+        text: "关键话题时间线",
+      },
+      {
+        type: "list",
+        items: [
+          "02:30 — 为什么选吉隆坡作为东南亚测试起点",
+          "05:15 — 新马 vs 印尼：华人文化圈的共性差异",
+          "08:40 — 大湾区供应链优势在出海中的角色",
+          "11:20 — 渠道选择：Shopee、Lazada 还是独立站？",
+          "13:45 — 给首次出海的品牌的三条避坑建议",
+        ],
+      },
+      {
+        type: "heading",
+        text: "核心观点摘要",
+      },
+      {
+        type: "paragraph",
+        text: "新马市场虽然体量不如印尼，但华人占比高、消费习惯接近国内，是最低成本的出海测试场。验证完产品-市场匹配后，再向印尼、泰国扩展。大湾区的供应链优势在出海中不仅是成本优势，更是「快速迭代」的能力——这点很多人低估了。",
+      },
+      {
+        type: "code",
+        lang: "strategy",
+        text: "# 出海测试路径\n吉隆坡 MVP 测试 (2-3 月)\n    ↓\n新马全渠道铺开 (3-6 月)\n    ↓\n印尼/泰国 扩展 (6-12 月)\n    ↓\n东南亚全域品牌建设 (12 月+)",
+      },
+      {
+        type: "blockquote",
+        text: "出海不是翻译网站，是重新理解一群人的生活方式。先去当地住一个月，比看一百份报告都有用。",
+      },
+    ],
   },
+  // 常规流卡片（非精选）
   {
     id: 4,
     title: "营销自动化工具的选型陷阱与避坑指南",
     excerpt: "市面上 80% 的 MarTech 工具都在贩卖焦虑，真正有价值的只有这三类。",
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=400&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=400&fit=crop",
     type: "article",
+    category: "图文长文",
     readTime: "8 min",
+    date: "2024.06.20",
+    author: "陈述中马 / 策略探索者",
+    views: "2,103",
+    likes: 95,
+    content: [
+      {
+        type: "paragraph",
+        text: "每次参加 MarTech 大会，都能看到几百个新工具。但真正用过之后你会发现，80% 的工具解决的是「不存在的问题」。",
+      },
+      {
+        type: "blockquote",
+        text: "选工具的第一原则：先明确痛点，再找工具。而不是反过来。",
+      },
+      {
+        type: "heading",
+        text: "真正值得投入的三类工具",
+      },
+      {
+        type: "list",
+        items: [
+          "数据层：统一客户数据平台（CDP），打通多触点行为数据",
+          "自动化层：能编排多步骤工作流的引擎（如 n8n / Coze）",
+          "分析层：能归因到渠道 ROI 的分析工具（如 GA4 + Mixpanel）",
+        ],
+      },
+    ],
   },
   {
     id: 5,
     title: "短观点：内容复利 > 流量赌博",
     excerpt: "可持续的内容资产才是长期 ROI 的来源。",
-    image: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop",
     type: "short",
+    category: "短观点",
+    readTime: "1 min",
+    date: "2024.06.15",
+    author: "陈述中马 / 策略探索者",
+    views: "1,456",
+    likes: 67,
+    content: [
+      {
+        type: "paragraph",
+        text: "很多人把内容营销当成「买流量」的替代品——发一篇帖子，看阅读量，算 ROI。但内容真正的价值是复利。",
+      },
+      {
+        type: "blockquote",
+        text: "一篇深度文章发布 6 个月后还在带来搜索流量，这才是内容资产的真正回报周期。",
+      },
+    ],
   },
   {
     id: 6,
-    title: "播客 EP.11 | 品牌人如何与 AI 协作而不被取代",
-    excerpt: "收听时长 28 分钟",
-    image: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=400&h=300&fit=crop",
+    title: "播客 EP.03 | 品牌人如何与 AI 协作而不被取代",
+    excerpt: "28 分钟对话，聊聊 AI 时代品牌人的生存策略与工具链。",
+    image:
+      "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=400&h=300&fit=crop",
     type: "podcast",
+    category: "🎙️ 音频思考",
     listenTime: "28 min",
+    date: "2024.06.10",
+    author: "陈述中马 / 策略探索者",
+    views: "823",
+    likes: 54,
+    content: [
+      {
+        type: "paragraph",
+        text: "这期聊了一个很实际的问题：品牌团队应该怎么引入 AI 工具，而不只是停留在「用 ChatGPT 写文案」的层面。",
+      },
+      {
+        type: "blockquote",
+        text: "AI 协作的关键不是「让 AI 做更多」，而是「让人做更对的事」。",
+      },
+    ],
   },
 ];
 
@@ -92,16 +323,83 @@ const typeLabel: Record<string, string> = {
 
 export default function Insights() {
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [selectedInsight, setSelectedInsight] = useState<InsightItem | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [showLikeFloat, setShowLikeFloat] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
 
-  const featured = insights.filter((i) => i.isFeatured);
+  const featured = insightsData.filter((i) => i.isFeatured);
   const heroFeatured = featured[0];
   const sideFeatured = featured.slice(1);
 
-  const regular = insights.filter((i) => {
+  const regular = insightsData.filter((i) => {
     if (filter === "all") return !i.isFeatured;
     if (filter === "featured") return false;
     return !i.isFeatured && i.type === filter;
   });
+
+  // ESC 关闭 + 禁用背景滚动
+  useEffect(() => {
+    if (!selectedInsight) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedInsight(null);
+    };
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [selectedInsight]);
+
+  // 打开 Modal 时重置状态
+  useEffect(() => {
+    if (selectedInsight) {
+      setLikeCount(selectedInsight.likes);
+      setCopied(false);
+      setShowLikeFloat(false);
+      setAudioPlaying(false);
+      setAudioProgress(0);
+    }
+  }, [selectedInsight]);
+
+  // 音频进度模拟
+  useEffect(() => {
+    if (!audioPlaying || !selectedInsight) return;
+    const timer = setInterval(() => {
+      setAudioProgress((prev) => {
+        if (prev >= 100) {
+          setAudioPlaying(false);
+          return 100;
+        }
+        return prev + 0.5;
+      });
+    }, 100);
+    return () => clearInterval(timer);
+  }, [audioPlaying, selectedInsight]);
+
+  // 复制链接
+  const handleCopyLink = useCallback(() => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, []);
+
+  // 点赞 +1 飘字
+  const handleLike = useCallback(() => {
+    setLikeCount((prev) => prev + 1);
+    setShowLikeFloat(true);
+    setTimeout(() => setShowLikeFloat(false), 1500);
+  }, []);
+
+  // 滚动至指定区域
+  const handleScrollTo = useCallback((id: string) => {
+    setSelectedInsight(null);
+    setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    }, 200);
+  }, []);
 
   return (
     <section id="insights" className="px-6 py-24">
@@ -134,10 +432,13 @@ export default function Insights() {
         </div>
 
         {/* Featured Focus Area */}
-        {(filter === "all" || filter === "featured") && (
+        {(filter === "all" || filter === "featured") && heroFeatured && (
           <div className="mb-10 grid gap-6 lg:grid-cols-3">
             {/* Hero Featured */}
-            <div className="group relative overflow-hidden rounded-2xl border border-blue-500/30 bg-zinc-900/40 lg:col-span-2">
+            <div
+              onClick={() => setSelectedInsight(heroFeatured)}
+              className="group relative cursor-pointer overflow-hidden rounded-2xl border border-blue-500/30 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-blue-500/50 lg:col-span-2"
+            >
               <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-blue-500/20" />
               <div className="relative h-64 overflow-hidden sm:h-80">
                 <img
@@ -172,7 +473,8 @@ export default function Insights() {
               {sideFeatured.map((item) => (
                 <div
                   key={item.id}
-                  className="group relative flex-1 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:border-zinc-700"
+                  onClick={() => setSelectedInsight(item)}
+                  className="group relative flex-1 cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
                 >
                   <div className="relative h-32 overflow-hidden">
                     <img
@@ -192,6 +494,12 @@ export default function Insights() {
                         <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
                           <Headphones className="h-3 w-3" />
                           {item.listenTime}
+                        </span>
+                      )}
+                      {item.readTime && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
+                          <Clock className="h-3 w-3" />
+                          {item.readTime}
                         </span>
                       )}
                     </div>
@@ -218,7 +526,8 @@ export default function Insights() {
             {regular.map((item) => (
               <div
                 key={item.id}
-                className="group overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
+                onClick={() => setSelectedInsight(item)}
+                className="group cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
               >
                 <div className="relative h-44 overflow-hidden">
                   <img
@@ -259,6 +568,278 @@ export default function Insights() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* ========== 沉浸式阅读器 Modal ========== */}
+      <AnimatePresence>
+        {selectedInsight && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={() => setSelectedInsight(null)}
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-zinc-950/90 backdrop-blur-2xl"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 30 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 30 }}
+              transition={{ type: "spring", bounce: 0.12, duration: 0.5 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative my-8 w-full max-w-3xl overflow-hidden rounded-3xl border border-purple-500/30 bg-zinc-950/95 shadow-[0_0_50px_rgba(168,85,247,0.15)]"
+            >
+              {/* 顶部阅读工具栏 */}
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur-xl">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs font-medium text-purple-300">
+                    [ {selectedInsight.category} ]
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-zinc-500">
+                    <Clock className="h-3 w-3" />
+                    {selectedInsight.readTime || selectedInsight.listenTime} read
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-400"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-green-400" />
+                        已复制
+                      </>
+                    ) : (
+                      <>
+                        <Link2 className="h-3.5 w-3.5" />
+                        复制链接
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setSelectedInsight(null)}
+                    className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 transition-all hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    关闭 (ESC)
+                  </button>
+                </div>
+              </div>
+
+              {/* 可滚动内容区 */}
+              <div className="max-h-[calc(85vh-56px)] overflow-y-auto px-6 py-8 sm:px-10 sm:py-10">
+                {/* 音频播放器特例 */}
+                {selectedInsight.type === "podcast" && (
+                  <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => setAudioPlaying(!audioPlaying)}
+                        className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-blue-600 text-white transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]"
+                      >
+                        {audioPlaying ? (
+                          <Pause className="h-5 w-5" />
+                        ) : (
+                          <Play className="h-5 w-5 translate-x-0.5" />
+                        )}
+                      </button>
+                      <div className="flex-1">
+                        <div className="mb-1.5 flex items-center justify-between text-xs text-zinc-500">
+                          <span>{selectedInsight.listenTime} 音频</span>
+                          <span>{Math.floor(audioProgress)}%</span>
+                        </div>
+                        {/* 波浪纹进度条 */}
+                        <div className="relative h-10 overflow-hidden rounded-lg bg-zinc-950">
+                          <div className="absolute inset-0 flex items-center gap-0.5 px-2">
+                            {Array.from({ length: 60 }).map((_, i) => {
+                              const barHeight = 20 + Math.sin(i * 0.5) * 15 + Math.cos(i * 0.3) * 10;
+                              const isActive = (i / 60) * 100 < audioProgress;
+                              return (
+                                <div
+                                  key={i}
+                                  className="flex-1 rounded-full transition-colors duration-150"
+                                  style={{
+                                    height: `${Math.max(4, barHeight)}px`,
+                                    background: isActive
+                                      ? "linear-gradient(to top, #a855f7, #3b82f6)"
+                                      : "rgba(63, 63, 70, 0.5)",
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                          {/* 播放头 */}
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.8)]"
+                            style={{ left: `${audioProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 文章 Header */}
+                <div className="mb-8">
+                  <h1 className="mb-4 text-2xl font-bold leading-tight text-zinc-100 md:text-3xl">
+                    {selectedInsight.title}
+                  </h1>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {selectedInsight.date}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" />
+                      {selectedInsight.author}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Eye className="h-3.5 w-3.5" />
+                      {selectedInsight.views} 阅读
+                    </span>
+                  </div>
+                </div>
+
+                {/* 封面图 */}
+                <div className="mb-8 overflow-hidden rounded-xl border border-zinc-800">
+                  <img
+                    src={selectedInsight.image}
+                    alt={selectedInsight.title}
+                    className="h-48 w-full object-cover brightness-90 contrast-110 sm:h-64"
+                  />
+                </div>
+
+                {/* 正文排版 */}
+                <article className="space-y-5">
+                  {selectedInsight.content.map((block, i) => {
+                    if (block.type === "heading") {
+                      return (
+                        <h2
+                          key={i}
+                          className="pt-2 text-lg font-bold text-zinc-100 sm:text-xl"
+                        >
+                          {block.text}
+                        </h2>
+                      );
+                    }
+                    if (block.type === "paragraph") {
+                      return (
+                        <p
+                          key={i}
+                          className="text-base leading-relaxed text-zinc-300 md:text-lg"
+                        >
+                          {block.text}
+                        </p>
+                      );
+                    }
+                    if (block.type === "blockquote") {
+                      return (
+                        <blockquote
+                          key={i}
+                          className="rounded-r-xl border-l-4 border-purple-500 bg-purple-950/20 p-4 italic text-purple-200"
+                        >
+                          {block.text}
+                        </blockquote>
+                      );
+                    }
+                    if (block.type === "code") {
+                      return (
+                        <div
+                          key={i}
+                          className="relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+                        >
+                          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
+                            <span className="text-xs text-zinc-500">
+                              {block.lang || "code"}
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard?.writeText(block.text || "");
+                              }}
+                              className="flex items-center gap-1 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                            >
+                              <Copy className="h-3 w-3" />
+                              复制
+                            </button>
+                          </div>
+                          <pre className="overflow-x-auto p-4 text-sm leading-relaxed text-green-400">
+                            <code>{block.text}</code>
+                          </pre>
+                        </div>
+                      );
+                    }
+                    if (block.type === "list") {
+                      return (
+                        <ul key={i} className="space-y-2">
+                          {block.items?.map((item, j) => (
+                            <li
+                              key={j}
+                              className="flex items-start gap-2 text-base leading-relaxed text-zinc-300 md:text-lg"
+                            >
+                              <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-400" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    }
+                    return null;
+                  })}
+                </article>
+
+                {/* 底部互动区 */}
+                <div className="mt-10 border-t border-zinc-800 pt-6">
+                  {/* 点赞按钮 + 飘字动画 */}
+                  <div className="relative mb-6">
+                    <button
+                      onClick={handleLike}
+                      className="flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-5 py-3 text-sm font-medium text-purple-300 transition-all hover:scale-105 hover:bg-purple-500/20 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                    >
+                      <ThumbsUp className="h-4 w-4" />
+                      激发灵感 ({likeCount})
+                    </button>
+                    <AnimatePresence>
+                      {showLikeFloat && (
+                        <motion.div
+                          initial={{ opacity: 1, y: 0, scale: 0.8 }}
+                          animate={{ opacity: 0, y: -40, scale: 1.2 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 1.5 }}
+                          className="pointer-events-none absolute left-20 top-0 text-lg font-bold text-purple-400"
+                        >
+                          +1 ⚡
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 引导转化区 */}
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+                    <p className="mb-4 text-sm text-zinc-400">
+                      对这个观点有同感？去庇护所交流脑洞，或联系我深入探讨。
+                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <button
+                        onClick={() => handleScrollTo("sanctuary")}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2.5 text-sm text-purple-300 transition-all hover:bg-purple-500/20"
+                      >
+                        去庇护所交流
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleScrollTo("connect")}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:from-purple-500 hover:to-blue-500"
+                      >
+                        联系我深入探讨
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
