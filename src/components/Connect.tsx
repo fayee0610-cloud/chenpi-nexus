@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { Mail, MessageCircle, Copy, Check, ArrowUpRight, QrCode } from "lucide-react";
+import { siteData } from "@/data/siteData";
 
 export default function Connect() {
   const [copied, setCopied] = useState(false);
   const [showWechat, setShowWechat] = useState(false);
 
-  const wechatId = "MyNeuralHub";
+  const { email, wechatId, copyright } = siteData.contact;
 
   const handleCopy = () => {
     navigator.clipboard?.writeText(wechatId);
@@ -28,7 +29,7 @@ export default function Connect() {
         <div className="mb-12 flex flex-wrap justify-center gap-4">
           {/* 邮箱 */}
           <a
-            href="mailto:hello@myneuralhub.com"
+            href={`mailto:${email}`}
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-6 py-3 text-sm font-medium text-zinc-300 transition-all hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100"
           >
             <Mail className="h-4 w-4" />
@@ -91,7 +92,7 @@ export default function Connect() {
 
         <div className="border-t border-zinc-800/60 pt-10">
           <p className="text-xs text-zinc-600">
-            © 2025 数字中枢 My Neural Hub
+            {copyright}
           </p>
         </div>
       </div>

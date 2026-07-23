@@ -12,125 +12,21 @@ import {
   ChevronDown,
   CornerDownRight,
 } from "lucide-react";
+import { siteData } from "@/data/siteData";
+import type { Incense, SanctuaryPost } from "@/data/siteData";
 
-// ========== 类型定义 ==========
-interface Incense {
-  id: string;
-  emoji: string;
-  name: string;
-  color: string;
-  glowClass: string;
-  borderClass: string;
-  count: number;
-}
-
-interface Comment {
-  author: string;
-  text: string;
-  time: string;
-}
-
-interface BrainFart {
-  id: number;
-  content: string;
-  tag: string;
-  tagColor: string;
-  author: string;
-  time: string;
-  likes: number;
-  reactions: { cool: number; biz: number; hard: number; fake: number };
-  comments: Comment[];
-  isNew?: boolean;
-}
-
-// ========== 常量数据 ==========
-const buffs = [
-  "功德 +1",
-  "运势 +100",
-  "甲方沟通顺畅度 +50%",
-  "Bug 自动消失 +1",
-  "发量 +1",
-  "脑洞清晰度 +200%",
-  "✨ 欧气爆棚：方案一次过审！",
-  "灵感涌入速度 +300%",
-  "下班准时率 +99%",
-];
-
-const fortunes = [
-  "今日宜：开始一件小事，去写下一个不成熟的脑洞",
-  "今日宜：大胆提案，甲方今天心情不错",
-  "今日宜：和 AI 聊聊，它会给你意想不到的灵感",
-  "今日宜：整理旧作品，会有新的发现",
-  "今日宜：休息一下，最好的创意往往在放松时降临",
-  "今日宜：把那个疯狂的念头说出来，也许有人懂",
-];
-
-const initialIncenses: Incense[] = [
-  { id: "1", emoji: "🕯️", name: "方案一次过", color: "text-blue-400", glowClass: "shadow-blue-500/40", borderClass: "hover:border-blue-500/50", count: 128 },
-  { id: "2", emoji: "💰", name: "甲方即刻回款", color: "text-amber-400", glowClass: "shadow-amber-500/40", borderClass: "hover:border-amber-500/50", count: 96 },
-  { id: "3", emoji: "💡", name: "灵感瞬间爆发", color: "text-purple-400", glowClass: "shadow-purple-500/40", borderClass: "hover:border-purple-500/50", count: 234 },
-  { id: "4", emoji: "🕊️", name: "沟通极其顺畅", color: "text-green-400", glowClass: "shadow-green-500/40", borderClass: "hover:border-green-500/50", count: 167 },
-  { id: "5", emoji: "💥", name: "品牌防塌房", color: "text-red-400", glowClass: "shadow-red-500/40", borderClass: "hover:border-red-500/50", count: 88 },
-  { id: "6", emoji: "🚀", name: "准点无痛下班", color: "text-orange-400", glowClass: "shadow-orange-500/40", borderClass: "hover:border-orange-500/50", count: 312 },
-];
-
-const initialFarts: BrainFart[] = [
-  {
-    id: 1,
-    content: "做一款只有墨水屏和 3 个物理按键的赛博灵感卡片，连着 Coze 接口，随时按一下就把声音转成结构化 Prompt 存回 Notion，大家觉得有戏吗？",
-    tag: "💡 概念萌芽",
-    tagColor: "text-blue-400 bg-blue-500/10",
-    author: "赛博农夫",
-    time: "2小时前",
-    likes: 42,
-    reactions: { cool: 12, biz: 8, hard: 3, fake: 2 },
-    comments: [
-      { author: "硬件老兵", text: "墨水屏 + 物理按键的成本可以压到 80 块以内，有戏。", time: "1小时前" },
-      { author: "产品经理阿May", text: "关键不是硬件，是后面的 Prompt 模板库做不做得好。", time: "30分钟前" },
-      { author: "赛博农夫", text: "对，所以我打算先做软件 MVP，再反推硬件。", time: "10分钟前" },
-    ],
-  },
-  {
-    id: 2,
-    content: "甲方说要「既有大厂的稳重，又有赛博朋克的叛逆，还要带一点新马东南亚本土风情」，我直接把上香页面发给了他。",
-    tag: "🔥 职场发疯",
-    tagColor: "text-red-400 bg-red-500/10",
-    author: "策略打工人",
-    time: "5小时前",
-    likes: 89,
-    reactions: { cool: 45, biz: 2, hard: 30, fake: 8 },
-    comments: [
-      { author: "设计受害者", text: "甲方看完上香页面说：这个可以，但能不能再大气一点？", time: "4小时前" },
-      { author: "策略打工人", text: "我反手给他上了一柱「品牌防塌房香」", time: "3小时前" },
-    ],
-  },
-  {
-    id: 3,
-    content: "做 independent B2B 独立站的第 30 天，把全流程 Workflow 接上了 AI 自动化，感觉一个人真的能打出一个小团队的产出。",
-    tag: "✦ 阶段探索",
-    tagColor: "text-purple-400 bg-purple-500/10",
-    author: "深圳探索者",
-    time: "1天前",
-    likes: 56,
-    reactions: { cool: 20, biz: 18, hard: 4, fake: 1 },
-    comments: [
-      { author: "独立开发者K", text: "同感，AI 自动化让单人作战成为可能。你用的什么 Workflow 工具？", time: "20小时前" },
-      { author: "深圳探索者", text: "Coze + n8n + Notion，三件套够用了", time: "18小时前" },
-    ],
-  },
-];
+// ========== 常量数据（从 siteData 导入）==========
+const buffs = siteData.sanctuary.incenseBuffs;
+const fortunes = siteData.sanctuary.fortunes;
+const initialIncenses: Incense[] = siteData.sanctuary.incenses;
+const initialFarts: SanctuaryPost[] = siteData.sanctuary.initialPosts;
+const postTagOptions = siteData.sanctuary.postTagOptions;
 
 const reactionButtons = [
   { key: "cool" as const, label: "🔥 酷" },
   { key: "biz" as const, label: "💰 商业" },
   { key: "hard" as const, label: "⚠️ 难点" },
   { key: "fake" as const, label: "😅 伪需求" },
-];
-
-const postTagOptions = [
-  { label: "💡 概念萌芽", color: "text-blue-400 bg-blue-500/10" },
-  { label: "🔥 职场发疯/吐槽", color: "text-red-400 bg-red-500/10" },
-  { label: "🤖 AI 硬件想法", color: "text-purple-400 bg-purple-500/10" },
 ];
 
 // ========== 粒子动画组件 ==========
@@ -164,8 +60,8 @@ function CommunityCard({
   onEnergy,
   onComment,
 }: {
-  fart: BrainFart;
-  onReaction: (id: number, key: keyof BrainFart["reactions"]) => void;
+  fart: SanctuaryPost;
+  onReaction: (id: number, key: keyof SanctuaryPost["reactions"]) => void;
   onEnergy: (id: number) => void;
   onComment: (id: number, text: string) => void;
 }) {
@@ -174,7 +70,7 @@ function CommunityCard({
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [energyPulse, setEnergyPulse] = useState(false);
 
-  const handleReaction = (key: keyof BrainFart["reactions"]) => {
+  const handleReaction = (key: keyof SanctuaryPost["reactions"]) => {
     onReaction(fart.id, key);
     setActiveReaction(key);
     setTimeout(() => setActiveReaction(null), 600);
@@ -329,8 +225,8 @@ export default function Sanctuary() {
   const [buffId, setBuffId] = useState(0);
   const [showFortune, setShowFortune] = useState(false);
   const [fortuneIndex, setFortuneIndex] = useState(0);
-  const [totalEnergy, setTotalEnergy] = useState(1842);
-  const [farts, setFarts] = useState<BrainFart[]>(initialFarts);
+  const [totalEnergy, setTotalEnergy] = useState(siteData.sanctuary.initialEnergy);
+  const [farts, setFarts] = useState<SanctuaryPost[]>(initialFarts);
   const [postContent, setPostContent] = useState("");
   const [postTag, setPostTag] = useState("💡 概念萌芽");
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -361,7 +257,7 @@ export default function Sanctuary() {
   }, []);
 
   // 表态 +1
-  const handleReaction = useCallback((fartId: number, key: keyof BrainFart["reactions"]) => {
+  const handleReaction = useCallback((fartId: number, key: keyof SanctuaryPost["reactions"]) => {
     setFarts((prev) =>
       prev.map((f) =>
         f.id === fartId
@@ -400,7 +296,7 @@ export default function Sanctuary() {
   const handlePost = () => {
     if (!postContent.trim()) return;
     const tagColor = postTagOptions.find((t) => t.label === postTag)?.color || "text-blue-400 bg-blue-500/10";
-    const newFart: BrainFart = {
+    const newFart: SanctuaryPost = {
       id: fartIdRef.current++,
       content: postContent.trim(),
       tag: postTag,

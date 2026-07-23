@@ -3,30 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Bot } from "lucide-react";
+import { siteData } from "@/data/siteData";
 
-const bubbles = [
-  "今日方案过审率 99%，来上根香？",
-  "又在发呆？灵感不会自己敲门。",
-  "需要我帮你整理作品集思路吗？",
-  "新的一周，新的甲方，新的修行。",
-  "休息一下吧，你已经看了三小时屏幕了。",
-  "赛博功德 +1，今日运势：宜提案。",
-];
-
-const quickQuestions = [
-  "你的核心能力是什么？",
-  "今天有什么自我激励建议？",
-  "聊聊你的 AI 硬件脑洞",
-];
-
-const replies: Record<string, string> = {
-  "你的核心能力是什么？":
-    "三件事：一是品牌策略与市场冷启动，擅长从 0 到 1 搭建增长引擎；二是 AI+硬件产品探索，关注交互体验与边缘智能；三是创意内容生产，用 AIGC 工作流提升 10 倍产能。简单说：把脑洞变成可落地的生意。",
-  "今天有什么自我激励建议？":
-    "今日宜：开始一件小事。不必等万事俱备，先写下一个不成熟的脑洞，先发布一条粗糙的内容，先和一个人聊聊你的想法。完成比完美更重要，行动本身就是最好的风水。",
-  "聊聊你的 AI 硬件脑洞":
-    "我最近在想：AI 硬件的终极形态可能是「无感」。当技术足够成熟时，最好的交互就是没有交互。设备不应该让人去学习它，而是它主动理解你。想象一个不需要唤醒词、不需要 App、不需要设置的智能助手——它就在那里，默默为你服务。",
-};
+const { bubbles, quickQuestions, replies } = siteData.mascot;
 
 export default function Mascot() {
   const [bubbleIndex, setBubbleIndex] = useState(0);
