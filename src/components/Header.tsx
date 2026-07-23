@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Cpu } from "lucide-react";
 
 const navItems = [
-  { label: "作品集", href: "#portfolio" },
-  { label: "灵感点", href: "#insights" },
-  { label: "庇护所", href: "#sanctuary" },
-  { label: "联系我", href: "#connect" },
+  { label: "作品集", href: "/portfolio" },
+  { label: "灵感点", href: "/insights" },
+  { label: "庇护所", href: "/sanctuary" },
+  { label: "联系我", href: "/#connect" },
 ];
 
 export default function Header() {
@@ -18,28 +19,28 @@ export default function Header() {
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         {/* Logo */}
-        <a href="#" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-500">
             <Cpu className="h-5 w-5 text-white" />
           </div>
           <span className="text-lg font-bold tracking-tight text-zinc-100">
-            数字中枢
+            陈皮同学
           </span>
           <span className="hidden text-xs font-medium text-zinc-500 sm:inline">
             My Neural Hub
           </span>
-        </a>
+        </Link>
 
         {/* Desktop Nav */}
         <nav className="hidden items-center gap-1 md:flex">
           {navItems.map((item) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
               className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
             >
               {item.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -73,14 +74,14 @@ export default function Header() {
           >
             <div className="flex flex-col gap-1 px-6 py-4">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
                   className="rounded-lg px-4 py-3 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <div className="mt-2 flex gap-3 border-t border-zinc-800/60 pt-4">
                 <button className="flex-1 rounded-lg py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-100">

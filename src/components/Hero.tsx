@@ -33,10 +33,9 @@ export default function Hero() {
             </div>
 
             <h1 className="mb-6 text-4xl font-extrabold leading-tight tracking-tight text-zinc-50 sm:text-5xl md:text-6xl">
-              {profile.title.replace("这里，连接", "这里，连接").split("、")[0]}
-              <span className="gradient-text"> 创意</span>、
+              这里，连接<span className="gradient-text">创意</span>、
               <span className="gradient-text">AI</span> 与
-              <span className="gradient-text"> 市场</span>
+              <span className="gradient-text">市场</span>
             </h1>
 
             <p className="mb-8 text-lg text-zinc-400 sm:text-xl">

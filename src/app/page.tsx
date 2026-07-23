@@ -5,19 +5,24 @@ import Insights from "@/components/Insights";
 import Sanctuary from "@/components/Sanctuary";
 import Connect from "@/components/Connect";
 import Mascot from "@/components/Mascot";
+import { fetchSiteConfig } from "@/lib/dataApi";
 
-export default function Home() {
+export default async function Home() {
+  const config = await fetchSiteConfig();
+
   return (
     <>
       <Header />
       <main className="flex-1">
         <Hero />
-        <Portfolio />
-        <Insights />
-        <Sanctuary />
+        {config.show_portfolio && <Portfolio />}
+        {config.show_insights && <Insights />}
+        {config.show_sanctuary && (
+          <Sanctuary showInspirationSign={config.show_inspiration_sign} />
+        )}
         <Connect />
       </main>
-      <Mascot />
+      {config.show_chenpi_ai && <Mascot />}
     </>
   );
 }

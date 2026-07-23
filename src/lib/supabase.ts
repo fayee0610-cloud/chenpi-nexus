@@ -62,6 +62,20 @@
  * -- 允许匿名插入庇护所帖子（访客发帖）
  * CREATE POLICY "anyone can post to sanctuary" ON public.sanctuary_posts
  *   FOR INSERT WITH CHECK (true);
+ *
+ * -- 4. 站点配置表（Feature Flags 模块显隐控制）
+ * CREATE TABLE IF NOT EXISTS public.site_config (
+ *   key TEXT PRIMARY KEY,
+ *   value JSONB DEFAULT '{}'::jsonb
+ * );
+ * ALTER TABLE public.site_config ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "site_config is readable by everyone" ON public.site_config
+ *   FOR SELECT USING (true);
+ * -- 写入通过 admin 后台（anon key 默认无写权限，可用 service_role 或单独 policy）
+ * CREATE POLICY "anyone can upsert site_config" ON public.site_config
+ *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can update site_config" ON public.site_config
+ *   FOR UPDATE USING (true);
  * ============================================================
  */
 

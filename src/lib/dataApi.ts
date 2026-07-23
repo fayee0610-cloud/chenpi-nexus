@@ -178,6 +178,167 @@ export async function deleteSanctuaryPost(id: string | number) {
   if (error) throw error;
 }
 
+// ---------- 写入：创建庇护所帖子 ----------
+export async function createSanctuaryPost(post: {
+  content: string;
+  tag?: string;
+  author?: string;
+  avatar?: string;
+}): Promise<SanctuaryPost | null> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data, error } = await supabase
+    .from("sanctuary_posts")
+    .insert([
+      {
+        id: genId(),
+        content: post.content,
+        tag: post.tag || null,
+        author: post.author || "匿名创作者",
+        avatar: post.avatar || null,
+        likes: 0,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    content: data.content || "",
+    tag: data.tag || "",
+    tagColor: "text-zinc-400 bg-zinc-800",
+    author: data.author || "匿名",
+    time: data.created_at ? new Date(data.created_at).toLocaleString("zh-CN") : "刚刚",
+    likes: data.likes || 0,
+    reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
+    comments: [],
+    isNew: true,
+  } as SanctuaryPost;
+}
+
+// ---------- 删除：作品 ----------
+export async function deleteProject(id: string | number) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase.from("projects").delete().eq("id", String(id));
+  if (error) throw error;
+}
+
+// ---------- 删除：灵感文章 ----------
+export async function deleteInsight(id: string | number) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase.from("insights").delete().eq("id", String(id));
+  if (error) throw error;
+}
+
+// ---------- 单条查询：作品 ----------
+export async function fetchProjectById(id: string): Promise<PortfolioProject | null> {
+  if (!supabase) {
+    return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
+  }
+  try {
+    const { data, error } = await supabase.from("projects").select("*").eq("id", id).single();
+    if (error || !data) {
+      return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
+    }
+    const cat = data.category || "";
+    let tab: "brand" | "ai" | "experiment" = "brand";
+    if (cat.includes("AI") || cat.includes("硬件")) tab = "ai";
+    else if (cat.includes("创意") || cat.includes("实验")) tab = "experiment";
+    return {
+      id: data.id,
+      title: data.title || "",
+      subTitle: data.sub_title || "",
+      image: data.image_url || "",
+      date: data.date || "",
+      role: data.role || "",
+      metrics: data.metrics || [],
+      tags: [],
+      tab,
+      category: data.category || "",
+      challenge: data.challenge || "",
+      solutions: data.strategy || [],
+      demoUrl: data.demo_url || undefined,
+    } as PortfolioProject;
+  } catch {
+    return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
+  }
+}
+
+// ---------- 单条查询：文章 ----------
+export async function fetchInsightById(id: string): Promise<InsightItem | null> {
+  if (!supabase) {
+    return siteData.insights.find((i) => String(i.id) === id) || null;
+  }
+  try {
+    const { data, error } = await supabase.from("insights").select("*").eq("id", id).single();
+    if (error || !data) {
+      return siteData.insights.find((i) => String(i.id) === id) || null;
+    }
+    const cat = data.category || "";
+    let type: "article" | "short" | "podcast" = "article";
+    if (cat.includes("短观点")) type = "short";
+    else if (cat.includes("音频") || cat.includes("播客") || data.audio_url) type = "podcast";
+    return {
+      id: data.id,
+      title: data.title || "",
+      excerpt: data.summary || "",
+      image: "",
+      type,
+      category: data.category || "",
+      readTime: data.read_time || undefined,
+      listenTime: data.audio_url ? "15 min" : undefined,
+      isFeatured: false,
+      date: data.date || "",
+      author: data.author || "",
+      views: "0",
+      likes: 0,
+      content: parseContent(data.content || ""),
+    } as InsightItem;
+  } catch {
+    return siteData.insights.find((i) => String(i.id) === id) || null;
+  }
+}
+
+// ---------- 站点配置 (Feature Flags) ----------
+export interface SiteConfig {
+  show_portfolio: boolean;
+  show_insights: boolean;
+  show_chenpi_ai: boolean;
+  show_sanctuary: boolean;
+  show_inspiration_sign: boolean;
+}
+
+const DEFAULT_CONFIG: SiteConfig = {
+  show_portfolio: true,
+  show_insights: true,
+  show_chenpi_ai: true,
+  show_sanctuary: true,
+  show_inspiration_sign: true,
+};
+
+export async function fetchSiteConfig(): Promise<SiteConfig> {
+  if (!supabase) return DEFAULT_CONFIG;
+  try {
+    const { data } = await supabase.from("site_config").select("key, value").eq("key", "feature_flags").single();
+    if (data?.value && typeof data.value === "object") {
+      return { ...DEFAULT_CONFIG, ...(data.value as object) };
+    }
+    return DEFAULT_CONFIG;
+  } catch {
+    return DEFAULT_CONFIG;
+  }
+}
+
+export async function saveSiteConfig(config: SiteConfig): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase
+    .from("site_config")
+    .upsert({ key: "feature_flags", value: config });
+  if (error) throw error;
+}
+
 // ---------- 写入：创建作品 ----------
 export async function createProject(project: Partial<PortfolioProject>) {
   if (!supabase) throw new Error("Supabase not configured");

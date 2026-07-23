@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp,
@@ -13,6 +14,7 @@ import {
   ExternalLink,
   MessageCircle,
   Zap,
+  ArrowUpRight,
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
@@ -72,6 +74,13 @@ export default function Portfolio() {
           <p className="mx-auto max-w-xl text-zinc-400">
             从品牌战略到 AI 硬件探索，持续交付可量化的创意价值
           </p>
+          <Link
+            href="/portfolio"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-4 py-1.5 text-xs font-medium text-zinc-400 transition-all hover:border-purple-500/40 hover:text-purple-300"
+          >
+            查看全部
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
         </div>
 
         {/* Tabs */}
@@ -116,11 +125,15 @@ export default function Portfolio() {
               >
                 {/* 图片 */}
                 <div className="relative h-48 overflow-hidden">
-                  <img
-                    src={project.image}
-                    alt={project.title}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
+                  {project.image?.trim() ? (
+                    <img
+                      src={project.image}
+                      alt={project.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 to-transparent" />
                   <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
                     {project.metrics[0] && (
@@ -139,9 +152,19 @@ export default function Portfolio() {
 
                 {/* 内容 */}
                 <div className="p-5">
-                  <h3 className="mb-3 text-base font-semibold text-zinc-100">
-                    {project.title}
-                  </h3>
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <h3 className="text-base font-semibold text-zinc-100">
+                      {project.title}
+                    </h3>
+                    <Link
+                      href={`/portfolio/${project.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      title="查看独立详情页"
+                      className="flex-shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5 text-zinc-500 transition-all hover:border-purple-500/50 hover:text-purple-300"
+                    >
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {project.tags.map((tag) => (
                       <span
@@ -306,11 +329,15 @@ export default function Portfolio() {
                     赛博视觉 / 架构图
                   </h3>
                   <div className="group relative overflow-hidden rounded-xl border border-zinc-800">
-                    <img
-                      src={selectedProject.image}
-                      alt={selectedProject.title}
-                      className="h-64 w-full object-cover brightness-90 contrast-110"
-                    />
+                    {selectedProject.image?.trim() ? (
+                      <img
+                        src={selectedProject.image}
+                        alt={selectedProject.title}
+                        className="h-64 w-full object-cover brightness-90 contrast-110"
+                      />
+                    ) : (
+                      <div className="h-64 w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/60 to-transparent" />
                     {/* 状态灯 */}
                     <div className="absolute left-3 top-3 flex items-center gap-1.5">
@@ -329,6 +356,13 @@ export default function Portfolio() {
                     <MessageCircle className="h-4 w-4" />
                     关于此项目聊聊
                   </button>
+                  <Link
+                    href={`/portfolio/${selectedProject.id}`}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm text-zinc-300 transition-all hover:border-purple-500/50 hover:text-purple-300"
+                  >
+                    <ArrowUpRight className="h-4 w-4" />
+                    查看独立详情页
+                  </Link>
                   {selectedProject.demoUrl && (
                     <button
                       onClick={() =>

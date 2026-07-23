@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Star,
@@ -19,6 +20,7 @@ import {
   User,
   Copy,
   Check,
+  ArrowUpRight,
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { InsightItem } from "@/data/siteData";
@@ -149,6 +151,13 @@ export default function Insights() {
           <p className="mx-auto max-w-xl text-zinc-400">
             关于品牌、AI 与创意的深度思考与碎片灵感
           </p>
+          <Link
+            href="/insights"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-4 py-1.5 text-xs font-medium text-zinc-400 transition-all hover:border-purple-500/40 hover:text-purple-300"
+          >
+            查看全部
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
         </div>
 
         {/* Filters */}
@@ -178,11 +187,15 @@ export default function Insights() {
             >
               <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-blue-500/20" />
               <div className="relative h-64 overflow-hidden sm:h-80">
-                <img
-                  src={heroFeatured.image}
-                  alt={heroFeatured.title}
-                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
+                {heroFeatured.image?.trim() ? (
+                  <img
+                    src={heroFeatured.image}
+                    alt={heroFeatured.title}
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-blue-950/30 to-zinc-900" />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
               </div>
               <div className="relative p-6 sm:p-8">
@@ -214,11 +227,15 @@ export default function Insights() {
                   className="group relative flex-1 cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
                 >
                   <div className="relative h-32 overflow-hidden">
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
+                    {item.image?.trim() ? (
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 to-transparent" />
                   </div>
                   <div className="p-5">
@@ -267,11 +284,15 @@ export default function Insights() {
                 className="group cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
               >
                 <div className="relative h-44 overflow-hidden">
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
+                  {item.image?.trim() ? (
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
                   <div className="absolute bottom-3 left-4 flex items-center gap-2">
                     <span className="inline-flex items-center gap-1 rounded-md bg-zinc-950/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
@@ -293,9 +314,19 @@ export default function Insights() {
                   </div>
                 </div>
                 <div className="p-5">
-                  <h4 className="mb-2 text-sm font-semibold text-zinc-100 line-clamp-2">
-                    {item.title}
-                  </h4>
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-zinc-100 line-clamp-2">
+                      {item.title}
+                    </h4>
+                    <Link
+                      href={`/insights/${item.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      title="阅读独立详情页"
+                      className="flex-shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5 text-zinc-500 transition-all hover:border-purple-500/50 hover:text-purple-300"
+                    >
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                   <p className="text-xs leading-relaxed text-zinc-500 line-clamp-2">
                     {item.excerpt}
                   </p>
@@ -353,6 +384,13 @@ export default function Insights() {
                       </>
                     )}
                   </button>
+                  <Link
+                    href={`/insights/${selectedInsight.id}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 transition-all hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-purple-300"
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                    独立详情页
+                  </Link>
                   <button
                     onClick={() => setSelectedInsight(null)}
                     className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 transition-all hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
@@ -438,11 +476,15 @@ export default function Insights() {
 
                 {/* 封面图 */}
                 <div className="mb-8 overflow-hidden rounded-xl border border-zinc-800">
-                  <img
-                    src={selectedInsight.image}
-                    alt={selectedInsight.title}
-                    className="h-48 w-full object-cover brightness-90 contrast-110 sm:h-64"
-                  />
+                  {selectedInsight.image?.trim() ? (
+                    <img
+                      src={selectedInsight.image}
+                      alt={selectedInsight.title}
+                      className="h-48 w-full object-cover brightness-90 contrast-110 sm:h-64"
+                    />
+                  ) : (
+                    <div className="h-48 w-full bg-gradient-to-br from-zinc-900 via-purple-950/30 to-zinc-900 sm:h-64" />
+                  )}
                 </div>
 
                 {/* 正文排版 */}

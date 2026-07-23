@@ -16,6 +16,7 @@ import {
   Briefcase,
   Sparkles,
   MessageCircle,
+  Settings,
   Plus,
   Trash2,
   Send,
@@ -29,12 +30,19 @@ import {
 import {
   createProject,
   createInsight,
+  fetchProjects,
+  fetchInsights,
   fetchSanctuaryPosts,
+  fetchSiteConfig,
+  saveSiteConfig,
+  deleteProject,
+  deleteInsight,
   deleteSanctuaryPost,
 } from "@/lib/dataApi";
+import type { SiteConfig } from "@/lib/dataApi";
 import type { PortfolioProject, InsightItem, SanctuaryPost } from "@/data/siteData";
 
-type AdminTab = "portfolio" | "insights" | "sanctuary";
+type AdminTab = "portfolio" | "insights" | "sanctuary" | "config";
 
 const TOKEN_KEY = "admin_token";
 
@@ -126,6 +134,7 @@ export default function AdminPage() {
             { key: "portfolio" as const, label: "作品案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
             { key: "insights" as const, label: "灵感文章", icon: <Sparkles className="h-3.5 w-3.5" /> },
             { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
+            { key: "config" as const, label: "站点配置", icon: <Settings className="h-3.5 w-3.5" /> },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -177,6 +186,17 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <SanctuaryManager />
+            </motion.div>
+          )}
+          {activeTab === "config" && (
+            <motion.div
+              key="config"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ConfigEditor />
             </motion.div>
           )}
         </AnimatePresence>
@@ -276,6 +296,39 @@ function PortfolioEditor() {
   });
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [projectList, setProjectList] = useState<PortfolioProject[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
+
+  const loadProjects = async () => {
+    setListLoading(true);
+    try {
+      const data = await fetchProjects();
+      setProjectList(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const handleDeleteProject = async (id: string | number) => {
+    if (!window.confirm("确定要彻底删除此项作品案例吗？此操作不可撤销。")) return;
+    setDeletingId(id);
+    try {
+      await deleteProject(id);
+      setProjectList((prev) => prev.filter((p) => p.id !== id));
+      setStatus({ type: "success", msg: "作品案例已删除" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "删除失败" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const updateField = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -335,6 +388,7 @@ function PortfolioEditor() {
         metrics: [{ value: "", label: "" }],
         solutions: [{ title: "", detail: "" }],
       });
+      loadProjects();
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message || "发布失败" });
     } finally {
@@ -505,6 +559,58 @@ function PortfolioEditor() {
           border-color: rgba(168, 85, 247, 0.5);
         }
       `}</style>
+
+      {/* 已发布作品列表 */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+          <h3 className="text-sm font-semibold text-zinc-200">已发布作品（{projectList.length}）</h3>
+          <button
+            onClick={loadProjects}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            刷新
+          </button>
+        </div>
+        {listLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+          </div>
+        ) : projectList.length === 0 ? (
+          <div className="py-16 text-center">
+            <Briefcase className="mx-auto mb-3 h-8 w-8 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无作品数据</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {projectList.map((p) => (
+              <div key={p.id} className="flex items-start gap-4 p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                      {p.category}
+                    </span>
+                    {p.date && <span className="text-[10px] text-zinc-600">{p.date}</span>}
+                  </div>
+                  <h4 className="truncate text-sm font-medium text-zinc-100">{p.title}</h4>
+                  {p.subTitle && <p className="mt-0.5 truncate text-xs text-zinc-500">{p.subTitle}</p>}
+                </div>
+                <button
+                  onClick={() => handleDeleteProject(p.id)}
+                  disabled={deletingId === p.id}
+                  className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === p.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -523,6 +629,39 @@ function InsightsEditor() {
   });
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [insightList, setInsightList] = useState<InsightItem[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
+
+  const loadInsights = async () => {
+    setListLoading(true);
+    try {
+      const data = await fetchInsights();
+      setInsightList(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInsights();
+  }, []);
+
+  const handleDeleteInsight = async (id: string | number) => {
+    if (!window.confirm("确定要彻底删除此项灵感文章吗？此操作不可撤销。")) return;
+    setDeletingId(id);
+    try {
+      await deleteInsight(id);
+      setInsightList((prev) => prev.filter((i) => i.id !== id));
+      setStatus({ type: "success", msg: "灵感文章已删除" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "删除失败" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const updateField = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -578,6 +717,7 @@ function InsightsEditor() {
         readTime: "", audioUrl: "",
         date: "", author: "", summary: "", contentText: "",
       });
+      loadInsights();
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message || "发布失败" });
     } finally {
@@ -681,6 +821,59 @@ function InsightsEditor() {
           border-color: rgba(168, 85, 247, 0.5);
         }
       `}</style>
+
+      {/* 已发布文章列表 */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+          <h3 className="text-sm font-semibold text-zinc-200">已发布文章（{insightList.length}）</h3>
+          <button
+            onClick={loadInsights}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            刷新
+          </button>
+        </div>
+        {listLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+          </div>
+        ) : insightList.length === 0 ? (
+          <div className="py-16 text-center">
+            <Sparkles className="mx-auto mb-3 h-8 w-8 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无文章数据</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {insightList.map((i) => (
+              <div key={i.id} className="flex items-start gap-4 p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                      {i.category}
+                    </span>
+                    {i.readTime && <span className="text-[10px] text-zinc-600">{i.readTime}</span>}
+                    {i.date && <span className="text-[10px] text-zinc-600">{i.date}</span>}
+                  </div>
+                  <h4 className="truncate text-sm font-medium text-zinc-100">{i.title}</h4>
+                  {i.excerpt && <p className="mt-0.5 truncate text-xs text-zinc-500">{i.excerpt}</p>}
+                </div>
+                <button
+                  onClick={() => handleDeleteInsight(i.id)}
+                  disabled={deletingId === i.id}
+                  className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === i.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -708,7 +901,7 @@ function SanctuaryManager() {
   }, []);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("确认删除这条留言？此操作不可撤销。")) return;
+    if (!window.confirm("确定要彻底删除这条庇护所留言吗？此操作不可撤销。")) return;
     setDeletingId(id);
     try {
       await deleteSanctuaryPost(id);
@@ -796,6 +989,175 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
     <div>
       <label className="mb-1.5 block text-xs font-medium text-zinc-400">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ========== Tab 4: 站点配置 (Feature Flags) ==========
+const FEATURE_FLAGS: {
+  key: keyof SiteConfig;
+  label: string;
+  desc: string;
+  default: boolean;
+}[] = [
+  { key: "show_portfolio", label: "作品集模块", desc: "首页展示作品案例与战术拆解", default: true },
+  { key: "show_insights", label: "深度文章模块", desc: "首页展示灵感点与深度思考", default: true },
+  { key: "show_chenpi_ai", label: "陈皮 AI 助手", desc: "右下角浮动的智能对话助手", default: true },
+  { key: "show_sanctuary", label: "脑洞与吐槽画布", desc: "社区互动与赛博上香模块", default: true },
+  { key: "show_inspiration_sign", label: "今日灵感签文", desc: "每日赛博灵感便签海报", default: true },
+];
+
+function ConfigEditor() {
+  // 本地默认配置（Supabase 不可用 / 表未创建时的防崩溃 Fallback）
+  const LOCAL_DEFAULT_CONFIG: SiteConfig = {
+    show_portfolio: true,
+    show_insights: true,
+    show_chenpi_ai: true,
+    show_sanctuary: true,
+    show_inspiration_sign: true,
+  };
+
+  const [config, setConfig] = useState<SiteConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ type: "success" | "warning"; msg: string } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // fetchSiteConfig 内部已有 try-catch 并返回默认配置，
+        // 此处再包一层防御，确保任何异常都不会导致界面崩溃
+        const data = await fetchSiteConfig();
+        if (mounted) setConfig(data || LOCAL_DEFAULT_CONFIG);
+      } catch (err) {
+        // 极端情况（如 Supabase 连接异常）：静默降级到本地默认配置
+        console.warn("site_config 加载降级到本地默认配置:", err);
+        if (mounted) setConfig(LOCAL_DEFAULT_CONFIG);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggle = (key: keyof SiteConfig) => {
+    if (!config) return;
+    setConfig({ ...config, [key]: !config[key] });
+  };
+
+  const handleSave = async () => {
+    if (!config) return;
+    setSaving(true);
+    setStatus(null);
+    try {
+      await saveSiteConfig(config);
+      setStatus({ type: "success", msg: "站点配置已保存至 Supabase，首页将立即生效" });
+    } catch (err: any) {
+      // 保存失败时使用琥珀色警告（非红色致命错误），提示用户表可能未创建
+      const reason = err?.message || "未知错误";
+      setStatus({
+        type: "warning",
+        msg: `本地配置已更新，但 Supabase 同步失败：${reason}。若尚未创建 site_config 表，请先在 SQL Editor 执行建表语句（见 src/lib/supabase.ts 注释）。`,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+      </div>
+    );
+  }
+
+  if (!config) {
+    // 兜底：理论上不会到达此处，但作为最终防御
+    return (
+      <div className="py-20 text-center">
+        <AlertCircle className="mx-auto mb-3 h-8 w-8 text-zinc-700" />
+        <p className="text-sm text-zinc-500">配置加载失败</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-50">站点配置 · 模块显隐控制</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          通过开关灵活控制首页各模块的显隐，适配不同阶段（求职展示 / 社区推广）的品牌定位。配置将持久化写入 Supabase <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-[11px] text-purple-300">site_config</code> 表。
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+        <div className="space-y-3">
+          {FEATURE_FLAGS.map((flag) => {
+            const enabled = config[flag.key];
+            return (
+              <div
+                key={flag.key}
+                className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/40 px-5 py-4 transition-colors hover:border-zinc-700"
+              >
+                <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-zinc-100">{flag.label}</h4>
+                    <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-500">
+                      {flag.key}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">{flag.desc}</p>
+                </div>
+                <button
+                  onClick={() => toggle(flag.key)}
+                  role="switch"
+                  aria-checked={enabled}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                    enabled
+                      ? "bg-gradient-to-r from-blue-500 to-purple-500"
+                      : "bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      enabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 状态提示 */}
+        {status && (
+          <div className={`mt-5 flex items-start gap-2 rounded-lg px-4 py-3 text-sm ${
+            status.type === "success"
+              ? "border border-green-500/30 bg-green-500/10 text-green-400"
+              : "border border-amber-500/30 bg-amber-500/10 text-amber-400"
+          }`}>
+            {status.type === "success" ? <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />}
+            <span className="leading-relaxed">{status.msg}</span>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+        >
+          {saving ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> 保存中...</>
+          ) : (
+            <><Save className="h-4 w-4" /> 保存配置</>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
