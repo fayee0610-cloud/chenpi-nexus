@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { InsightItem } from "@/data/siteData";
+import { fetchInsights } from "@/lib/dataApi";
 
 type FilterKey = "all" | "featured" | "article" | "short" | "podcast";
 
@@ -33,7 +34,7 @@ const filters: { key: FilterKey; label: string }[] = [
   { key: "podcast", label: "播客与音频" },
 ];
 
-const insightsData: InsightItem[] = siteData.insights;
+const staticInsights: InsightItem[] = siteData.insights;
 
 const typeIcon: Record<string, React.ReactNode> = {
   article: <BookOpen className="h-3.5 w-3.5" />,
@@ -55,6 +56,16 @@ export default function Insights() {
   const [showLikeFloat, setShowLikeFloat] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
+  const [insightsData, setInsightsData] = useState<InsightItem[]>(staticInsights);
+
+  // 从 Supabase 加载数据，失败则降级为静态数据
+  useEffect(() => {
+    let mounted = true;
+    fetchInsights().then((data) => {
+      if (mounted) setInsightsData(data);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const featured = insightsData.filter((i) => i.isFeatured);
   const heroFeatured = featured[0];

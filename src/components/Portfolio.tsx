@@ -16,15 +16,26 @@ import {
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
+import { fetchProjects } from "@/lib/dataApi";
 
 type TabKey = "brand" | "ai" | "experiment";
 
 const tabs = siteData.portfolio.categories;
-const portfolioProjects: PortfolioProject[] = siteData.portfolio.projects;
+const staticProjects: PortfolioProject[] = siteData.portfolio.projects;
 
 export default function Portfolio() {
   const [activeTab, setActiveTab] = useState<TabKey>("brand");
   const [selectedProject, setSelectedProject] = useState<PortfolioProject | null>(null);
+  const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>(staticProjects);
+
+  // 从 Supabase 加载数据，失败则降级为静态数据
+  useEffect(() => {
+    let mounted = true;
+    fetchProjects().then((data) => {
+      if (mounted) setPortfolioProjects(data);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const filtered = portfolioProjects.filter((p) => p.tab === activeTab);
 
@@ -112,15 +123,17 @@ export default function Portfolio() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 to-transparent" />
                   <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
-                    <div>
-                      <div className="flex items-center gap-1 text-lg font-bold text-white">
-                        <TrendingUp className="h-4 w-4 text-green-500" />
-                        {project.metrics[0].value}
+                    {project.metrics[0] && (
+                      <div>
+                        <div className="flex items-center gap-1 text-lg font-bold text-white">
+                          <TrendingUp className="h-4 w-4 text-green-500" />
+                          {project.metrics[0].value}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          {project.metrics[0].label}
+                        </div>
                       </div>
-                      <div className="text-xs text-zinc-400">
-                        {project.metrics[0].label}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 

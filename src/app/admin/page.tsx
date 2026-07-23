@@ -1,0 +1,801 @@
+"use client";
+
+/* ============================================================
+ * /admin — 极简内容发布后台
+ *
+ * 完整建表 SQL 见 src/lib/supabase.ts 顶部注释（TEXT 主键版）
+ * 三张表：projects / insights / sanctuary_posts，均开启 RLS 公开读
+ * ============================================================
+ */
+
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Lock,
+  LogOut,
+  Briefcase,
+  Sparkles,
+  MessageCircle,
+  Plus,
+  Trash2,
+  Send,
+  Save,
+  Eye,
+  X,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
+import {
+  createProject,
+  createInsight,
+  fetchSanctuaryPosts,
+  deleteSanctuaryPost,
+} from "@/lib/dataApi";
+import type { PortfolioProject, InsightItem, SanctuaryPost } from "@/data/siteData";
+
+type AdminTab = "portfolio" | "insights" | "sanctuary";
+
+const TOKEN_KEY = "admin_token";
+
+function validateToken(token: string | null): boolean {
+  if (!token) return false;
+  try {
+    // 浏览器端使用 atob 解码 Base64（服务端用 Buffer 生成，纯 ASCII 负载可安全解码）
+    const payload = JSON.parse(atob(token));
+    return payload.role === "admin" && payload.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+export default function AdminPage() {
+  const [authed, setAuthed] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [activeTab, setActiveTab] = useState<AdminTab>("portfolio");
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (validateToken(token)) {
+      setAuthed(true);
+    }
+  }, []);
+
+  const handleLogin = async () => {
+    if (!password.trim()) return;
+    setIsLoggingIn(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (data.success && data.token) {
+        localStorage.setItem(TOKEN_KEY, data.token);
+        setAuthed(true);
+        setPassword("");
+      } else {
+        setLoginError(data.error || "登录失败");
+      }
+    } catch {
+      setLoginError("网络错误，请稍后重试");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    setAuthed(false);
+  };
+
+  if (!authed) {
+    return <LoginView password={password} setPassword={setPassword} error={loginError} onLogin={handleLogin} isLoading={isLoggingIn} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* 顶部栏 */}
+      <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold">内容管理后台</h1>
+              <p className="text-[10px] text-zinc-500">Admin Dashboard</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            退出
+          </button>
+        </div>
+
+        {/* Tab 切换 */}
+        <div className="mx-auto flex max-w-7xl items-center gap-1 px-6 pb-3">
+          {[
+            { key: "portfolio" as const, label: "作品案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
+            { key: "insights" as const, label: "灵感文章", icon: <Sparkles className="h-3.5 w-3.5" /> },
+            { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                activeTab === tab.key
+                  ? "bg-zinc-100 text-zinc-950"
+                  : "text-zinc-500 hover:text-zinc-200"
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* 主内容区 */}
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <AnimatePresence mode="wait">
+          {activeTab === "portfolio" && (
+            <motion.div
+              key="portfolio"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <PortfolioEditor />
+            </motion.div>
+          )}
+          {activeTab === "insights" && (
+            <motion.div
+              key="insights"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <InsightsEditor />
+            </motion.div>
+          )}
+          {activeTab === "sanctuary" && (
+            <motion.div
+              key="sanctuary"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <SanctuaryManager />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
+  );
+}
+
+// ========== 登录页 ==========
+function LoginView({
+  password,
+  setPassword,
+  error,
+  onLogin,
+  isLoading,
+}: {
+  password: string;
+  setPassword: (v: string) => void;
+  error: string;
+  onLogin: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute left-1/3 top-1/4 h-96 w-96 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="absolute right-1/3 top-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-purple-500/10 blur-3xl" />
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 w-full max-w-sm"
+      >
+        <div className="rounded-2xl border border-purple-500/30 bg-zinc-950/90 p-8 shadow-[0_0_50px_rgba(168,85,247,0.1)] backdrop-blur-xl">
+          <div className="mb-6 flex flex-col items-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 shadow-lg shadow-purple-500/20">
+              <Lock className="h-5 w-5 text-white" />
+            </div>
+            <h1 className="text-lg font-bold text-zinc-50">管理员登录</h1>
+            <p className="mt-1 text-xs text-zinc-500">输入密码进入内容管理后台</p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && onLogin()}
+                placeholder="请输入管理员密码"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
+                autoFocus
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={onLogin}
+              disabled={isLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  登录中...
+                </>
+              ) : (
+                "进入后台"
+              )}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ========== Tab 1: 作品案例编辑器 ==========
+function PortfolioEditor() {
+  const [form, setForm] = useState({
+    title: "",
+    subTitle: "",
+    category: "品牌与市场战术",
+    role: "",
+    date: "",
+    image: "",
+    demoUrl: "",
+    challenge: "",
+    metrics: [{ value: "", label: "" }],
+    solutions: [{ title: "", detail: "" }],
+  });
+  const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateField = (field: string, value: any) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const addMetric = () => {
+    setForm((prev) => ({ ...prev, metrics: [...prev.metrics, { value: "", label: "" }] }));
+  };
+  const removeMetric = (i: number) => {
+    setForm((prev) => ({ ...prev, metrics: prev.metrics.filter((_, idx) => idx !== i) }));
+  };
+  const updateMetric = (i: number, key: string, val: string) => {
+    setForm((prev) => ({
+      ...prev,
+      metrics: prev.metrics.map((m, idx) => (idx === i ? { ...m, [key]: val } : m)),
+    }));
+  };
+
+  const addSolution = () => {
+    setForm((prev) => ({ ...prev, solutions: [...prev.solutions, { title: "", detail: "" }] }));
+  };
+  const removeSolution = (i: number) => {
+    setForm((prev) => ({ ...prev, solutions: prev.solutions.filter((_, idx) => idx !== i) }));
+  };
+  const updateSolution = (i: number, key: string, val: string) => {
+    setForm((prev) => ({
+      ...prev,
+      solutions: prev.solutions.map((s, idx) => (idx === i ? { ...s, [key]: val } : s)),
+    }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) {
+      setStatus({ type: "error", msg: "请填写项目标题" });
+      return;
+    }
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      const project: Partial<PortfolioProject> = {
+        title: form.title,
+        subTitle: form.subTitle,
+        category: form.category,
+        role: form.role,
+        date: form.date,
+        image: form.image,
+        demoUrl: form.demoUrl || undefined,
+        challenge: form.challenge,
+        metrics: form.metrics.filter((m) => m.value),
+        solutions: form.solutions.filter((s) => s.title),
+      };
+      await createProject(project);
+      setStatus({ type: "success", msg: "作品案例发布成功！" });
+      setForm({
+        title: "", subTitle: "", category: "品牌与市场战术",
+        role: "", date: "", image: "", demoUrl: "", challenge: "",
+        metrics: [{ value: "", label: "" }],
+        solutions: [{ title: "", detail: "" }],
+      });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "发布失败" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-50">发布作品案例</h2>
+        <p className="mt-1 text-sm text-zinc-500">新增一个作品集项目，保存至 Supabase projects 表</p>
+      </div>
+
+      <div className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+        {/* 基础信息 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="项目标题 *">
+            <input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="如：跨境品牌 DTC 独立站增长路线" className="input-admin" />
+          </FormField>
+          <FormField label="副标题">
+            <input value={form.subTitle} onChange={(e) => updateField("subTitle", e.target.value)} placeholder="一句话概述项目" className="input-admin" />
+          </FormField>
+          <FormField label="分类 *">
+            <input value={form.category} onChange={(e) => updateField("category", e.target.value)} placeholder="如：品牌与市场战术 / AI 与硬件探索 / 阶段性创意实验" className="input-admin" />
+          </FormField>
+          <FormField label="角色">
+            <input value={form.role} onChange={(e) => updateField("role", e.target.value)} placeholder="如：品牌策略总监" className="input-admin" />
+          </FormField>
+          <FormField label="执行时间">
+            <input value={form.date} onChange={(e) => updateField("date", e.target.value)} placeholder="如：2024.03 - 2024.09" className="input-admin" />
+          </FormField>
+          <FormField label="封面图 URL">
+            <input value={form.image} onChange={(e) => updateField("image", e.target.value)} placeholder="https://..." className="input-admin" />
+          </FormField>
+          <FormField label="Demo 链接">
+            <input value={form.demoUrl} onChange={(e) => updateField("demoUrl", e.target.value)} placeholder="https://..." className="input-admin" />
+          </FormField>
+        </div>
+
+        {/* 核心数据标尺 */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-300">核心数据标尺（Metrics）</label>
+            <button onClick={addMetric} className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200">
+              <Plus className="h-3 w-3" /> 添加
+            </button>
+          </div>
+          <div className="space-y-2">
+            {form.metrics.map((m, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  value={m.value}
+                  onChange={(e) => updateMetric(i, "value", e.target.value)}
+                  placeholder="数据值（如 GMV +180%）"
+                  className="input-admin flex-1"
+                />
+                <input
+                  value={m.label}
+                  onChange={(e) => updateMetric(i, "label", e.target.value)}
+                  placeholder="说明（如 海外独立站季度增长）"
+                  className="input-admin flex-1"
+                />
+                {form.metrics.length > 1 && (
+                  <button onClick={() => removeMetric(i)} className="rounded-lg border border-zinc-800 px-3 text-zinc-500 hover:border-red-500/50 hover:text-red-400">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 挑战背景 */}
+        <FormField label="项目挑战与背景">
+          <textarea
+            value={form.challenge}
+            onChange={(e) => updateField("challenge", e.target.value)}
+            rows={4}
+            placeholder="描述项目面临的痛点与挑战..."
+            className="input-admin resize-none"
+          />
+        </FormField>
+
+        {/* 破局战术 */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-300">破局战术与解法（多步骤）</label>
+            <button onClick={addSolution} className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200">
+              <Plus className="h-3 w-3" /> 添加步骤
+            </button>
+          </div>
+          <div className="space-y-3">
+            {form.solutions.map((s, i) => (
+              <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-500">步骤 {i + 1}</span>
+                  {form.solutions.length > 1 && (
+                    <button onClick={() => removeSolution(i)} className="text-zinc-500 hover:text-red-400">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  value={s.title}
+                  onChange={(e) => updateSolution(i, "title", e.target.value)}
+                  placeholder="战术标题"
+                  className="input-admin mb-2"
+                />
+                <textarea
+                  value={s.detail}
+                  onChange={(e) => updateSolution(i, "detail", e.target.value)}
+                  rows={2}
+                  placeholder="详细描述..."
+                  className="input-admin resize-none"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 状态提示 */}
+        {status && (
+          <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+            status.type === "success"
+              ? "border border-green-500/30 bg-green-500/10 text-green-400"
+              : "border border-red-500/30 bg-red-500/10 text-red-400"
+          }`}>
+            {status.type === "success" ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <AlertCircle className="h-4 w-4" />
+            )}
+            {status.msg}
+          </div>
+        )}
+
+        {/* 提交按钮 */}
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+        >
+          {submitting ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> 发布中...</>
+          ) : (
+            <><Save className="h-4 w-4" /> 发布作品案例</>
+          )}
+        </button>
+      </div>
+
+      <style jsx>{`
+        .input-admin {
+          width: 100%;
+          border-radius: 0.75rem;
+          border: 1px solid rgb(39 39 42);
+          background-color: rgb(9 9 11);
+          padding: 0.625rem 0.875rem;
+          font-size: 0.875rem;
+          color: rgb(244 244 245);
+          outline: none;
+          transition: all 0.15s;
+        }
+        .input-admin::placeholder {
+          color: rgb(82 82 91);
+        }
+        .input-admin:focus {
+          border-color: rgba(168, 85, 247, 0.5);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ========== Tab 2: 灵感文章编辑器 ==========
+function InsightsEditor() {
+  const [form, setForm] = useState({
+    title: "",
+    category: "✦ 深度长文",
+    readTime: "",
+    audioUrl: "",
+    date: "",
+    author: "",
+    summary: "",
+    contentText: "",
+  });
+  const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateField = (field: string, value: any) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) {
+      setStatus({ type: "error", msg: "请填写文章标题" });
+      return;
+    }
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      const content = form.contentText
+        .split("\n\n")
+        .filter(Boolean)
+        .map((para) => {
+          if (para.startsWith("> ")) {
+            return { type: "blockquote" as const, text: para.slice(2) };
+          }
+          if (para.startsWith("## ")) {
+            return { type: "heading" as const, text: para.slice(3) };
+          }
+          if (para.startsWith("```")) {
+            const lines = para.split("\n");
+            const lang = lines[0].slice(3).trim();
+            const text = lines.slice(1, lines.length - 1).join("\n");
+            return { type: "code" as const, lang, text };
+          }
+          if (para.startsWith("- ")) {
+            return {
+              type: "list" as const,
+              items: para.split("\n").map((l) => l.replace(/^- /, "")),
+            };
+          }
+          return { type: "paragraph" as const, text: para };
+        });
+
+      const insight: Partial<InsightItem> = {
+        title: form.title,
+        category: form.category,
+        readTime: form.readTime || undefined,
+        listenTime: form.audioUrl || undefined,
+        date: form.date,
+        author: form.author,
+        excerpt: form.summary,
+        content,
+      };
+      await createInsight(insight);
+      setStatus({ type: "success", msg: "灵感文章发布成功！" });
+      setForm({
+        title: "", category: "✦ 深度长文",
+        readTime: "", audioUrl: "",
+        date: "", author: "", summary: "", contentText: "",
+      });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "发布失败" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-50">发布灵感文章</h2>
+        <p className="mt-1 text-sm text-zinc-500">新增一篇深度思考内容，支持简易 Markdown 语法（标题 / 引用 / 列表 / 代码块）</p>
+      </div>
+
+      <div className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+        {/* 基础信息 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="文章标题 *">
+            <input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="如：AI 时代下 B2B 营销人的第二曲线" className="input-insight" />
+          </FormField>
+          <FormField label="分类 *">
+            <input value={form.category} onChange={(e) => updateField("category", e.target.value)} placeholder="如：✦ 深度长文 / 短观点 / 🎙️ 音频思考" className="input-insight" />
+          </FormField>
+          <FormField label="作者">
+            <input value={form.author} onChange={(e) => updateField("author", e.target.value)} placeholder="如：陈述中马 / 策略探索者" className="input-insight" />
+          </FormField>
+          <FormField label="阅读时长">
+            <input value={form.readTime} onChange={(e) => updateField("readTime", e.target.value)} placeholder="如：5 min" className="input-insight" />
+          </FormField>
+          <FormField label="发布日期">
+            <input value={form.date} onChange={(e) => updateField("date", e.target.value)} placeholder="如：2024.07.15" className="input-insight" />
+          </FormField>
+          <FormField label="音频 URL（播客用）">
+            <input value={form.audioUrl} onChange={(e) => updateField("audioUrl", e.target.value)} placeholder="https://..." className="input-insight" />
+          </FormField>
+        </div>
+
+        {/* 摘要 */}
+        <FormField label="摘要">
+          <textarea
+            value={form.summary}
+            onChange={(e) => updateField("summary", e.target.value)}
+            rows={2}
+            placeholder="一句话概括文章核心观点..."
+            className="input-insight resize-none"
+          />
+        </FormField>
+
+        {/* 正文 Markdown */}
+        <FormField label="正文内容（简易 Markdown）">
+          <textarea
+            value={form.contentText}
+            onChange={(e) => updateField("contentText", e.target.value)}
+            rows={12}
+            placeholder={`支持语法：\n\n普通段落（空行分隔）\n\n## 二级标题\n\n> 引用金句\n\n- 列表项1\n- 列表项2\n\n\`\`\`js\n代码块\n\`\`\``}
+            className="input-insight resize-y font-mono text-xs leading-relaxed"
+          />
+        </FormField>
+
+        {/* 状态 */}
+        {status && (
+          <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+            status.type === "success"
+              ? "border border-green-500/30 bg-green-500/10 text-green-400"
+              : "border border-red-500/30 bg-red-500/10 text-red-400"
+          }`}>
+            {status.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {status.msg}
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+        >
+          {submitting ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> 发布中...</>
+          ) : (
+            <><Send className="h-4 w-4" /> 发布灵感文章</>
+          )}
+        </button>
+      </div>
+
+      <style jsx>{`
+        .input-insight {
+          width: 100%;
+          border-radius: 0.75rem;
+          border: 1px solid rgb(39 39 42);
+          background-color: rgb(9 9 11);
+          padding: 0.625rem 0.875rem;
+          font-size: 0.875rem;
+          color: rgb(244 244 245);
+          outline: none;
+          transition: all 0.15s;
+        }
+        .input-insight::placeholder {
+          color: rgb(82 82 91);
+        }
+        .input-insight:focus {
+          border-color: rgba(168, 85, 247, 0.5);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ========== Tab 3: 庇护所互动管理 ==========
+function SanctuaryManager() {
+  const [posts, setPosts] = useState<SanctuaryPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const loadPosts = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchSanctuaryPosts();
+      setPosts(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("确认删除这条留言？此操作不可撤销。")) return;
+    setDeletingId(id);
+    try {
+      await deleteSanctuaryPost(id);
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err: any) {
+      alert("删除失败：" + (err.message || ""));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-zinc-50">庇护所互动管理</h2>
+          <p className="mt-1 text-sm text-zinc-500">管理访客在「庇护所」发布的脑洞与吐槽卡片</p>
+        </div>
+        <button
+          onClick={loadPosts}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          刷新
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="py-20 text-center">
+            <MessageCircle className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无留言数据</p>
+            <p className="mt-1 text-xs text-zinc-600">访客发布的脑洞/吐槽会显示在这里</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {posts.map((post) => (
+              <div key={post.id} className="flex items-start gap-4 p-5">
+                <div className="flex-1">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${post.tagColor || "bg-zinc-800 text-zinc-400"}`}>
+                      {post.tag}
+                    </span>
+                    <span className="text-[11px] text-zinc-500">{post.author}</span>
+                    <span className="text-[11px] text-zinc-600">·</span>
+                    <span className="text-[11px] text-zinc-600">{post.time}</span>
+                  </div>
+                  <p className="text-sm text-zinc-200">{post.content}</p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-zinc-500">
+                    <span>⚡ {post.likes} 能量</span>
+                    <span>🔥 {post.reactions?.cool || 0}</span>
+                    <span>💰 {post.reactions?.biz || 0}</span>
+                    <span>⚠️ {post.reactions?.hard || 0}</span>
+                    <span>😅 {post.reactions?.fake || 0}</span>
+                    <span>💬 {(post.comments || []).length} 评论</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDelete(post.id)}
+                  disabled={deletingId === post.id}
+                  className="rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === post.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========== 通用表单字段 ==========
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-zinc-400">{label}</label>
+      {children}
+    </div>
+  );
+}
