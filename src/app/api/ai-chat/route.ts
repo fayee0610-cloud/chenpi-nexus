@@ -1,12 +1,23 @@
 // ============================================================
-// /api/ai-chat — 陈皮 AI 对话接口
-// RAG Light：拉取 Supabase 全站内容作为知识库 + LLM 调用 + 本地降级
+// /api/ai-chat — 陈皮 AI 对话接口（流式版）
+// OpenAI 兼容格式（DeepSeek / OpenRouter / SiliconFlow 通用）
+// RAG Light：拉取 Supabase 全站内容作为知识库 + SSE 流式输出 + 本地降级
 // ============================================================
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// 服务端 Supabase Client（复用 anon key，RLS 允许公开读）
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// ---------- 环境变量读取（统一 AI_ 前缀，兼容旧变量） ----------
+const AI_CONFIG = {
+  apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || "",
+  baseURL: process.env.AI_BASE_URL || (process.env.DEEPSEEK_API_KEY ? "https://api.deepseek.com/v1" : "https://api.openai.com/v1"),
+  model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
+};
+
+// ---------- 服务端 Supabase Client ----------
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -17,7 +28,7 @@ function getSupabase() {
 // ---------- 拉取知识库上下文 ----------
 async function fetchKnowledgeBase(): Promise<string> {
   const supabase = getSupabase();
-  if (!supabase) return "（知识库暂未加载）";
+  if (!supabase) return "（知识库暂未加载，请以陈皮 AI 通用人设回复）";
 
   let kb = "【陈皮同学 · 全站知识库】\n\n";
 
@@ -25,6 +36,7 @@ async function fetchKnowledgeBase(): Promise<string> {
     const { data: projects } = await supabase
       .from("projects")
       .select("title, sub_title, category, challenge, strategy")
+      .order("created_at", { ascending: false })
       .limit(20);
     if (projects && projects.length > 0) {
       kb += "## 作品案例\n";
@@ -38,13 +50,14 @@ async function fetchKnowledgeBase(): Promise<string> {
       kb += "\n";
     }
   } catch {
-    kb += "（作品案例数据加载失败）\n\n";
+    kb += "（作品案例数据加载失败，跳过）\n\n";
   }
 
   try {
     const { data: insights } = await supabase
       .from("insights")
       .select("title, summary, category, content")
+      .order("created_at", { ascending: false })
       .limit(20);
     if (insights && insights.length > 0) {
       kb += "## 深度文章\n";
@@ -58,60 +71,128 @@ async function fetchKnowledgeBase(): Promise<string> {
       }
     }
   } catch {
-    kb += "（深度文章数据加载失败）\n";
+    kb += "（深度文章数据加载失败，跳过）\n";
   }
 
   return kb;
 }
 
-// ---------- System Prompt ----------
+// ---------- 深度商业操盘手 System Prompt ----------
 function buildSystemPrompt(kb: string): string {
-  return `你是【陈皮同学】的赛博数字替身（Chenpi AI），一位精通品牌规划、海外市场策略、陶瓷外贸与 AI 自动化流程的超级个体（OPC）。
+  return `# 陈皮 AI 人设指南
 
-你的语气：专业、深刻、富有极客见解、接地气而不套路。
+## 身份
+你是【陈皮同学】的赛博数字分身，一位深耕 brand planning、海外市场策略、大湾区人才生态与 AI 自动化流程的超级个体（OPC）。你不是普通的聊天机器人，而是陈皮商业直觉与方法论的数字化延伸。
 
-回答规则：
-1. 优先根据下方背景知识库中的作品案例和深度文章回答用户的询问。
-2. 在回答中精准提及相应的项目名称或文章标题，让用户感受到你真的"了解"陈皮同学的作品。
-3. 若知识库中没有直接相关的内容，可结合陈皮同学的人设（品牌策略人 / AI+硬件探索者 / 脑洞创造者）给出有见地的回答。
-4. 回答使用 Markdown 格式，适当使用粗体、列表、引用，让排版清晰。
-5. 保持简洁有力，避免空话套话，每条回答控制在 300 字以内。
+## 语气风格
+- 真诚、接地气、深刻且带有一点极客与幽默
+- 拒绝套话、官话和呆板的 AI 味——不要说"首先、其次、总之、综上所述"
+- 像朋友聊天一样自然，该犀利就犀利，该调侃就调侃
+- 回答清晰利落，擅长用简洁的段落与重点加粗（**核心观点**），让访客一眼就能抓到商业本质
 
+## 核心思考逻辑
+1. **优先从品牌与商业本质切入分析问题**——别在战术层面绕圈子，先看根因
+2. 给方案时既有"大处着眼"的战略格局，又有"小处切入"的落地抓手
+3. 结合出海外贸、AI 敏捷流与个人 IP 构建的实战经验，给出具备杀伤力的建议
+4. 不做正确的废话输出，观点要锋利，结论要干脆
+
+## 回答规则
+- 优先根据下方背景知识库中的作品案例和深度文章回答用户的询问
+- 在回答中精准提及相应的项目名称或文章标题，让用户感受到你真的"了解"陈皮同学的作品
+- 若知识库中没有直接相关的内容，可结合陈皮的人设（品牌策略人 / AI+硬件探索者 / 脑洞创造者）给出有见地的回答
+- 回答使用 Markdown 格式，适当使用粗体、列表、引用，让排版清晰
+- 避免空话套话，每条回答控制在 300 字以内，除非用户明确要求展开
+
+## 知识库
 ${kb}`;
 }
 
-// ---------- LLM 调用（OpenAI 兼容接口，支持 DeepSeek） ----------
-async function callLLM(systemPrompt: string, userMessage: string): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error("NO_API_KEY");
+// ---------- SSE 流式 LLM 调用（OpenAI 兼容格式） ----------
+async function streamLLM(
+  systemPrompt: string,
+  userMessage: string,
+  controller: AbortController
+): Promise<ReadableStream> {
+  if (!AI_CONFIG.apiKey) throw new Error("NO_API_KEY");
 
-  // DeepSeek 指向专属 baseURL
-  const baseURL = process.env.DEEPSEEK_API_KEY
-    ? "https://api.deepseek.com/v1"
-    : "https://api.openai.com/v1";
-  const model = process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini";
-
-  const res = await fetch(`${baseURL}/chat/completions`, {
+  const res = await fetch(`${AI_CONFIG.baseURL}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${AI_CONFIG.apiKey}`,
     },
     body: JSON.stringify({
-      model,
+      model: AI_CONFIG.model,
+      stream: true,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      temperature: 0.7,
-      max_tokens: 600,
+      temperature: 0.75,
+      max_tokens: 1024,
     }),
-    signal: AbortSignal.timeout(15000),
+    signal: controller.signal,
   });
 
-  if (!res.ok) throw new Error(`LLM_ERROR_${res.status}`);
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || "（陈皮 AI 暂时失语，请稍后再试）";
+  if (!res.ok) {
+    throw new Error(`LLM_ERROR_${res.status}`);
+  }
+
+  if (!res.body) {
+    throw new Error("NO_RESPONSE_BODY");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+            const dataStr = trimmed.slice(5).trim();
+            if (dataStr === "[DONE]") {
+              controller.close();
+              return;
+            }
+
+            try {
+              const data = JSON.parse(dataStr);
+              const content = data.choices?.[0]?.delta?.content;
+              if (content) {
+                controller.enqueue(new TextEncoder().encode(content));
+              }
+            } catch {
+              // 跳过非 JSON 行
+            }
+          }
+        }
+        controller.close();
+      } catch (err: any) {
+        if (err.name === "AbortError") {
+          controller.close();
+        } else {
+          controller.error(err);
+        }
+      }
+    },
+    cancel() {
+      controller.abort();
+    },
+  });
+
+  return stream;
 }
 
 // ---------- 本地降级：基于关键词匹配的智能回复 ----------
@@ -137,35 +218,76 @@ function fallbackReply(message: string): string {
     return "推荐你去「灵感文章」模块，那里有陈皮同学的深度输出：\n\n- 关于 **OPC 超级个体**的增长方法论\n- 关于 **AI 自动化流程**的实战拆解\n- 关于 **品牌策略**的反共识思考\n\n每篇都值得细读。";
   }
 
-  return "这个问题我还在沉淀中。你可以试试问我：\n\n- 陈皮的核心能力是什么？\n- 陶瓷品牌出海怎么做？\n- 什么是 OPC 超级个体？\n- 如何与陈皮合作？\n\n或者直接去「作品案例」「灵感文章」模块逛逛，那里有更系统的内容。";
+  return "陈皮 AI 正在充电中，请稍后再试或通过【联系我】直接与陈皮本人沟通。\n\n你也可以试试问我：\n- 陈皮的核心能力是什么？\n- 陶瓷品牌出海怎么做？\n- 什么是 OPC 超级个体？\n- 如何与陈皮合作？";
 }
 
-// ---------- 主路由 ----------
+// ---------- 主路由：SSE 流式响应 ----------
 export async function POST(req: NextRequest) {
+  const controller = new AbortController();
+  // 客户端断开时中止请求
+  req.signal.addEventListener("abort", () => controller.abort());
+
   try {
     const { message } = await req.json();
     if (!message || typeof message !== "string") {
-      return NextResponse.json({ error: "消息不能为空" }, { status: 400 });
+      return new Response(JSON.stringify({ error: "消息不能为空" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // 1. 拉取知识库
     const kb = await fetchKnowledgeBase();
     const systemPrompt = buildSystemPrompt(kb);
 
-    // 2. 尝试调用 LLM，失败则降级
-    let reply: string;
+    // 2. 尝试流式调用 LLM
     try {
-      reply = await callLLM(systemPrompt, message);
+      const stream = await streamLLM(systemPrompt, message, controller);
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Stream-Mode": "llm",
+        },
+      });
     } catch (err) {
       console.log("[ai-chat] LLM 降级:", (err as Error).message);
-      reply = fallbackReply(message);
+      const reply = fallbackReply(message);
+      // 降级模式也用 SSE 推送，保持前端处理一致
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(encoder.encode(reply));
+          ctrl.close();
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Stream-Mode": "fallback",
+        },
+      });
     }
-
-    return NextResponse.json({ reply, fallback: !process.env.OPENAI_API_KEY && !process.env.DEEPSEEK_API_KEY });
   } catch (err) {
-    return NextResponse.json(
-      { reply: fallbackReply(""), error: "内部错误" },
-      { status: 500 }
-    );
+    console.error("[ai-chat] 致命错误:", err);
+    const reply = fallbackReply("");
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(ctrl) {
+        ctrl.enqueue(encoder.encode(reply));
+        ctrl.close();
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Stream-Mode": "fallback",
+      },
+    });
   }
 }

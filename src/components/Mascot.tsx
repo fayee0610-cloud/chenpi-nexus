@@ -36,7 +36,7 @@ export default function Mascot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // 发送消息
+  // 发送消息（SSE 流式响应 + 打字机效果）
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -46,24 +46,70 @@ export default function Mascot() {
     setInput("");
     setLoading(true);
 
+    // 先插入一条空的 AI 消息，用于流式填充
+    const aiMsgIndex = messages.length + 1;
+    setMessages((prev) => [...prev, { role: "ai", content: "" }]);
+
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
       });
-      const data = await res.json();
-      const aiMsg: Message = { role: "ai", content: data.reply || "（陈皮 AI 暂时失语）" };
-      setMessages((prev) => [...prev, aiMsg]);
+
+      if (!res.ok) throw new Error("REQUEST_FAILED");
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("NO_READER");
+
+      const decoder = new TextDecoder("utf-8");
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+
+        // 实时更新 AI 消息内容
+        setMessages((prev) => {
+          const next = [...prev];
+          if (next[aiMsgIndex]) {
+            next[aiMsgIndex] = { ...next[aiMsgIndex], content: fullText };
+          }
+          return next;
+        });
+      }
+
+      // 流结束后，如果内容为空，显示兜底提示
+      if (!fullText.trim()) {
+        setMessages((prev) => {
+          const next = [...prev];
+          if (next[aiMsgIndex]) {
+            next[aiMsgIndex] = {
+              ...next[aiMsgIndex],
+              content: "陈皮 AI 正在充电中，请稍后再试或通过【联系我】直接与陈皮本人沟通。",
+            };
+          }
+          return next;
+        });
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "ai", content: "网络开小差了，稍后再试一次？" },
-      ]);
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next[aiMsgIndex]) {
+          next[aiMsgIndex] = {
+            ...next[aiMsgIndex],
+            content: "网络开小差了，稍后再试一次？",
+          };
+        }
+        return next;
+      });
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  }, [loading, messages.length]);
 
   // Enter 发送，Shift+Enter 换行
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -198,13 +244,13 @@ export default function Mascot() {
                 </motion.div>
               ))}
 
-              {/* 等待呼吸灯 */}
-              {loading && (
+              {/* 等待呼吸灯（仅在 AI 消息内容为空且 loading 时显示，流式输出中不显示） */}
+              {loading && messages[messages.length - 1]?.role === "ai" && !messages[messages.length - 1]?.content && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-1 rounded-2xl border border-purple-500/30 bg-purple-950/15 px-4 py-3">
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400 [animation-delay:-0.3s]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400 [animation-delay:-0.15s]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-purple-400" />
+                  <div className="flex items-center gap-1.5 rounded-2xl border border-purple-500/30 bg-purple-950/15 px-4 py-3">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-purple-400 [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-purple-400 [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-purple-400" />
                   </div>
                 </div>
               )}
