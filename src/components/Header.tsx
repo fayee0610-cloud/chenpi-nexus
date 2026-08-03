@@ -7,6 +7,7 @@ import { Menu, X, Cpu } from "lucide-react";
 
 const navItems = [
   { label: "作品集", href: "/portfolio" },
+  { label: "情报站", href: "/hub" },
   { label: "灵感点", href: "/insights" },
   { label: "资源包", href: "/resources" },
   { label: "庇护所", href: "/sanctuary" },

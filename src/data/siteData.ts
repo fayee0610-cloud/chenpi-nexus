@@ -98,6 +98,20 @@ export interface ResourceItem {
   date: string;
 }
 
+export type InsightHubCategory = "🤖 机器人/具身智能" | "💡 AI技术/大厂" | "📈 品牌营销/SOP";
+
+export interface InsightHubItem {
+  id: string;
+  title: string;
+  category: InsightHubCategory;
+  summary: string;
+  sourceName: string;
+  originalUrl: string;
+  publishedAt: string;
+  isPublished: boolean;
+  isFeatured?: boolean;
+}
+
 // ========== 1. 个人简介与 Hero 区 ==========
 
 export const profile = {
@@ -541,6 +555,77 @@ export const resources: ResourceItem[] = [
   },
 ];
 
+// ========== 8. 情报站 (Information Hub) Mock 数据 ==========
+
+export const insightsHub: InsightHubItem[] = [
+  {
+    id: "hub-1",
+    title: "智元机器人发布远征 A2 商用版，目标售价下探至 10 万区间",
+    category: "🤖 机器人/具身智能",
+    summary: "智元将核心伺服模组自研化，BOM 成本降低 40%。商用清洁与巡检场景已落地首批 200 台订单，标志着人形机器人从实验室走向标准化交付的拐点。",
+    sourceName: "智元机器人官方发布会",
+    originalUrl: "https://example.com/agibot-a2",
+    publishedAt: "2025.07.20",
+    isPublished: true,
+    isFeatured: true,
+  },
+  {
+    id: "hub-2",
+    title: "DeepSeek-V3 推理成本降至 GPT-4o 的 1/30，API 调用量周增 300%",
+    category: "💡 AI技术/大厂",
+    summary: "MoE 架构 + FP8 混合精度训练，单次推理成本 $0.002。中小团队首次拥有可负担的深度推理能力，RAG 应用的商业闭环被彻底打开。",
+    sourceName: "36Kr 深度",
+    originalUrl: "https://example.com/deepseek-v3",
+    publishedAt: "2025.07.18",
+    isPublished: true,
+    isFeatured: true,
+  },
+  {
+    id: "hub-3",
+    title: "字节跳动 TikTok Shop 巴西站 GMV 突破 10 亿美元，本地化达人矩阵跑通",
+    category: "📈 品牌营销/SOP",
+    summary: "巴西市场达人分销占比 73%，核心 SOP：本地达人筛选 → 样品寄测 → 15 秒原生短视频 → 直播转化。中国品牌出海拉美的可复制路径已验证。",
+    sourceName: "专家访谈 / 跨境出海白皮书",
+    originalUrl: "https://example.com/tiktok-brazil",
+    publishedAt: "2025.07.15",
+    isPublished: true,
+    isFeatured: false,
+  },
+  {
+    id: "hub-4",
+    title: "宇树科技 G1 人形机器人量产线投产，年产能目标 1 万台",
+    category: "🤖 机器人/具身智能",
+    summary: "G1 采用关节直驱方案，省去谐波减速器，制造成本压缩 60%。目标场景从科研扩展到高校教育与 STEM 培训，客单价 9.9 万起。",
+    sourceName: "宇树科技官方公告",
+    originalUrl: "https://example.com/unitree-g1",
+    publishedAt: "2025.07.12",
+    isPublished: true,
+    isFeatured: false,
+  },
+  {
+    id: "hub-5",
+    title: "OpenAI 发布 GPT-5 多模态实时推理，延迟降至 200ms 以内",
+    category: "💡 AI技术/大厂",
+    summary: "GPT-5 原生支持语音+视觉流式推理，端到端延迟 200ms。实时 AI 助手、同声传译、机器人视觉交互的产品化门槛被大幅拉低。",
+    sourceName: "OpenAI DevDay 2025",
+    originalUrl: "https://example.com/gpt5",
+    publishedAt: "2025.07.10",
+    isPublished: true,
+    isFeatured: false,
+  },
+  {
+    id: "hub-6",
+    title: "SHEIN 半托管模式欧美站上线，招商门槛降至月 GMV 5 万美元",
+    category: "📈 品牌营销/SOP",
+    summary: "半托管模式让商家自主定价与运营，SHEIN 提供流量与物流。核心 SOP：选品上架 → 平台流量倾斜 → 海外仓 3 日达。适合中小品牌快速出海。",
+    sourceName: "SHEIN 招商大会",
+    originalUrl: "https://example.com/shein-semi",
+    publishedAt: "2025.07.08",
+    isPublished: true,
+    isFeatured: false,
+  },
+];
+
 // ========== 统一导出 ==========
 
 export const siteData = {
@@ -551,4 +636,5 @@ export const siteData = {
   sanctuary,
   mascot,
   resources,
+  insightsHub,
 };

@@ -11,6 +11,8 @@ import {
   type SanctuaryPost,
   type ContentBlock,
   type ResourceItem,
+  type InsightHubItem,
+  type InsightHubCategory,
 } from "@/data/siteData";
 
 // 生成 TEXT 主键
@@ -559,5 +561,67 @@ export async function fetchLeads(): Promise<Lead[]> {
 export async function deleteLead(id: string) {
   if (!supabase) throw new Error("Supabase not configured");
   const { error } = await supabase.from("leads").delete().eq("id", String(id));
+  if (error) throw error;
+}
+
+// ---------- Insights Hub (情报站) CRUD ----------
+export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
+  if (!supabase) return siteData.insightsHub;
+  try {
+    const { data, error } = await supabase
+      .from("insights_hub")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error || !data || data.length === 0) return siteData.insightsHub;
+    return data.map((row: any) => ({
+      id: row.id,
+      title: row.title || "",
+      category: row.category || "💡 AI技术/大厂",
+      summary: row.summary || "",
+      sourceName: row.source_name || "",
+      originalUrl: row.original_url || "",
+      publishedAt: row.published_at || "",
+      isPublished: row.is_published ?? true,
+      isFeatured: row.is_featured ?? false,
+    })) as InsightHubItem[];
+  } catch {
+    return siteData.insightsHub;
+  }
+}
+
+export async function createInsightHub(item: Partial<InsightHubItem>) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data, error } = await supabase
+    .from("insights_hub")
+    .insert([
+      {
+        id: genId(),
+        title: item.title,
+        category: item.category,
+        summary: item.summary,
+        source_name: item.sourceName,
+        original_url: item.originalUrl,
+        published_at: item.publishedAt,
+        is_published: item.isPublished ?? true,
+        is_featured: item.isFeatured ?? false,
+      },
+    ])
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteInsightHub(id: string) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase.from("insights_hub").delete().eq("id", String(id));
+  if (error) throw error;
+}
+
+export async function toggleInsightHubPublish(id: string, isPublished: boolean) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase
+    .from("insights_hub")
+    .update({ is_published: isPublished })
+    .eq("id", String(id));
   if (error) throw error;
 }

@@ -30,6 +30,7 @@ import {
   Upload,
   FileText,
   Mail,
+  Radar,
 } from "lucide-react";
 import {
   createProject,
@@ -51,11 +52,15 @@ import {
   uploadResourceFile,
   fetchLeads,
   deleteLead,
+  fetchInsightsHub,
+  createInsightHub,
+  deleteInsightHub,
+  toggleInsightHubPublish,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
-import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem } from "@/data/siteData";
+import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory } from "@/data/siteData";
 
-type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "leads" | "config";
+type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "leads" | "hub" | "config";
 
 // 列表项扩展 isPublished 字段（DB 返回，但 fetchProjects/fetchInsights 未映射，admin 页面自行管理）
 type AdminProject = PortfolioProject & { isPublished: boolean };
@@ -153,6 +158,7 @@ export default function AdminPage() {
             { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
             { key: "resources" as const, label: "资源包", icon: <Package className="h-3.5 w-3.5" /> },
             { key: "leads" as const, label: "线索", icon: <Mail className="h-3.5 w-3.5" /> },
+            { key: "hub" as const, label: "情报站", icon: <Radar className="h-3.5 w-3.5" /> },
             { key: "config" as const, label: "站点配置", icon: <Settings className="h-3.5 w-3.5" /> },
           ].map((tab) => (
             <button
@@ -227,6 +233,17 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <LeadsManager />
+            </motion.div>
+          )}
+          {activeTab === "hub" && (
+            <motion.div
+              key="hub"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <InsightHubEditor />
             </motion.div>
           )}
           {activeTab === "config" && (
@@ -1635,6 +1652,318 @@ function LeadsManager() {
                   className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                 >
                   {deletingId === lead.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========== Tab: 情报站编辑器 (Insight Hub) ==========
+function InsightHubEditor() {
+  const [form, setForm] = useState({
+    title: "",
+    category: "🤖 机器人/具身智能" as InsightHubCategory,
+    sourceName: "",
+    originalUrl: "",
+    publishedAt: "",
+    summary: "",
+    isFeatured: false,
+  });
+  const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [hubList, setHubList] = useState<InsightHubItem[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const loadHub = async () => {
+    setListLoading(true);
+    try {
+      const data = await fetchInsightsHub();
+      setHubList(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHub();
+  }, []);
+
+  const updateField = (field: string, value: any) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) {
+      setStatus({ type: "error", msg: "请填写资讯标题" });
+      return;
+    }
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      const item: Partial<InsightHubItem> = {
+        title: form.title,
+        category: form.category,
+        summary: form.summary,
+        sourceName: form.sourceName,
+        originalUrl: form.originalUrl,
+        publishedAt: form.publishedAt,
+        isPublished: true,
+        isFeatured: form.isFeatured,
+      };
+      await createInsightHub(item);
+      setStatus({ type: "success", msg: "情报站内容发布成功！" });
+      setForm({
+        title: "",
+        category: "🤖 机器人/具身智能",
+        sourceName: "",
+        originalUrl: "",
+        publishedAt: "",
+        summary: "",
+        isFeatured: false,
+      });
+      loadHub();
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "发布失败" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("确定要彻底删除此条情报吗？此操作不可撤销。")) return;
+    setDeletingId(id);
+    try {
+      await deleteInsightHub(id);
+      setHubList((prev) => prev.filter((h) => h.id !== id));
+      setStatus({ type: "success", msg: "情报已删除" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "删除失败" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleTogglePublish = async (id: string, current: boolean) => {
+    setTogglingId(id);
+    try {
+      await toggleInsightHubPublish(id, !current);
+      setHubList((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, isPublished: !current } : h))
+      );
+    } catch {
+      alert("切换失败");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-50">发布情报站内容</h2>
+        <p className="mt-1 text-sm text-zinc-500">新增一条行业情报，保存至 Supabase insights_hub 表</p>
+      </div>
+
+      <div className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+        {/* 基础信息 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="资讯标题 *">
+            <input
+              value={form.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              placeholder="如：智元机器人发布远征 A2 具身智能新品"
+              className="input-hub"
+            />
+          </FormField>
+          <FormField label="分类 *">
+            <select
+              value={form.category}
+              onChange={(e) => updateField("category", e.target.value)}
+              className="input-hub"
+            >
+              <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
+              <option value="💡 AI技术/大厂">💡 AI技术/大厂</option>
+              <option value="📈 品牌营销/SOP">📈 品牌营销/SOP</option>
+            </select>
+          </FormField>
+          <FormField label="来源名称">
+            <input
+              value={form.sourceName}
+              onChange={(e) => updateField("sourceName", e.target.value)}
+              placeholder="如：智元机器人官方发布会"
+              className="input-hub"
+            />
+          </FormField>
+          <FormField label="原文链接">
+            <input
+              value={form.originalUrl}
+              onChange={(e) => updateField("originalUrl", e.target.value)}
+              placeholder="https://..."
+              className="input-hub"
+            />
+          </FormField>
+          <FormField label="发布日期">
+            <input
+              value={form.publishedAt}
+              onChange={(e) => updateField("publishedAt", e.target.value)}
+              placeholder="如：2025.07.20"
+              className="input-hub"
+            />
+          </FormField>
+        </div>
+
+        {/* 陈皮提炼看点 */}
+        <FormField label="陈皮提炼看点（100字核心摘要）">
+          <textarea
+            value={form.summary}
+            onChange={(e) => updateField("summary", e.target.value)}
+            rows={4}
+            placeholder="用一句话提炼这条情报的核心看点..."
+            className="input-hub resize-none"
+          />
+        </FormField>
+
+        {/* 是否置顶 */}
+        <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/40 px-5 py-4">
+          <div className="flex-1 pr-4">
+            <h4 className="text-sm font-semibold text-zinc-100">置顶</h4>
+            <p className="mt-1 text-xs text-zinc-500">开启后，该情报将在情报站顶部展示</p>
+          </div>
+          <button
+            onClick={() => updateField("isFeatured", !form.isFeatured)}
+            role="switch"
+            aria-checked={form.isFeatured}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+              form.isFeatured
+                ? "bg-gradient-to-r from-blue-500 to-purple-500"
+                : "bg-zinc-700"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                form.isFeatured ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* 状态提示 */}
+        {status && (
+          <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+            status.type === "success"
+              ? "border border-green-500/30 bg-green-500/10 text-green-400"
+              : "border border-red-500/30 bg-red-500/10 text-red-400"
+          }`}>
+            {status.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {status.msg}
+          </div>
+        )}
+
+        {/* 提交按钮 */}
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+        >
+          {submitting ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> 发布中...</>
+          ) : (
+            <><Save className="h-4 w-4" /> 发布情报</>
+          )}
+        </button>
+      </div>
+
+      <style jsx>{`
+        .input-hub {
+          width: 100%;
+          border-radius: 0.75rem;
+          border: 1px solid rgb(39 39 42);
+          background-color: rgb(9 9 11);
+          padding: 0.625rem 0.875rem;
+          font-size: 0.875rem;
+          color: rgb(244 244 245);
+          outline: none;
+          transition: all 0.15s;
+        }
+        .input-hub::placeholder {
+          color: rgb(82 82 91);
+        }
+        .input-hub:focus {
+          border-color: rgba(168, 85, 247, 0.5);
+        }
+      `}</style>
+
+      {/* 已发布情报列表 */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+          <h3 className="text-sm font-semibold text-zinc-200">已发布情报（{hubList.length}）</h3>
+          <button
+            onClick={loadHub}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            刷新
+          </button>
+        </div>
+        {listLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+          </div>
+        ) : hubList.length === 0 ? (
+          <div className="py-16 text-center">
+            <Radar className="mx-auto mb-3 h-8 w-8 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无情报数据</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {hubList.map((h) => (
+              <div key={h.id} className="flex items-start gap-4 p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                      {h.category}
+                    </span>
+                    {h.publishedAt && <span className="text-[10px] text-zinc-600">{h.publishedAt}</span>}
+                    {h.isFeatured && (
+                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
+                        置顶
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="truncate text-sm font-medium text-zinc-100">{h.title}</h4>
+                  {h.sourceName && <p className="mt-0.5 truncate text-xs text-zinc-500">来源：{h.sourceName}</p>}
+                </div>
+                {/* 发布状态开关 */}
+                <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  <span className={`text-[10px] ${h.isPublished ? "text-green-400" : "text-zinc-500"}`}>
+                    {h.isPublished ? "已发布" : "未发布"}
+                  </span>
+                  <button
+                    onClick={() => handleTogglePublish(h.id, h.isPublished)}
+                    disabled={togglingId === h.id}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${h.isPublished ? "bg-green-500" : "bg-zinc-600"}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${h.isPublished ? "translate-x-4" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleDelete(h.id)}
+                  disabled={deletingId === h.id}
+                  className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === h.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Trash2 className="h-4 w-4" />

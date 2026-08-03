@@ -73,6 +73,23 @@
  * CREATE POLICY "anyone can submit lead" ON public.leads
  *   FOR INSERT WITH CHECK (true);
  *
+ * -- 7. 情报站 (Information Hub) 表
+ * CREATE TABLE IF NOT EXISTS public.insights_hub (
+ *   id TEXT PRIMARY KEY,
+ *   title TEXT NOT NULL,
+ *   category TEXT NOT NULL,
+ *   summary TEXT,
+ *   source_name TEXT,
+ *   original_url TEXT,
+ *   published_at TEXT,
+ *   is_published BOOLEAN DEFAULT TRUE,
+ *   is_featured BOOLEAN DEFAULT FALSE,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * ALTER TABLE public.insights_hub ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "insights_hub are readable by everyone" ON public.insights_hub
+ *   FOR SELECT USING (true);
+ *
  * -- 3. 庇护所互动帖子表
  * CREATE TABLE IF NOT EXISTS public.sanctuary_posts (
  *   id TEXT PRIMARY KEY,
