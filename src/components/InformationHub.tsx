@@ -26,21 +26,37 @@ export default function InformationHub() {
   const [aiRefreshing, setAiRefreshing] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
 
-  const loadData = () => {
-    fetchInsightsHub().then((data) => {
-      setItems(data.filter((i) => i.isPublished));
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchInsightsHub();
+      // 过滤 isPublished = true，未发布的前台不可见
+      const published = data.filter((i) => i.isPublished);
+      setItems(published);
+    } catch (err: any) {
+      console.warn("[InformationHub] loadData 失败:", err?.message || err);
+      setItems([]);
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
     let mounted = true;
-    fetchInsightsHub().then((data) => {
-      if (mounted) {
-        setItems(data.filter((i) => i.isPublished));
-        setLoading(false);
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await fetchInsightsHub();
+        if (mounted) {
+          const published = data.filter((i) => i.isPublished);
+          setItems(published);
+        }
+      } catch (err) {
+        console.warn("[InformationHub] 首次加载失败:", err);
+      } finally {
+        if (mounted) setLoading(false);
       }
-    });
+    })();
     return () => { mounted = false; };
   }, []);
 
@@ -54,21 +70,31 @@ export default function InformationHub() {
         headers: { "Content-Type": "application/json" },
       });
       const result = await res.json();
-      if (!result.success) {
-        setAiMessage(result.error || result.message || "AI 感知失败，请稍后再试");
-        return;
-      }
       const stats = result.stats || {};
       const inserted = stats.inserted ?? 0;
+      const duplicatesRemoved = stats.duplicatesRemoved ?? 0;
+
       if (inserted > 0) {
-        setAiMessage(`⚡ 已写入 ${inserted} 条新情报（去重 ${stats.deduplicated ?? 0} / 清洗 ${stats.sanitized ?? 0}）`);
+        // 写入成功：立即刷新数据
+        setAiMessage(`⚡ 写入 ${inserted}/${stats.afterDedup ?? stats.totalItems ?? stats.sanitized ?? "?"} 条（24h跳过 ${duplicatesRemoved} 条重复）`);
+        // 小延迟后刷新，确保 Supabase 写入落盘（避免读取时还在 RLS/复制延迟）
+        await new Promise((r) => setTimeout(r, 400));
+        await loadData();
       } else {
-        setAiMessage(result.message || "暂无新情报，全部已存在或未通过筛选");
+        // 写入为 0 时，分三种情况提示：重复 / 清洗拦截 / 写入失败
+        if (duplicatesRemoved > 0) {
+          setAiMessage(`⚠️ 24h 内已有重复情报（跳过 ${duplicatesRemoved} 条），稍后再试或换个时间`);
+        } else if (!result.success) {
+          const firstErr = (result.errors && result.errors[0]) || result.error || result.message || "未知错误";
+          setAiMessage(`❌ ${firstErr}`);
+        } else {
+          setAiMessage(result.message || "暂无新情报，稍后再试");
+        }
+        // 即使本次没写入新数据，也刷新一次（可能数据库里之前有没读取到的）
+        await loadData();
       }
-      // 重新加载前台数据
-      loadData();
     } catch (err: any) {
-      setAiMessage(err.message || "AI 感知请求失败");
+      setAiMessage(`❌ 网络错误：${err?.message || "AI 感知请求失败"}`);
     } finally {
       setAiRefreshing(false);
     }
@@ -123,7 +149,13 @@ export default function InformationHub() {
             )}
           </button>
           {aiMessage && (
-            <span className={`text-xs ${aiMessage.includes("失败") || aiMessage.includes("未") ? "text-amber-400" : "text-emerald-400"}`}>
+            <span className={`text-xs whitespace-nowrap ${
+              aiMessage.startsWith("❌") || aiMessage.includes("失败") || aiMessage.startsWith("写入失败")
+                ? "text-rose-400"
+                : aiMessage.startsWith("⚠️")
+                ? "text-amber-400"
+                : "text-emerald-400"
+            }`}>
               {aiMessage}
             </span>
           )}

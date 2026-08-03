@@ -2193,20 +2193,26 @@ function InsightHubEditor() {
         headers: { "Content-Type": "application/json" },
       });
       const result = await res.json();
-      if (!result.success) {
-        setStatus({ type: "error", msg: result.error || result.message || "AI 生成失败" });
-        return;
-      }
       const stats = result.stats || {};
       const inserted = stats.inserted ?? 0;
+      const duplicatesRemoved = stats.duplicatesRemoved ?? 0;
+
       if (inserted > 0) {
-        setStatus({ type: "success", msg: `⚡ AI 已写入 ${inserted} 条情报（去重 ${stats.deduplicated ?? 0} / 清洗 ${stats.sanitized ?? 0}）` });
+        setStatus({ type: "success", msg: `⚡ AI 写入 ${inserted}/${stats.afterDedup ?? stats.totalItems ?? "?"} 条（24h跳过重复 ${duplicatesRemoved} 条，写入方式：${stats.method}）` });
       } else {
-        setStatus({ type: "error", msg: result.message || "暂无新情报，全部已存在或未通过筛选" });
+        // 细化错误提示
+        let msg = result.message || "暂无新情报";
+        if (duplicatesRemoved > 0) {
+          msg = `⚠️ 24h 内已有重复情报（跳过 ${duplicatesRemoved} 条）`;
+        } else if (!result.success) {
+          msg = (result.errors && result.errors[0]) || result.error || result.message || "AI 生成/写入失败";
+        }
+        setStatus({ type: "error", msg });
       }
-      loadHub();
+      // 写入完成后立即刷新数据（无论写入成功与否）
+      await loadHub();
     } catch (err: any) {
-      setStatus({ type: "error", msg: err.message || "AI 请求失败" });
+      setStatus({ type: "error", msg: `网络错误：${err.message || "AI 请求失败"}` });
     } finally {
       setAiGenerating(false);
     }
