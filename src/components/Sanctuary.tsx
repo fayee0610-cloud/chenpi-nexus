@@ -507,7 +507,8 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
       setFarts((prev) => [finalPost, ...prev]);
       setPostContent("");
     } catch (err) {
-      // Supabase 写入失败时仍在前端显示（降级处理）
+      // Supabase 写入失败 — 打印详细错误便于排查，仍在前端临时显示
+      console.warn("[Sanctuary] 发帖写入 Supabase 失败:", err instanceof Error ? err.message : err);
       const fallback: SanctuaryPost = {
         id: fartIdRef.current++,
         content: postContent.trim(),

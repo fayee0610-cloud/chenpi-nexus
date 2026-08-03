@@ -57,12 +57,15 @@ export default function ResourceHub() {
   const handleSubmitEmail = useCallback(async () => {
     if (!email.trim() || !email.includes("@")) return;
     setSubmitting(true);
-    // 静默写入线索
-    await createLead(email.trim(), lockResource?.id, lockResource?.title);
+    // 写入线索到 Supabase（失败不阻断下载，但打印警告便于排查）
+    const result = await createLead(email.trim(), lockResource?.id, lockResource?.title);
+    if (!result.success) {
+      console.warn("[ResourceHub] 邮箱留存失败:", result.error);
+    }
     // 记录已提交状态
     localStorage.setItem("has_submitted_email", "true");
     setHasSubmittedEmail(true);
-    // 立即触发下载
+    // 立即触发下载（即使留存失败也放行下载，不影响用户体验）
     if (lockResource) await triggerDownload(lockResource);
     // 关闭弹窗
     setLockResource(null);

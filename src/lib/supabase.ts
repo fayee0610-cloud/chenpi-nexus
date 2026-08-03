@@ -60,6 +60,12 @@
  * ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "resources are readable by everyone" ON public.resources
  *   FOR SELECT USING (true);
+ * CREATE POLICY "anyone can insert resources" ON public.resources
+ *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can update resources" ON public.resources
+ *   FOR UPDATE USING (true);
+ * CREATE POLICY "anyone can delete resources" ON public.resources
+ *   FOR DELETE USING (true);
  *
  * -- 6. 线索/邮箱订阅表（资源下载获客）
  * CREATE TABLE IF NOT EXISTS public.leads (
@@ -74,6 +80,8 @@
  *   FOR SELECT USING (true);
  * CREATE POLICY "anyone can submit lead" ON public.leads
  *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can delete leads" ON public.leads
+ *   FOR DELETE USING (true);
  *
  * -- 7. 情报站 (Information Hub) 表
  * CREATE TABLE IF NOT EXISTS public.insights_hub (
@@ -96,7 +104,13 @@
  * ALTER TABLE public.insights_hub ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "insights_hub are readable by everyone" ON public.insights_hub
  *   FOR SELECT USING (true);
- * -- 允许 API 路由通过 service_role 写入（anon 无写入权限）
+ * -- 允许 Admin 后台（anon key）写入/修改/删除情报站内容
+ * CREATE POLICY "anyone can insert insights_hub" ON public.insights_hub
+ *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can update insights_hub" ON public.insights_hub
+ *   FOR UPDATE USING (true);
+ * CREATE POLICY "anyone can delete insights_hub" ON public.insights_hub
+ *   FOR DELETE USING (true);
  *
  * -- 3. 庇护所互动帖子表
  * CREATE TABLE IF NOT EXISTS public.sanctuary_posts (
@@ -112,7 +126,7 @@
  * -- 若表已存在，补加 is_published 列：
  * -- ALTER TABLE public.sanctuary_posts ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  *
- * -- RLS 配置（允许公开读，写入通过 admin 后台）
+ * -- RLS 配置（允许公开读 + Admin 后台 anon key 写入）
  * ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
  * ALTER TABLE public.insights ENABLE ROW LEVEL SECURITY;
  * ALTER TABLE public.sanctuary_posts ENABLE ROW LEVEL SECURITY;
@@ -124,9 +138,29 @@
  * CREATE POLICY "sanctuary_posts are readable by everyone" ON public.sanctuary_posts
  *   FOR SELECT USING (true);
  *
+ * -- 允许 Admin 后台（anon key）写入/修改/删除作品案例
+ * CREATE POLICY "anyone can insert projects" ON public.projects
+ *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can update projects" ON public.projects
+ *   FOR UPDATE USING (true);
+ * CREATE POLICY "anyone can delete projects" ON public.projects
+ *   FOR DELETE USING (true);
+ *
+ * -- 允许 Admin 后台（anon key）写入/修改/删除灵感文章
+ * CREATE POLICY "anyone can insert insights" ON public.insights
+ *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can update insights" ON public.insights
+ *   FOR UPDATE USING (true);
+ * CREATE POLICY "anyone can delete insights" ON public.insights
+ *   FOR DELETE USING (true);
+ *
  * -- 允许匿名插入庇护所帖子（访客发帖）
  * CREATE POLICY "anyone can post to sanctuary" ON public.sanctuary_posts
  *   FOR INSERT WITH CHECK (true);
+ * CREATE POLICY "anyone can update sanctuary_posts" ON public.sanctuary_posts
+ *   FOR UPDATE USING (true);
+ * CREATE POLICY "anyone can delete sanctuary_posts" ON public.sanctuary_posts
+ *   FOR DELETE USING (true);
  *
  * -- 4. 站点配置表（Feature Flags 模块显隐控制）
  * CREATE TABLE IF NOT EXISTS public.site_config (

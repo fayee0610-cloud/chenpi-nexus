@@ -621,13 +621,13 @@ export interface Lead {
   createdAt: string;
 }
 
-export async function createLead(email: string, resourceId?: string, resourceTitle?: string): Promise<void> {
+export async function createLead(email: string, resourceId?: string, resourceTitle?: string): Promise<{ success: boolean; error?: string }> {
   if (!supabase) {
     // 未配置 Supabase 时静默成功（不影响用户下载）
-    return;
+    return { success: false, error: "Supabase 未配置" };
   }
   try {
-    await supabase.from("leads").insert([
+    const { error } = await supabase.from("leads").insert([
       {
         id: genId(),
         email,
@@ -635,9 +635,15 @@ export async function createLead(email: string, resourceId?: string, resourceTit
         resource_title: resourceTitle || null,
       },
     ]);
+    if (error) {
+      // RLS 阻止写入时，Supabase 返回 error
+      console.warn("[dataApi] createLead 写入失败:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
   } catch (err) {
-    // 静默失败，不阻断下载流程，仅打印日志
     logNetworkFallback("createLead", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
