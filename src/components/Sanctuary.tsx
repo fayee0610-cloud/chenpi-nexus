@@ -388,6 +388,22 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     setShowFortune(true);
   }, [fortuneCategory, pickRandomQuote]);
 
+  // 将金句拆分为三行短诗（现代诗节奏）
+  const splitPoem = (quote: string): string[] => {
+    const parts = quote.split(/[，,。；;——、]/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      return [parts[0], parts[1], parts.slice(2).join("，")];
+    }
+    if (parts.length === 2) {
+      const mid = Math.ceil(parts[1].length / 2);
+      return [parts[0], parts[1].slice(0, mid), parts[1].slice(mid)];
+    }
+    const len = quote.length;
+    const a = Math.ceil(len / 3);
+    const b = Math.ceil((len * 2) / 3);
+    return [quote.slice(0, a), quote.slice(a, b), quote.slice(b)];
+  };
+
   // 3D Tilt 跟随鼠标
   const handleTiltMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -835,17 +851,48 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                 className="relative w-[300px] overflow-hidden rounded-2xl sm:w-[340px]"
                 style={{
                   aspectRatio: "9 / 16",
-                  background: "rgba(12, 12, 14, 0.78)",
-                  backdropFilter: "blur(20px)",
-                  WebkitBackdropFilter: "blur(20px)",
-                  boxShadow: `0 0 40px ${fortuneTheme.glow}, 0 0 0 1px rgba(255,255,255,0.04) inset`,
+                  background: "rgba(9, 9, 11, 0.78)",
+                  backdropFilter: "blur(18px)",
+                  WebkitBackdropFilter: "blur(18px)",
+                  boxShadow: `0 0 45px ${fortuneTheme.glow}, 0 0 0 1px ${fortuneTheme.border} inset`,
                 }}
               >
-                {/* 背景层：中心柔和径向光晕（极淡） */}
+                {/* 背景层：赛博网格 + 几何水印 + 光晕（降透明度去油） */}
+                <div className="absolute inset-0">
+                  <div
+                    className="absolute inset-0 opacity-[0.15]"
+                    style={{
+                      backgroundImage: `linear-gradient(${fortuneTheme.gridLine} 1px, transparent 1px), linear-gradient(90deg, ${fortuneTheme.gridLine} 1px, transparent 1px)`,
+                      backgroundSize: "24px 24px",
+                    }}
+                  />
+                  <div
+                    className="absolute right-4 top-20 h-28 w-28 rotate-45 border opacity-[0.18]"
+                    style={{ borderColor: fortuneTheme.border }}
+                  />
+                  <div
+                    className="absolute left-4 bottom-28 h-20 w-20 rotate-12 border opacity-[0.15]"
+                    style={{ borderColor: fortuneTheme.border }}
+                  />
+                  <div
+                    className="absolute -top-24 left-1/4 h-48 w-48 rounded-full blur-3xl opacity-60"
+                    style={{ background: fortuneTheme.blurA }}
+                  />
+                  <div
+                    className="absolute -bottom-24 right-1/4 h-48 w-48 rounded-full blur-3xl opacity-60"
+                    style={{ background: fortuneTheme.blurB }}
+                  />
+                </div>
+
+                {/* 渐变边框光晕（Cyber Glow Border） */}
                 <div
-                  className="absolute inset-0"
+                  className="pointer-events-none absolute inset-0 rounded-2xl"
                   style={{
-                    background: `radial-gradient(circle at 50% 42%, ${fortuneTheme.primary}10 0%, transparent 55%), radial-gradient(circle at 50% 42%, ${fortuneTheme.secondary}08 0%, transparent 70%)`,
+                    background: `linear-gradient(135deg, ${fortuneTheme.primary}30, transparent 40%, transparent 60%, ${fortuneTheme.secondary}30)`,
+                    maskImage: "linear-gradient(black, black) padding-box, linear-gradient(black, black)",
+                    WebkitMaskComposite: "xor",
+                    maskComposite: "exclude",
+                    padding: 1,
                   }}
                 />
 
@@ -881,41 +928,58 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                     </span>
                   </div>
 
-                  {/* 中部：签文金句（设计师级字体排版） */}
+                  {/* 中部：三行短诗（现代诗排版） */}
                   <div className="relative my-8 flex flex-1 items-center justify-center">
                     {/* 极淡柔光背景 */}
                     <div
                       className="absolute inset-0 rounded-2xl"
                       style={{
-                        background: `radial-gradient(ellipse at center, ${fortuneTheme.primary}08 0%, transparent 70%)`,
+                        background: `radial-gradient(ellipse at center, ${fortuneTheme.primary}0A 0%, transparent 70%)`,
                       }}
                     />
 
-                    <div className="relative z-10 w-full px-2">
-                      <span
-                        className="mb-2 block font-serif text-3xl leading-none"
-                        style={{ color: fortuneTheme.quoteMark, opacity: 0.3 }}
-                      >
-                        "
-                      </span>
-                      <p
-                        className="text-center font-medium"
-                        style={{
-                          fontSize: "19px",
-                          lineHeight: 1.8,
-                          letterSpacing: "0.05em",
-                          color: "rgba(255, 255, 255, 0.9)",
-                        }}
-                      >
-                        {currentQuote}
-                      </p>
-                      <span
-                        className="mt-2 block rotate-180 self-end font-serif text-3xl leading-none"
-                        style={{ color: fortuneTheme.quoteMark, opacity: 0.3 }}
-                      >
-                        "
-                      </span>
+                    {/* 双引号浮标 - 上 */}
+                    <span
+                      className="absolute left-1 top-0 font-serif text-2xl leading-none"
+                      style={{ color: fortuneTheme.quoteMark, opacity: 0.4 }}
+                    >
+                      "
+                    </span>
+
+                    {/* 三行诗内容 */}
+                    <div className="relative z-10 w-full px-5">
+                      {splitPoem(currentQuote).map((line, i) => {
+                        const isLast = i === 2;
+                        return (
+                          <p
+                            key={i}
+                            className="text-center"
+                            style={{
+                              fontSize: "20px",
+                              lineHeight: 2.0,
+                              letterSpacing: "0.05em",
+                              fontWeight: isLast ? 500 : 400,
+                              color: isLast ? "transparent" : "rgba(255,255,255,0.85)",
+                              ...(isLast && {
+                                backgroundImage: `linear-gradient(90deg, ${fortuneTheme.primary}, ${fortuneTheme.secondary})`,
+                                WebkitBackgroundClip: "text",
+                                backgroundClip: "text",
+                              }),
+                            }}
+                          >
+                            {line}
+                          </p>
+                        );
+                      })}
                     </div>
+
+                    {/* 双引号浮标 - 下 */}
+                    <span
+                      className="absolute bottom-0 right-1 rotate-180 font-serif text-2xl leading-none"
+                      style={{ color: fortuneTheme.quoteMark, opacity: 0.4 }}
+                    >
+                      "
+                    </span>
                   </div>
 
                   {/* 底部：二维码 + 编号（极简收纳） */}
@@ -962,6 +1026,12 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                     </div>
                   </div>
                 </div>
+
+                {/* 毛玻璃边框光晕 */}
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl ring-1"
+                  style={{ boxShadow: `0 0 30px ${fortuneTheme.glow} inset` }}
+                />
               </div>
               </div>
 
