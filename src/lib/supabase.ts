@@ -197,10 +197,36 @@
  * CREATE POLICY IF NOT EXISTS "portfolio-covers anon update"
  *   ON storage.objects FOR UPDATE
  *   USING (bucket_id = 'portfolio-covers');
+ *
+ * -- ============================================================
+ * -- 9. Storage Bucket: resources（资源包 PDF 公开存储桶）
+ * -- 【必须在 Supabase Dashboard → SQL Editor 中运行以下 SQL 才能生效】
+ * -- Step 1: 创建 Public Bucket
+ * INSERT INTO storage.buckets (id, name, public)
+ * VALUES ('resources', 'resources', true)
+ * ON CONFLICT (id) DO NOTHING;
+ *
+ * -- Step 2: 允许匿名读取（前台展示/下载 PDF）
+ * CREATE POLICY IF NOT EXISTS "resources public read"
+ *   ON storage.objects FOR SELECT
+ *   USING (bucket_id = 'resources');
+ *
+ * -- Step 3: 允许匿名上传（admin 后台使用 anon key 直传 PDF）
+ * CREATE POLICY IF NOT EXISTS "resources anon upload"
+ *   ON storage.objects FOR INSERT
+ *   WITH CHECK (bucket_id = 'resources');
+ *
+ * -- Step 4: 允许匿名更新/删除（admin 后台替换/删除 PDF）
+ * CREATE POLICY IF NOT EXISTS "resources anon update"
+ *   ON storage.objects FOR UPDATE
+ *   USING (bucket_id = 'resources');
+ * CREATE POLICY IF NOT EXISTS "resources anon delete"
+ *   ON storage.objects FOR DELETE
+ *   USING (bucket_id = 'resources');
  * ============================================================
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -225,7 +251,9 @@ function isValidSupabaseUrl(url: string): boolean {
 // 初始化 Supabase 客户端
 // - URL 格式不合法或 key 缺失时返回 null（调用方返回空数组，无 Mock 降级）
 // - 启动时打印一次诊断日志，方便排查配置问题
-let supabaseClient: ReturnType<typeof createClient> | null = null;
+// 使用 SupabaseClient<any, "public", any> 显式指定泛型，
+// 避免 ReturnType<typeof createClient> 在新版 supabase-js 中将表行类型推断为 never
+let supabaseClient: SupabaseClient<any, "public", any> | null = null;
 
 if (supabaseUrl && supabaseAnonKey) {
   if (isValidSupabaseUrl(supabaseUrl)) {

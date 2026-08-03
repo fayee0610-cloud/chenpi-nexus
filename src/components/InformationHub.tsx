@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Radar, Sparkles, TrendingUp, Bot } from "lucide-react";
-import { fetchInsightsHub } from "@/lib/dataApi";
+import { ExternalLink, Radar, Sparkles, TrendingUp, Bot, Loader2 } from "lucide-react";
+import { fetchInsightsHub, createInsightHub } from "@/lib/dataApi";
 import { type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
 
 const CATEGORY_TABS = [
@@ -23,6 +23,15 @@ export default function InformationHub() {
   const [items, setItems] = useState<InsightHubItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [aiRefreshing, setAiRefreshing] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
+
+  const loadData = () => {
+    fetchInsightsHub().then((data) => {
+      setItems(data.filter((i) => i.isPublished));
+      setLoading(false);
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +43,52 @@ export default function InformationHub() {
     });
     return () => { mounted = false; };
   }, []);
+
+  // AI 实时感知：调用 AI 接口生成最新情报并写入数据库
+  const handleAiRefresh = async () => {
+    setAiRefreshing(true);
+    setAiMessage(null);
+    try {
+      const res = await fetch("/api/intelligence/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await res.json();
+      if (!result.success || !result.items?.length) {
+        setAiMessage(result.error || "AI 暂时没有生成新情报，请稍后再试");
+        return;
+      }
+      // 将 AI 生成的情报写入数据库
+      let savedCount = 0;
+      for (const item of result.items) {
+        try {
+          await createInsightHub({
+            title: item.title,
+            category: item.category,
+            summary: item.summary,
+            sourceName: item.source_name,
+            originalUrl: item.original_url,
+            publishedAt: item.published_at,
+            isPublished: true,
+            isFeatured: false,
+            apiSource: "ai_generated",
+            tags: item.tags || [],
+          });
+          savedCount++;
+        } catch (e) {
+          // 单条写入失败不影响整体
+        }
+      }
+      setAiMessage(savedCount > 0 ? `AI 已生成 ${savedCount} 条新情报` : "AI 情报写入失败，请检查后台");
+      // 重新加载前台数据
+      loadData();
+    } catch (err: any) {
+      setAiMessage(err.message || "AI 感知请求失败");
+    } finally {
+      setAiRefreshing(false);
+    }
+  };
 
   const filteredItems = useMemo(() => {
     if (activeCategory === "all") return items;
@@ -63,6 +118,32 @@ export default function InformationHub() {
         <p className="mt-3 text-sm text-zinc-500">
           AI · 机器人 · 出海营销 — 第一手硬核商业情报提炼
         </p>
+
+        {/* AI 实时感知按钮 */}
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <button
+            onClick={handleAiRefresh}
+            disabled={aiRefreshing}
+            className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-xs font-medium text-purple-300 transition-all hover:border-purple-500/50 hover:bg-purple-500/20 disabled:opacity-50"
+          >
+            {aiRefreshing ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                AI 感知中...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                AI 实时感知
+              </>
+            )}
+          </button>
+          {aiMessage && (
+            <span className={`text-xs ${aiMessage.includes("失败") || aiMessage.includes("没有") ? "text-amber-400" : "text-emerald-400"}`}>
+              {aiMessage}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 分类 Tab */}

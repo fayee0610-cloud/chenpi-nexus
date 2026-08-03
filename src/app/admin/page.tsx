@@ -34,6 +34,7 @@ import {
   Edit3,
   ImagePlus,
   Link2,
+  Star,
 } from "lucide-react";
 import {
   createInsight,
@@ -56,8 +57,10 @@ import {
   deleteLead,
   fetchInsightsHub,
   createInsightHub,
+  updateInsightHub,
   deleteInsightHub,
   toggleInsightHubPublish,
+  toggleInsightHubFeature,
   uploadPortfolioCover,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
@@ -2120,11 +2123,113 @@ function InsightHubEditor() {
     }
   };
 
+  // 切换置顶
+  const handleToggleFeature = async (id: string, current: boolean) => {
+    setTogglingId(id);
+    try {
+      await toggleInsightHubFeature(id, !current);
+      setHubList((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, isFeatured: !current } : h))
+      );
+    } catch {
+      alert("置顶切换失败");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // 编辑情报
+  const [editingHub, setEditingHub] = useState<InsightHubItem | null>(null);
+  const [editForm, setEditForm] = useState<{ title: string; summary: string; category: InsightHubCategory; sourceName: string; originalUrl: string; publishedAt: string }>({ title: "", summary: "", category: "🤖 机器人/具身智能", sourceName: "", originalUrl: "", publishedAt: "" });
+
+  const handleEdit = (item: InsightHubItem) => {
+    setEditingHub(item);
+    setEditForm({
+      title: item.title,
+      summary: item.summary,
+      category: item.category,
+      sourceName: item.sourceName,
+      originalUrl: item.originalUrl,
+      publishedAt: item.publishedAt,
+    });
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingHub) return;
+    setTogglingId(editingHub.id);
+    try {
+      await updateInsightHub(editingHub.id, {
+        title: editForm.title,
+        summary: editForm.summary,
+        category: editForm.category,
+        sourceName: editForm.sourceName,
+        originalUrl: editForm.originalUrl,
+        publishedAt: editForm.publishedAt,
+      });
+      setHubList((prev) =>
+        prev.map((h) =>
+          h.id === editingHub.id
+            ? { ...h, ...editForm }
+            : h
+        )
+      );
+      setEditingHub(null);
+      setStatus({ type: "success", msg: "情报编辑成功" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "编辑失败" });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // AI 一键生成并写入
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const handleAiGenerate = async () => {
+    setAiGenerating(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/intelligence/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await res.json();
+      if (!result.success || !result.items?.length) {
+        setStatus({ type: "error", msg: result.error || "AI 生成失败" });
+        return;
+      }
+      let saved = 0;
+      for (const item of result.items) {
+        try {
+          await createInsightHub({
+            title: item.title,
+            category: item.category,
+            summary: item.summary,
+            sourceName: item.source_name,
+            originalUrl: item.original_url,
+            publishedAt: item.published_at,
+            isPublished: true,
+            isFeatured: false,
+            apiSource: "ai_generated",
+            tags: item.tags || [],
+          });
+          saved++;
+        } catch {}
+      }
+      setStatus({ type: "success", msg: `AI 已生成 ${saved} 条情报` });
+      loadHub();
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "AI 请求失败" });
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-zinc-50">发布情报站内容</h2>
-        <p className="mt-1 text-sm text-zinc-500">新增一条行业情报，保存至 Supabase insights_hub 表</p>
+        <h2 className="text-xl font-bold text-zinc-50">情报站管理</h2>
+        <p className="mt-1 text-sm text-zinc-500">新增、编辑、置顶、删除行业情报，支持 AI 一键生成</p>
       </div>
 
       <div className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
@@ -2145,8 +2250,8 @@ function InsightHubEditor() {
               className="input-hub"
             >
               <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
-              <option value="💡 AI技术/大厂">💡 AI技术/大厂</option>
-              <option value="📈 品牌营销/SOP">📈 品牌营销/SOP</option>
+              <option value="💡 AI技术/大厂策略">💡 AI技术/大厂策略</option>
+              <option value="📈 品牌策略/GTM干货">📈 品牌策略/GTM干货</option>
             </select>
           </FormField>
           <FormField label="来源名称">
@@ -2234,6 +2339,19 @@ function InsightHubEditor() {
             <><Save className="h-4 w-4" /> 发布情报</>
           )}
         </button>
+
+        {/* AI 一键生成 */}
+        <button
+          onClick={handleAiGenerate}
+          disabled={aiGenerating}
+          className="ml-3 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-6 py-3 text-sm font-semibold text-purple-300 transition-all hover:border-purple-500/50 hover:bg-purple-500/20 disabled:opacity-50"
+        >
+          {aiGenerating ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> AI 生成中...</>
+          ) : (
+            <><Sparkles className="h-4 w-4" /> AI 一键生成</>
+          )}
+        </button>
       </div>
 
       <style jsx>{`
@@ -2292,12 +2410,39 @@ function InsightHubEditor() {
                         置顶
                       </span>
                     )}
+                    {h.apiSource === "ai_generated" && (
+                      <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-400">
+                        AI生成
+                      </span>
+                    )}
                   </div>
                   <h4 className="truncate text-sm font-medium text-zinc-100">{h.title}</h4>
                   {h.sourceName && <p className="mt-0.5 truncate text-xs text-zinc-500">来源：{h.sourceName}</p>}
                 </div>
-                {/* 发布状态开关 */}
+                {/* 操作按钮组 */}
                 <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  {/* 置顶按钮 */}
+                  <button
+                    onClick={() => handleToggleFeature(h.id, h.isFeatured ?? false)}
+                    disabled={togglingId === h.id}
+                    title={h.isFeatured ? "取消置顶" : "置顶"}
+                    className={`rounded-lg border p-2 transition-all disabled:opacity-50 ${
+                      h.isFeatured
+                        ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+                        : "border-zinc-800 text-zinc-500 hover:border-amber-500/50 hover:text-amber-400"
+                    }`}
+                  >
+                    <Star className="h-4 w-4" />
+                  </button>
+                  {/* 编辑按钮 */}
+                  <button
+                    onClick={() => handleEdit(h)}
+                    title="编辑"
+                    className="rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-blue-500/50 hover:text-blue-400"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </button>
+                  {/* 发布状态开关 */}
                   <span className={`text-[10px] ${h.isPublished ? "text-green-400" : "text-zinc-500"}`}>
                     {h.isPublished ? "已发布" : "未发布"}
                   </span>
@@ -2325,6 +2470,104 @@ function InsightHubEditor() {
           </div>
         )}
       </div>
+
+      {/* 编辑弹窗 */}
+      <AnimatePresence>
+        {editingHub && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setEditingHub(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="mx-4 w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-bold text-zinc-100">编辑情报</h3>
+                <button onClick={() => setEditingHub(null)} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">标题</label>
+                  <input
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">分类</label>
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value as InsightHubCategory })}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
+                  >
+                    <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
+                    <option value="💡 AI技术/大厂策略">💡 AI技术/大厂策略</option>
+                    <option value="📈 品牌策略/GTM干货">📈 品牌策略/GTM干货</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">看点摘要</label>
+                  <textarea
+                    value={editForm.summary}
+                    onChange={(e) => setEditForm({ ...editForm, summary: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">来源</label>
+                    <input
+                      value={editForm.sourceName}
+                      onChange={(e) => setEditForm({ ...editForm, sourceName: e.target.value })}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-400">发布日期</label>
+                    <input
+                      value={editForm.publishedAt}
+                      onChange={(e) => setEditForm({ ...editForm, publishedAt: e.target.value })}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">原文链接</label>
+                  <input
+                    value={editForm.originalUrl}
+                    onChange={(e) => setEditForm({ ...editForm, originalUrl: e.target.value })}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={() => setEditingHub(null)} className="rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800">
+                    取消
+                  </button>
+                  <button
+                    onClick={handleEditSubmit}
+                    disabled={togglingId === editingHub.id}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+                  >
+                    {togglingId === editingHub.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    保存修改
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

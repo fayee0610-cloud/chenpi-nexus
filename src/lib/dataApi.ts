@@ -97,13 +97,15 @@ export async function fetchProjects(): Promise<PortfolioProject[]> {
   if (!supabase) return [];
 
   try {
-    // 仅查询 is_published = true 的作品（字段不存在时 Supabase 会忽略该过滤）
-    let query = supabase.from("projects").select("*").order("created_at", { ascending: false });
-    // 尝试加 is_published 过滤（若字段不存在，Supabase 返回错误，下面 catch 会降级为不带过滤的重试）
-    const { data, error } = await query;
+    // 服务端过滤 is_published = true，确保隐藏内容不传输到前端
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
 
     if (error) {
-      // 如果错误是 is_published 字段不存在，重试不带过滤
+      // 若 is_published 字段不存在，降级为全量查询 + 客户端过滤
       if (error.message && error.message.includes("is_published")) {
         console.warn("[dataApi] projects 表无 is_published 字段，建议执行 ALTER TABLE projects ADD COLUMN is_published BOOLEAN DEFAULT TRUE");
         const retry = await supabase.from("projects").select("*").order("created_at", { ascending: false });
@@ -117,9 +119,7 @@ export async function fetchProjects(): Promise<PortfolioProject[]> {
     }
     if (!data || data.length === 0) return [];
 
-    return data
-      .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
-      .map(mapProjectRow);
+    return data.map(mapProjectRow);
   } catch (err) {
     logNetworkFallback("fetchProjects", err);
     return [];
@@ -157,46 +157,58 @@ export async function fetchInsights(): Promise<InsightItem[]> {
   if (!supabase) return [];
 
   try {
+    // 服务端过滤 is_published = true
     const { data, error } = await supabase
       .from("insights")
       .select("*")
+      .eq("is_published", true)
       .order("created_at", { ascending: false });
 
     if (error) {
+      // 字段不存在时降级
+      if (error.message && error.message.includes("is_published")) {
+        console.warn("[dataApi] insights 表无 is_published 字段，建议执行 ALTER TABLE insights ADD COLUMN is_published BOOLEAN DEFAULT TRUE");
+        const retry = await supabase.from("insights").select("*").order("created_at", { ascending: false });
+        if (retry.error || !retry.data) return [];
+        return retry.data
+          .filter((row: any) => row.is_published !== false)
+          .map((row: any) => mapInsightRow(row));
+      }
       console.warn("[dataApi] fetchInsights 查询出错:", error.message);
       return [];
     }
     if (!data || data.length === 0) return [];
 
-    return data
-      .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
-      .map((row: any) => {
-        const cat = row.category || "";
-        let type: "article" | "short" | "podcast" = "article";
-        if (cat.includes("短观点")) type = "short";
-        else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
-
-        return {
-          id: row.id,
-          title: row.title || "",
-          excerpt: row.summary || "",
-          image: "",
-          type,
-          category: row.category || "",
-          readTime: row.read_time || undefined,
-          listenTime: row.audio_url ? "15 min" : undefined,
-          isFeatured: false,
-          date: row.date || "",
-          author: row.author || "",
-          views: "0",
-          likes: 0,
-          content: parseContent(row.content || ""),
-        } as InsightItem;
-      });
+    return data.map((row: any) => mapInsightRow(row));
   } catch (err) {
     logNetworkFallback("fetchInsights", err);
     return [];
   }
+}
+
+// insights 表行 → InsightItem 映射
+function mapInsightRow(row: any): InsightItem {
+  const cat = row.category || "";
+  let type: "article" | "short" | "podcast" = "article";
+  if (cat.includes("短观点")) type = "short";
+  else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
+
+  return {
+    id: row.id,
+    title: row.title || "",
+    excerpt: row.summary || "",
+    image: "",
+    type,
+    category: row.category || "",
+    readTime: row.read_time || undefined,
+    listenTime: row.audio_url ? "15 min" : undefined,
+    isFeatured: false,
+    date: row.date || "",
+    author: row.author || "",
+    views: "0",
+    likes: 0,
+    content: parseContent(row.content || ""),
+  } as InsightItem;
 }
 
 // ---------- Sanctuary Posts ----------
@@ -222,7 +234,7 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
         content: row.content || "",
         tag: row.tag || "",
         tagColor: "text-zinc-400 bg-zinc-800",
-        author: row.author || "匿名",
+        author: row.author || "赛博访客",
         time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
         likes: row.likes || 0,
         reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
@@ -255,25 +267,26 @@ export async function createSanctuaryPost(post: {
         id: genId(),
         content: post.content,
         tag: post.tag || null,
-        author: post.author || "匿名创作者",
+        author: post.author || "赛博访客",
         avatar: post.avatar || null,
         likes: 0,
       },
-    ])
+    ] as any)
     .select()
     .single();
 
   if (error) throw error;
   if (!data) return null;
 
+  const row = data as any;
   return {
-    id: data.id,
-    content: data.content || "",
-    tag: data.tag || "",
+    id: row.id,
+    content: row.content || "",
+    tag: row.tag || "",
     tagColor: "text-zinc-400 bg-zinc-800",
-    author: data.author || "匿名",
-    time: data.created_at ? new Date(data.created_at).toLocaleString("zh-CN") : "刚刚",
-    likes: data.likes || 0,
+    author: row.author || "赛博访客",
+    time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "刚刚",
+    likes: row.likes || 0,
     reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
     comments: [],
     isNew: true,
@@ -313,25 +326,26 @@ export async function fetchInsightById(id: string): Promise<InsightItem | null> 
   try {
     const { data, error } = await supabase.from("insights").select("*").eq("id", id).single();
     if (error || !data) return null;
-    const cat = data.category || "";
+    const row = data as any;
+    const cat = row.category || "";
     let type: "article" | "short" | "podcast" = "article";
     if (cat.includes("短观点")) type = "short";
-    else if (cat.includes("音频") || cat.includes("播客") || data.audio_url) type = "podcast";
+    else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
     return {
-      id: data.id,
-      title: data.title || "",
-      excerpt: data.summary || "",
+      id: row.id,
+      title: row.title || "",
+      excerpt: row.summary || "",
       image: "",
       type,
-      category: data.category || "",
-      readTime: data.read_time || undefined,
-      listenTime: data.audio_url ? "15 min" : undefined,
+      category: row.category || "",
+      readTime: row.read_time || undefined,
+      listenTime: row.audio_url ? "15 min" : undefined,
       isFeatured: false,
-      date: data.date || "",
-      author: data.author || "",
+      date: row.date || "",
+      author: row.author || "",
       views: "0",
       likes: 0,
-      content: parseContent(data.content || ""),
+      content: parseContent(row.content || ""),
     } as InsightItem;
   } catch (err) {
     logNetworkFallback("fetchInsightById", err);
@@ -364,8 +378,9 @@ export async function fetchSiteConfig(): Promise<SiteConfig> {
   if (!supabase) return DEFAULT_CONFIG;
   try {
     const { data } = await supabase.from("site_config").select("key, value").eq("key", "feature_flags").single();
-    if (data?.value && typeof data.value === "object") {
-      return { ...DEFAULT_CONFIG, ...(data.value as object) };
+    const cfgRow = data as any;
+    if (cfgRow?.value && typeof cfgRow.value === "object") {
+      return { ...DEFAULT_CONFIG, ...(cfgRow.value as object) };
     }
     return DEFAULT_CONFIG;
   } catch (err) {
@@ -450,7 +465,7 @@ export async function uploadPortfolioCover(file: File): Promise<{ url: string } 
   });
   if (error) {
     // 提取 Supabase Storage 的具体错误信息，便于前端展示和排查
-    const errMsg = error.message || error.error || JSON.stringify(error);
+    const errMsg = error.message || JSON.stringify(error);
     if (errMsg.includes("Bucket not found") || errMsg.includes("404")) {
       throw new Error("Storage bucket 'portfolio-covers' 不存在，请在 Supabase Dashboard 创建该 Public Bucket");
     }
@@ -592,8 +607,9 @@ export async function incrementResourceDownload(id: string) {
     logNetworkFallback("incrementResourceDownload(rpc)", err);
     try {
       const { data } = await supabase.from("resources").select("download_count").eq("id", String(id)).single();
-      if (data) {
-        await supabase.from("resources").update({ download_count: (data.download_count || 0) + 1 }).eq("id", String(id));
+      const dlRow = data as any;
+      if (dlRow) {
+        await supabase.from("resources").update({ download_count: (dlRow.download_count || 0) + 1 }).eq("id", String(id));
       }
     } catch (err2) {
       logNetworkFallback("incrementResourceDownload(fallback)", err2);
@@ -609,6 +625,7 @@ export async function uploadResourceFile(file: File): Promise<{ url: string; siz
   const { error } = await supabase.storage.from("resources").upload(fileName, file, {
     cacheControl: "3600",
     upsert: false,
+    contentType: file.type || "application/pdf",
   });
   if (error) throw error;
   const { data: urlData } = supabase.storage.from("resources").getPublicUrl(fileName);
@@ -839,4 +856,59 @@ export async function toggleInsightHubPublish(id: string, isPublished: boolean) 
     .update({ is_published: isPublished })
     .eq("id", String(id));
   if (error) throw error;
+}
+
+// ---------- 切换置顶状态 ----------
+export async function toggleInsightHubFeature(id: string, isFeatured: boolean) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase
+    .from("insights_hub")
+    .update({ is_featured: isFeatured })
+    .eq("id", String(id));
+  if (error) throw error;
+}
+
+// ---------- 编辑情报站内容 ----------
+export async function updateInsightHub(id: string, updates: Partial<InsightHubItem>) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const updateData: Record<string, any> = {};
+  if (updates.title !== undefined) updateData.title = updates.title;
+  if (updates.category !== undefined) updateData.category = updates.category;
+  if (updates.summary !== undefined) updateData.summary = updates.summary;
+  if (updates.sourceName !== undefined) updateData.source_name = updates.sourceName;
+  if (updates.originalUrl !== undefined) updateData.original_url = updates.originalUrl;
+  if (updates.publishedAt !== undefined) updateData.published_at = updates.publishedAt;
+  if (updates.isPublished !== undefined) updateData.is_published = updates.isPublished;
+  if (updates.isFeatured !== undefined) updateData.is_featured = updates.isFeatured;
+  if (updates.tags !== undefined) updateData.tags = updates.tags;
+
+  const { data, error } = await supabase
+    .from("insights_hub")
+    .update(updateData)
+    .eq("id", String(id))
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+// ---------- 编辑资源包 ----------
+export async function updateResource(id: string, updates: Partial<ResourceItem>) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const updateData: Record<string, any> = {};
+  if (updates.title !== undefined) updateData.title = updates.title;
+  if (updates.excerpt !== undefined) updateData.excerpt = updates.excerpt;
+  if (updates.outline !== undefined) updateData.outline = updates.outline;
+  if (updates.category !== undefined) updateData.category = updates.category;
+  if (updates.requireLogin !== undefined) updateData.require_login = updates.requireLogin;
+  if (updates.isPublished !== undefined) updateData.is_published = updates.isPublished;
+  if (updates.fileUrl !== undefined) updateData.file_url = updates.fileUrl;
+  if (updates.fileSize !== undefined) updateData.file_size = updates.fileSize;
+
+  const { data, error } = await supabase
+    .from("resources")
+    .update(updateData)
+    .eq("id", String(id))
+    .select();
+  if (error) throw error;
+  return data;
 }
