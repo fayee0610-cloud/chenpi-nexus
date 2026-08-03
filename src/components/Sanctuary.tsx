@@ -40,6 +40,111 @@ const reactionButtons = [
   { key: "fake" as const, label: "😅 伪需求" },
 ];
 
+// ========== 4 种赛博配色主题 ==========
+type FortuneTheme = {
+  key: string;
+  name: string;
+  // 主色 / 辅色
+  primary: string;
+  secondary: string;
+  // CSS 变量（注入到卡片 style）
+  glow: string;
+  gridLine: string;
+  blurA: string;
+  blurB: string;
+  ring: string;
+  border: string;
+  tagBg: string;
+  tagText: string;
+  signText: string;
+  quoteMark: string;
+};
+
+const FORTUNE_THEMES: FortuneTheme[] = [
+  {
+    key: "neon-purple",
+    name: "赛博朋克紫",
+    primary: "#a855f7",
+    secondary: "#22d3ee",
+    glow: "rgba(168,85,247,0.35)",
+    gridLine: "rgba(168,85,247,0.25)",
+    blurA: "rgba(168,85,247,0.25)",
+    blurB: "rgba(34,211,238,0.18)",
+    ring: "rgba(168,85,247,0.35)",
+    border: "rgba(168,85,247,0.25)",
+    tagBg: "rgba(168,85,247,0.12)",
+    tagText: "#c084fc",
+    signText: "#a855f7",
+    quoteMark: "rgba(168,85,247,0.45)",
+  },
+  {
+    key: "deep-bay",
+    name: "大湾区深海蓝",
+    primary: "#3b82f6",
+    secondary: "#2dd4bf",
+    glow: "rgba(59,130,246,0.35)",
+    gridLine: "rgba(59,130,246,0.22)",
+    blurA: "rgba(59,130,246,0.25)",
+    blurB: "rgba(45,212,191,0.18)",
+    ring: "rgba(59,130,246,0.35)",
+    border: "rgba(59,130,246,0.25)",
+    tagBg: "rgba(59,130,246,0.12)",
+    tagText: "#60a5fa",
+    signText: "#3b82f6",
+    quoteMark: "rgba(59,130,246,0.45)",
+  },
+  {
+    key: "dark-amber",
+    name: "黑金商业客",
+    primary: "#f59e0b",
+    secondary: "#fbbf24",
+    glow: "rgba(245,158,11,0.32)",
+    gridLine: "rgba(245,158,11,0.2)",
+    blurA: "rgba(245,158,11,0.22)",
+    blurB: "rgba(251,191,36,0.15)",
+    ring: "rgba(245,158,11,0.35)",
+    border: "rgba(245,158,11,0.28)",
+    tagBg: "rgba(245,158,11,0.12)",
+    tagText: "#fbbf24",
+    signText: "#f59e0b",
+    quoteMark: "rgba(245,158,11,0.45)",
+  },
+  {
+    key: "emerald-cyber",
+    name: "极客流光绿",
+    primary: "#22c55e",
+    secondary: "#10b981",
+    glow: "rgba(34,197,94,0.32)",
+    gridLine: "rgba(34,197,94,0.2)",
+    blurA: "rgba(34,197,94,0.22)",
+    blurB: "rgba(16,185,129,0.15)",
+    ring: "rgba(34,197,94,0.35)",
+    border: "rgba(34,197,94,0.28)",
+    tagBg: "rgba(34,197,94,0.12)",
+    tagText: "#4ade80",
+    signText: "#22c55e",
+    quoteMark: "rgba(34,197,94,0.45)",
+  },
+];
+
+// 生成 6 位 Base64 极客哈希码
+function genHash(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let hash = "#";
+  for (let i = 0; i < 6; i++) {
+    hash += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return hash;
+}
+
+// 生成动态签印编号 NO.YYYYMMDD-XXXX
+function genSerial(): string {
+  const d = new Date();
+  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `NO.${ymd}-${rand}`;
+}
+
 // ========== 粒子动画组件 ==========
 function SmokeParticles({ active, color }: { active: boolean; color: string }) {
   if (!active) return null;
@@ -237,6 +342,10 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   const [showFortune, setShowFortune] = useState(false);
   const [fortuneCategory, setFortuneCategory] = useState<"inspiration" | "growth" | "healing">("inspiration");
   const [currentQuote, setCurrentQuote] = useState("");
+  const [fortuneTheme, setFortuneTheme] = useState<FortuneTheme>(FORTUNE_THEMES[0]);
+  const [fortuneSerial, setFortuneSerial] = useState<string>("");
+  const [fortuneHash, setFortuneHash] = useState<string>("");
+  const [tiltStyle, setTiltStyle] = useState<React.CSSProperties>({});
   const [totalEnergy, setTotalEnergy] = useState(siteData.sanctuary.initialEnergy);
   const [farts, setFarts] = useState<SanctuaryPost[]>(initialFarts);
   const [postContent, setPostContent] = useState("");
@@ -269,10 +378,42 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     return pool[Math.floor(Math.random() * pool.length)];
   }, []);
 
-  // 生成/刷新签文
+  // 生成/刷新签文（随机主题 + 签印编号 + 哈希码）
   const handleRevealFortune = useCallback(() => {
     setCurrentQuote(pickRandomQuote(fortuneCategory));
+    setFortuneTheme(FORTUNE_THEMES[Math.floor(Math.random() * FORTUNE_THEMES.length)]);
+    setFortuneSerial(genSerial());
+    setFortuneHash(genHash());
+    setTiltStyle({});
     setShowFortune(true);
+  }, [fortuneCategory, pickRandomQuote]);
+
+  // 3D Tilt 跟随鼠标
+  const handleTiltMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    const rotateY = x * 16;
+    const rotateX = -y * 16;
+    setTiltStyle({
+      transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`,
+      transition: "transform 0.15s ease-out",
+    });
+  }, []);
+
+  const handleTiltLeave = useCallback(() => {
+    setTiltStyle({
+      transform: "perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)",
+      transition: "transform 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
+    });
+  }, []);
+
+  // 换一条：同时随机切换主题 + 编号
+  const handleChangeQuote = useCallback(() => {
+    setCurrentQuote(pickRandomQuote(fortuneCategory));
+    setFortuneTheme(FORTUNE_THEMES[Math.floor(Math.random() * FORTUNE_THEMES.length)]);
+    setFortuneSerial(genSerial());
+    setFortuneHash(genHash());
   }, [fortuneCategory, pickRandomQuote]);
 
   // 切换分类并重新抽取
@@ -385,8 +526,11 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   const handleDownloadFortune = useCallback(async () => {
     if (!fortuneRef.current || downloading) return;
     setDownloading(true);
+    // 临时移除 Tilt 变换，避免变换矩阵影响截图
+    const prevTransform = fortuneRef.current.style.transform;
+    fortuneRef.current.style.transform = "none";
     try {
-      // 生成标准 data:image/png;base64 格式，移动端/微信浏览器长按可直接保存
+      // 生成标准 data:image/png;base64 格式，9:16 高清海报
       const dataUrl = await toPng(fortuneRef.current, {
         quality: 0.95,
         pixelRatio: 3, // 高清渲染，适配移动端 Retina 屏
@@ -394,7 +538,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
         backgroundColor: "#09090b",
       });
 
-      const fileName = `chenpi-inspiration-${new Date().toISOString().split("T")[0]}.png`;
+      const fileName = `chenpi-inspiration-${fortuneHash.replace("#", "")}.png`;
       // 移动端检测（含微信浏览器 UA 判断）
       const ua = navigator.userAgent.toLowerCase();
       const isMobile = window.innerWidth < 768 || ua.includes("mobile") || ua.includes("micromessenger");
@@ -414,9 +558,13 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
       // 降级提示
       window.alert("海报生成失败，请截图保存或稍后重试");
     } finally {
+      // 恢复 Tilt 变换
+      if (fortuneRef.current) {
+        fortuneRef.current.style.transform = prevTransform;
+      }
       setDownloading(false);
     }
-  }, [downloading]);
+  }, [downloading, fortuneHash]);
 
   // 滚动至发帖框
   const scrollToCanvas = () => {
@@ -676,47 +824,104 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                 <X className="h-4 w-4" />
               </button>
 
-              {/* 9:16 赛博便签海报 */}
+              {/* 9:16 赛博便签海报（玻璃拟态 + 3D Tilt + 动态主题色） */}
+              <div
+                onMouseMove={handleTiltMove}
+                onMouseLeave={handleTiltLeave}
+                style={tiltStyle}
+              >
               <div
                 ref={fortuneRef}
                 className="relative w-[300px] overflow-hidden rounded-2xl sm:w-[340px]"
-                style={{ aspectRatio: "9 / 16" }}
+                style={{
+                  aspectRatio: "9 / 16",
+                  // 玻璃拟态背景
+                  background: "rgba(9, 9, 11, 0.72)",
+                  backdropFilter: "blur(16px)",
+                  WebkitBackdropFilter: "blur(16px)",
+                  // 渐变光晕边框
+                  boxShadow: `0 0 50px ${fortuneTheme.glow}, 0 0 0 1px ${fortuneTheme.border} inset`,
+                }}
               >
-                {/* 背景层：赛博网格 + 渐变 + 霓虹光晕 */}
-                <div className="absolute inset-0 bg-zinc-950">
+                {/* 背景层：赛博网格 + 渐变 + 霓虹光晕（主题色驱动） */}
+                <div className="absolute inset-0">
                   <div
                     className="absolute inset-0 opacity-[0.18]"
                     style={{
-                      backgroundImage:
-                        "linear-gradient(rgba(168,85,247,0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.2) 1px, transparent 1px)",
+                      backgroundImage: `linear-gradient(${fortuneTheme.gridLine} 1px, transparent 1px), linear-gradient(90deg, ${fortuneTheme.gridLine} 1px, transparent 1px)`,
                       backgroundSize: "22px 22px",
                     }}
                   />
                   {/* 几何水印 */}
-                  <div className="absolute right-4 top-20 h-32 w-32 rotate-45 border border-purple-500/10" />
-                  <div className="absolute left-4 bottom-24 h-24 w-24 rotate-12 border border-blue-500/10" />
-                  <div className="absolute -top-24 left-1/4 h-52 w-52 rounded-full bg-purple-500/20 blur-3xl" />
-                  <div className="absolute -bottom-24 right-1/4 h-52 w-52 rounded-full bg-blue-500/20 blur-3xl" />
+                  <div
+                    className="absolute right-4 top-20 h-32 w-32 rotate-45 border"
+                    style={{ borderColor: fortuneTheme.border }}
+                  />
+                  <div
+                    className="absolute left-4 bottom-24 h-24 w-24 rotate-12 border"
+                    style={{ borderColor: fortuneTheme.border }}
+                  />
+                  <div
+                    className="absolute -top-24 left-1/4 h-52 w-52 rounded-full blur-3xl"
+                    style={{ background: fortuneTheme.blurA }}
+                  />
+                  <div
+                    className="absolute -bottom-24 right-1/4 h-52 w-52 rounded-full blur-3xl"
+                    style={{ background: fortuneTheme.blurB }}
+                  />
                 </div>
+
+                {/* 渐变边框光晕（Cyber Glow Border） */}
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl"
+                  style={{
+                    background: `linear-gradient(135deg, ${fortuneTheme.primary}40, transparent 40%, transparent 60%, ${fortuneTheme.secondary}40)`,
+                    maskImage: "linear-gradient(black, black) padding-box, linear-gradient(black, black)",
+                    WebkitMaskComposite: "xor",
+                    maskComposite: "exclude",
+                    padding: 1,
+                  }}
+                />
 
                 {/* 内容层 */}
                 <div className="relative z-10 flex h-full flex-col p-6">
                   {/* Header */}
-                  <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
+                  <div
+                    className="flex items-center justify-between border-b pb-3"
+                    style={{ borderColor: fortuneTheme.border }}
+                  >
                     <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-purple-500">
+                      <div
+                        className="flex h-6 w-6 items-center justify-center rounded-md"
+                        style={{
+                          background: `linear-gradient(135deg, ${fortuneTheme.primary}, ${fortuneTheme.secondary})`,
+                        }}
+                      >
                         <Flame className="h-3.5 w-3.5 text-white" />
                       </div>
                       <span className="text-xs font-bold text-zinc-200">陈皮同学 · 赛博灵感中枢</span>
                     </div>
                   </div>
-                  <div className="mt-1.5 text-[10px] tracking-wider text-zinc-500">
-                    {new Date().toLocaleDateString("zh-CN").replace(/\//g, ".")}
+                  <div className="mt-1.5 flex items-center justify-between text-[10px] tracking-wider text-zinc-500">
+                    <span>{new Date().toLocaleDateString("zh-CN").replace(/\//g, ".")}</span>
+                    <span
+                      className="rounded px-1.5 py-0.5 font-mono"
+                      style={{ background: fortuneTheme.tagBg, color: fortuneTheme.tagText }}
+                    >
+                      {fortuneTheme.name}
+                    </span>
                   </div>
 
                   {/* 分类标签 */}
                   <div className="mt-3">
-                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium ${fortuneCategories[fortuneCategory].color}`}>
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium"
+                      style={{
+                        borderColor: fortuneTheme.border,
+                        background: fortuneTheme.tagBg,
+                        color: fortuneTheme.tagText,
+                      }}
+                    >
                       {fortuneCategories[fortuneCategory].icon}
                       {fortuneCategories[fortuneCategory].label}
                     </span>
@@ -724,25 +929,38 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
 
                   {/* 中部：签文金句 */}
                   <div className="flex flex-1 flex-col items-center justify-center py-4">
-                    <span className="mb-2 text-4xl font-serif text-purple-500/40">"</span>
+                    <span
+                      className="mb-2 font-serif text-4xl"
+                      style={{ color: fortuneTheme.quoteMark }}
+                    >
+                      "
+                    </span>
                     <p className="text-center text-base font-bold leading-relaxed text-zinc-100">
                       {currentQuote}
                     </p>
-                    <span className="mt-2 text-4xl font-serif leading-none text-purple-500/40 rotate-180">"</span>
+                    <span
+                      className="mt-2 rotate-180 font-serif text-4xl leading-none"
+                      style={{ color: fortuneTheme.quoteMark }}
+                    >
+                      "
+                    </span>
                   </div>
 
-                  {/* 底部：签名 + 二维码 */}
-                  <div className="flex items-end justify-between border-t border-purple-500/20 pt-3">
+                  {/* 底部：签名 + 二维码 + 签印编号 */}
+                  <div
+                    className="flex items-end justify-between border-t pt-3"
+                    style={{ borderColor: fortuneTheme.border }}
+                  >
                     <div className="flex-1 pr-3">
                       <p className="text-xs font-bold text-zinc-300">Chenpi</p>
                       <p className="text-[10px] text-zinc-500">OPC & Brand Strategist</p>
-                      <p className="mt-1.5 text-[9px] leading-tight text-zinc-600">
-                        扫码探索陈皮同学的数字空间
+                      <p className="mt-1 text-[9px] leading-tight text-zinc-600">
+                        扫码探索陈皮赛博数字中枢
                       </p>
                     </div>
                     <div className="rounded-lg bg-white p-1.5">
                       <QRCodeSVG
-                        value="https://myneuralhub.com"
+                        value="https://github.com/fayee0610-cloud/chenpi-nexus"
                         size={52}
                         level="M"
                         fgColor="#09090b"
@@ -750,20 +968,43 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                       />
                     </div>
                   </div>
+
+                  {/* 专属签印 + 编号 + 哈希码（右下角） */}
+                  <div className="mt-3 flex items-center justify-between">
+                    {/* 陈皮签印 */}
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-md border text-[9px] font-bold"
+                      style={{
+                        borderColor: fortuneTheme.signText,
+                        color: fortuneTheme.signText,
+                        background: `${fortuneTheme.signText}10`,
+                      }}
+                    >
+                      陈皮
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 font-mono text-[9px] text-zinc-500">
+                      <span>{fortuneSerial}</span>
+                      <span style={{ color: fortuneTheme.tagText }}>{fortuneHash}</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 毛玻璃边框光晕 */}
-                <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-purple-500/30" />
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl ring-1"
+                  style={{ boxShadow: `0 0 30px ${fortuneTheme.glow} inset` }}
+                />
+              </div>
               </div>
 
               {/* 操作按钮区 */}
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <button
-                  onClick={() => setCurrentQuote(pickRandomQuote(fortuneCategory))}
+                  onClick={handleChangeQuote}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/80 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
-                  换一条
+                  换一张
                 </button>
                 <button
                   onClick={handleDownloadFortune}
@@ -773,7 +1014,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                   {downloading ? (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 生成中...</>
                   ) : (
-                    <><Download className="h-3.5 w-3.5" /> 保存便签</>
+                    <><Download className="h-3.5 w-3.5" /> 保存高光海报</>
                   )}
                 </button>
                 <button
