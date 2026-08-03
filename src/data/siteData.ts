@@ -100,8 +100,8 @@ export const profile = {
 // ========== 2. 联系方式 ==========
 
 export const contact = {
-  email: "hello@myneuralhub.com",
-  wechatId: "MyNeuralHub",
+  email: "fayee0610@gmail.com",
+  wechatId: "CHENPI_MKT",
   copyright: "© 2025 陈皮同学 My Neural Hub",
 };
 
