@@ -157,9 +157,10 @@ export default function InformationHub() {
                       <span className="text-[10px] text-zinc-600">{item.publishedAt}</span>
                     </div>
                     <a
-                      href={item.originalUrl}
+                      href={/^https?:\/\//.test(item.originalUrl) ? item.originalUrl : `https://${item.originalUrl}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-800"
                     >
                       查看原文

@@ -178,14 +178,26 @@ async function aiRefine(searchResults: { title: string; snippet: string; url: st
     const parsed = JSON.parse(jsonMatch[0]);
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.filter(
-      (item: any) =>
-        item.title &&
-        item.category &&
-        item.summary &&
-        item.source_name &&
-        item.original_url
-    );
+    return parsed
+      .filter(
+        (item: any) =>
+          item.title &&
+          item.category &&
+          item.summary &&
+          item.source_name &&
+          item.original_url
+      )
+      .map((item: any) => {
+        // URL 防空保护：补全协议头，无效 URL 用来源首页兜底
+        let url = String(item.original_url).trim();
+        if (!url || url === "#" || url === "/") {
+          url = String(item.source_name).trim();
+        }
+        if (!/^https?:\/\//.test(url)) {
+          url = `https://${url}`;
+        }
+        return { ...item, original_url: url };
+      });
   } catch (err) {
     console.error("[cron] AI 提炼错误:", err);
     return [];

@@ -65,13 +65,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. 调用服务端写入函数（含分类白名单 + 品牌策略内容过滤）
+    // 4. URL 防空保护：补全协议头
+    let safeUrl = original_url.trim();
+    if (!safeUrl || safeUrl === "#" || safeUrl === "/") {
+      safeUrl = source_name.trim();
+    }
+    if (!/^https?:\/\//.test(safeUrl)) {
+      safeUrl = `https://${safeUrl}`;
+    }
+
+    // 5. 调用服务端写入函数（含分类白名单 + 品牌策略内容过滤）
     const result = await createInsightHubViaAPI({
       title: title.trim(),
       category: category.trim(),
       summary: summary.trim(),
       source_name: source_name.trim(),
-      original_url: original_url.trim(),
+      original_url: safeUrl,
       tags: Array.isArray(tags) ? tags : [],
     });
 
