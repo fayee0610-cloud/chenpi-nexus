@@ -2348,6 +2348,8 @@ const FEATURE_FLAGS: {
 }[] = [
   { key: "show_portfolio", label: "作品集模块", desc: "首页展示作品案例与战术拆解", default: true },
   { key: "show_insights", label: "深度文章模块", desc: "首页展示灵感点与深度思考", default: true },
+  { key: "show_insights_hub", label: "情报站模块", desc: "首页展示行业情报与自动化抓取内容", default: true },
+  { key: "show_resources", label: "资源包模块", desc: "首页展示精选 PDF 资源下载", default: true },
   { key: "show_chenpi_ai", label: "陈皮 AI 助手", desc: "右下角浮动的智能对话助手", default: true },
   { key: "show_sanctuary", label: "脑洞与吐槽画布", desc: "社区互动与赛博上香模块", default: true },
   { key: "show_inspiration_sign", label: "今日灵感签文", desc: "每日赛博灵感便签海报", default: true },
@@ -2358,6 +2360,8 @@ function ConfigEditor() {
   const LOCAL_DEFAULT_CONFIG: SiteConfig = {
     show_portfolio: true,
     show_insights: true,
+    show_insights_hub: true,
+    show_resources: true,
     show_chenpi_ai: true,
     show_sanctuary: true,
     show_inspiration_sign: true,

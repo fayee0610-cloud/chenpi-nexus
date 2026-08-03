@@ -343,6 +343,8 @@ export async function fetchInsightById(id: string): Promise<InsightItem | null> 
 export interface SiteConfig {
   show_portfolio: boolean;
   show_insights: boolean;
+  show_insights_hub: boolean;
+  show_resources: boolean;
   show_chenpi_ai: boolean;
   show_sanctuary: boolean;
   show_inspiration_sign: boolean;
@@ -351,6 +353,8 @@ export interface SiteConfig {
 const DEFAULT_CONFIG: SiteConfig = {
   show_portfolio: true,
   show_insights: true,
+  show_insights_hub: true,
+  show_resources: true,
   show_chenpi_ai: true,
   show_sanctuary: true,
   show_inspiration_sign: true,
@@ -678,10 +682,37 @@ export async function deleteLead(id: string) {
 export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
   if (!supabase) return [];
   try {
+    // 显式指定列名，避免 select("*") 触发 schema cache 报错
     const { data, error } = await supabase
       .from("insights_hub")
-      .select("*")
+      .select("id,title,category,summary,source_name,original_url,published_at,is_published,is_featured,api_source,tags,created_at")
       .order("created_at", { ascending: false });
+
+    // 若 schema 不匹配（如 tags/api_source 列缺失），降级为基础列查询
+    if (error && (error.code === "PGRST204" || error.message.includes("schema cache") || error.message.includes("Could not find"))) {
+      console.warn("[dataApi] insights_hub schema 不完整，降级到基础列查询:", error.message);
+      const basic = await supabase
+        .from("insights_hub")
+        .select("id,title,category,summary,source_name,original_url,published_at,is_published,is_featured,created_at")
+        .order("created_at", { ascending: false });
+      if (basic.error || !basic.data) return [];
+      return basic.data
+        .filter((row: any) => row.is_published !== false)
+        .map((row: any) => ({
+          id: row.id,
+          title: row.title || "",
+          category: row.category || "💡 AI技术/大厂策略",
+          summary: row.summary || "",
+          sourceName: row.source_name || "",
+          originalUrl: row.original_url || "",
+          publishedAt: row.published_at || "",
+          isPublished: row.is_published ?? true,
+          isFeatured: row.is_featured ?? false,
+          apiSource: "manual",
+          tags: [],
+        })) as InsightHubItem[];
+    }
+
     if (error) {
       console.warn("[dataApi] fetchInsightsHub 查询出错:", error.message);
       return [];

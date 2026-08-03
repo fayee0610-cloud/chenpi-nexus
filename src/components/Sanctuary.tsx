@@ -32,6 +32,42 @@ const fortuneCategories = siteData.sanctuary.fortuneLibrary;
 const initialIncenses: Incense[] = siteData.sanctuary.incenses;
 const postTagOptions = siteData.sanctuary.postTagOptions;
 
+// ========== 赛博 ID 生成机制 ==========
+// 赛博风格前缀池
+const CYBER_PREFIXES = [
+  "赛博漫游者", "高新节点", "暗网幽灵", "边缘打工人", "数据浪人",
+  "神经突触", "比特旅人", "信号游侠", "协议观察者", "终端诗人",
+  "量子 migrant", "代码苦行僧", "加密旁观者", "低熵生物", "故障艺术家",
+];
+
+// 基于 navigator 特征生成稳定的 4 位十六进制短哈希
+function genCyberId(): string {
+  // localStorage 持久化，保证同一浏览器/访客 ID 稳定不变
+  const STORAGE_KEY = "chenpi_cyber_id";
+  const cached = localStorage.getItem(STORAGE_KEY);
+  if (cached) return cached;
+
+  // 采集客户端特征：UA + 语言 + 时区 + 屏幕分辨率 + 随机种子
+  const ua = navigator.userAgent || "unknown";
+  const lang = navigator.language || "unknown";
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
+  const screen = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+  const seed = `${ua}#${lang}#${tz}#${screen}#${Math.random().toString(36).slice(2, 8)}`;
+
+  // FNV-1a 哈希 → 4 位十六进制
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  const hex = (hash & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+  const prefix = CYBER_PREFIXES[Math.floor(Math.random() * CYBER_PREFIXES.length)];
+  const cyberId = `${prefix}#${hex}`;
+
+  localStorage.setItem(STORAGE_KEY, cyberId);
+  return cyberId;
+}
+
 const reactionButtons = [
   { key: "cool" as const, label: "🔥 酷" },
   { key: "biz" as const, label: "💰 商业" },
@@ -223,12 +259,19 @@ function CommunityCard({
       {/* 内容 */}
       <p className="mb-4 text-sm leading-relaxed text-zinc-200">{fart.content}</p>
 
-      {/* 作者 */}
+      {/* 作者（赛博 ID） */}
       <div className="mb-4 flex items-center gap-2">
         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-blue-600 text-[10px] font-bold text-white">
           {fart.author.charAt(0)}
         </div>
-        <span className="text-xs text-zinc-400">{fart.author}</span>
+        <span className="text-xs text-zinc-300">
+          {fart.author.split("#")[0]}
+          {fart.author.includes("#") && (
+            <span className="ml-0.5 font-mono text-[10px] text-purple-400">
+              #{fart.author.split("#")[1]}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* 表态按钮 */}
@@ -464,6 +507,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
 
   // 评论
   const handleComment = useCallback((fartId: number, text: string) => {
+    const cyberAuthor = genCyberId();
     setFarts((prev) =>
       prev.map((f) =>
         f.id === fartId
@@ -471,7 +515,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
               ...f,
               comments: [
                 ...f.comments,
-                { author: "匿名访客", text, time: "刚刚" },
+                { author: cyberAuthor, text, time: "刚刚" },
               ],
             }
           : f
@@ -484,11 +528,13 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     if (!postContent.trim() || posting) return;
     setPosting(true);
     const tagColor = postTagOptions.find((t) => t.label === postTag)?.color || "text-blue-400 bg-blue-500/10";
+    // 生成赛博 ID（未登录用户）
+    const cyberAuthor = genCyberId();
     try {
       const newPost = await createSanctuaryPost({
         content: postContent.trim(),
         tag: postTag,
-        author: "匿名创作者",
+        author: cyberAuthor,
       });
       const finalPost: SanctuaryPost = newPost
         ? { ...newPost, tagColor }
@@ -497,7 +543,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
             content: postContent.trim(),
             tag: postTag,
             tagColor,
-            author: "匿名创作者",
+            author: cyberAuthor,
             time: "刚刚",
             likes: 0,
             reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
@@ -514,7 +560,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
         content: postContent.trim(),
         tag: postTag,
         tagColor,
-        author: "匿名创作者",
+        author: cyberAuthor,
         time: "刚刚",
         likes: 0,
         reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },

@@ -14,13 +14,13 @@ export default async function Home() {
 
   return (
     <>
-      <Header />
+      <Header config={config} />
       <main className="flex-1">
         <Hero />
         {config.show_portfolio && <Portfolio />}
-        <InformationHub />
+        {config.show_insights_hub && <InformationHub />}
         {config.show_insights && <Insights />}
-        <ResourceHub />
+        {config.show_resources && <ResourceHub />}
         {config.show_sanctuary && (
           <Sanctuary showInspirationSign={config.show_inspiration_sign} />
         )}
