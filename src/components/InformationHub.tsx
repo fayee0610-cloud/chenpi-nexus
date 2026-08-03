@@ -3,19 +3,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExternalLink, Radar, Sparkles, TrendingUp, Bot, Loader2 } from "lucide-react";
-import { fetchInsightsHub, createInsightHub } from "@/lib/dataApi";
+import { fetchInsightsHub } from "@/lib/dataApi";
 import { type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
 
 const CATEGORY_TABS = [
   { key: "all", label: "全部分类", icon: Radar },
   { key: "🤖 机器人/具身智能", label: "机器人/具身智能", icon: Bot },
-  { key: "💡 AI技术/大厂策略", label: "AI技术/大厂策略", icon: Sparkles },
+  { key: "⚡ AI技术/大厂策略", label: "AI技术/大厂策略", icon: Sparkles },
   { key: "📈 品牌策略/GTM干货", label: "品牌策略/GTM干货", icon: TrendingUp },
 ] as const;
 
 const CATEGORY_STYLES: Record<string, { border: string; bg: string; text: string; glow: string }> = {
   "🤖 机器人/具身智能": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400", glow: "shadow-cyan-500/5" },
-  "💡 AI技术/大厂策略": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
+  "⚡ AI技术/大厂策略": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
   "📈 品牌策略/GTM干货": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
 };
 
@@ -44,43 +44,27 @@ export default function InformationHub() {
     return () => { mounted = false; };
   }, []);
 
-  // AI 实时感知：调用 AI 接口生成最新情报并写入数据库
+  // ⚡ 实时感知：调用 Cron 接口一键完成 生成 → 清洗 → 去重 → 写入
   const handleAiRefresh = async () => {
     setAiRefreshing(true);
     setAiMessage(null);
     try {
-      const res = await fetch("/api/intelligence/generate", {
+      const res = await fetch("/api/cron/fetch-intelligence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
       });
       const result = await res.json();
-      if (!result.success || !result.items?.length) {
-        setAiMessage(result.error || "AI 暂时没有生成新情报，请稍后再试");
+      if (!result.success) {
+        setAiMessage(result.error || result.message || "AI 感知失败，请稍后再试");
         return;
       }
-      // 将 AI 生成的情报写入数据库
-      let savedCount = 0;
-      for (const item of result.items) {
-        try {
-          await createInsightHub({
-            title: item.title,
-            category: item.category,
-            summary: item.summary,
-            sourceName: item.source_name,
-            originalUrl: item.original_url,
-            publishedAt: item.published_at,
-            isPublished: true,
-            isFeatured: false,
-            apiSource: "ai_generated",
-            tags: item.tags || [],
-          });
-          savedCount++;
-        } catch (e) {
-          // 单条写入失败不影响整体
-        }
+      const stats = result.stats || {};
+      const inserted = stats.inserted ?? 0;
+      if (inserted > 0) {
+        setAiMessage(`⚡ 已写入 ${inserted} 条新情报（去重 ${stats.deduplicated ?? 0} / 清洗 ${stats.sanitized ?? 0}）`);
+      } else {
+        setAiMessage(result.message || "暂无新情报，全部已存在或未通过筛选");
       }
-      setAiMessage(savedCount > 0 ? `AI 已生成 ${savedCount} 条新情报` : "AI 情报写入失败，请检查后台");
       // 重新加载前台数据
       loadData();
     } catch (err: any) {
@@ -116,10 +100,10 @@ export default function InformationHub() {
           赛博情报站
         </h2>
         <p className="mt-3 text-sm text-zinc-500">
-          AI · 机器人 · 出海营销 — 第一手硬核商业情报提炼
+          具身智能 · AI大厂 · GTM战术 — 第一手硬核商业情报提炼
         </p>
 
-        {/* AI 实时感知按钮 */}
+        {/* ⚡ 实时感知按钮 */}
         <div className="mt-4 flex items-center justify-center gap-3">
           <button
             onClick={handleAiRefresh}
@@ -129,17 +113,17 @@ export default function InformationHub() {
             {aiRefreshing ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                AI 感知中...
+                感知中...
               </>
             ) : (
               <>
                 <Sparkles className="h-3.5 w-3.5" />
-                AI 实时感知
+                ⚡ 实时感知
               </>
             )}
           </button>
           {aiMessage && (
-            <span className={`text-xs ${aiMessage.includes("失败") || aiMessage.includes("没有") ? "text-amber-400" : "text-emerald-400"}`}>
+            <span className={`text-xs ${aiMessage.includes("失败") || aiMessage.includes("未") ? "text-amber-400" : "text-emerald-400"}`}>
               {aiMessage}
             </span>
           )}
@@ -178,7 +162,7 @@ export default function InformationHub() {
               />
             ))
           : sortedItems.map((item, i) => {
-              const style = CATEGORY_STYLES[item.category] || CATEGORY_STYLES["💡 AI技术/大厂"];
+              const style = CATEGORY_STYLES[item.category] || CATEGORY_STYLES["⚡ AI技术/大厂策略"];
               return (
                 <motion.div
                   key={item.id}

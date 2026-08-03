@@ -114,7 +114,7 @@ export async function GET() {
     auth: "Bearer Token (CR_API_SECRET)",
     fields: {
       title: "string (必填) - 资讯标题",
-      category: "string (必填) - 分类：🤖 机器人/具身智能 | 💡 AI技术/大厂策略 | 📈 品牌策略/GTM干货",
+      category: "string (必填) - 分类：🤖 机器人/具身智能 | ⚡ AI技术/大厂策略 | 📈 品牌策略/GTM干货",
       summary: "string (必填) - 陈皮式 100 字核心看点",
       source_name: "string (必填) - 数据来源",
       original_url: "string (必填) - 原文链接",

@@ -2182,41 +2182,28 @@ function InsightHubEditor() {
     }
   };
 
-  // AI 一键生成并写入
+  // AI 一键生成并写入（调用 Cron 接口，服务端完成 生成→清洗→去重→写入）
   const [aiGenerating, setAiGenerating] = useState(false);
   const handleAiGenerate = async () => {
     setAiGenerating(true);
     setStatus(null);
     try {
-      const res = await fetch("/api/intelligence/generate", {
+      const res = await fetch("/api/cron/fetch-intelligence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
       });
       const result = await res.json();
-      if (!result.success || !result.items?.length) {
-        setStatus({ type: "error", msg: result.error || "AI 生成失败" });
+      if (!result.success) {
+        setStatus({ type: "error", msg: result.error || result.message || "AI 生成失败" });
         return;
       }
-      let saved = 0;
-      for (const item of result.items) {
-        try {
-          await createInsightHub({
-            title: item.title,
-            category: item.category,
-            summary: item.summary,
-            sourceName: item.source_name,
-            originalUrl: item.original_url,
-            publishedAt: item.published_at,
-            isPublished: true,
-            isFeatured: false,
-            apiSource: "ai_generated",
-            tags: item.tags || [],
-          });
-          saved++;
-        } catch {}
+      const stats = result.stats || {};
+      const inserted = stats.inserted ?? 0;
+      if (inserted > 0) {
+        setStatus({ type: "success", msg: `⚡ AI 已写入 ${inserted} 条情报（去重 ${stats.deduplicated ?? 0} / 清洗 ${stats.sanitized ?? 0}）` });
+      } else {
+        setStatus({ type: "error", msg: result.message || "暂无新情报，全部已存在或未通过筛选" });
       }
-      setStatus({ type: "success", msg: `AI 已生成 ${saved} 条情报` });
       loadHub();
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message || "AI 请求失败" });
@@ -2250,7 +2237,7 @@ function InsightHubEditor() {
               className="input-hub"
             >
               <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
-              <option value="💡 AI技术/大厂策略">💡 AI技术/大厂策略</option>
+              <option value="⚡ AI技术/大厂策略">⚡ AI技术/大厂策略</option>
               <option value="📈 品牌策略/GTM干货">📈 品牌策略/GTM干货</option>
             </select>
           </FormField>
@@ -2511,7 +2498,7 @@ function InsightHubEditor() {
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
                   >
                     <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
-                    <option value="💡 AI技术/大厂策略">💡 AI技术/大厂策略</option>
+                    <option value="⚡ AI技术/大厂策略">⚡ AI技术/大厂策略</option>
                     <option value="📈 品牌策略/GTM干货">📈 品牌策略/GTM干货</option>
                   </select>
                 </div>

@@ -718,7 +718,7 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
         .map((row: any) => ({
           id: row.id,
           title: row.title || "",
-          category: row.category || "💡 AI技术/大厂策略",
+          category: row.category || "⚡ AI技术/大厂策略",
           summary: row.summary || "",
           sourceName: row.source_name || "",
           originalUrl: row.original_url || "",
@@ -740,7 +740,7 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
       .map((row: any) => ({
         id: row.id,
         title: row.title || "",
-        category: row.category || "💡 AI技术/大厂策略",
+        category: row.category || "⚡ AI技术/大厂策略",
         summary: row.summary || "",
         sourceName: row.source_name || "",
         originalUrl: row.original_url || "",
@@ -799,7 +799,7 @@ export async function createInsightHubViaAPI(item: {
   // 允许的分类白名单
   const ALLOWED_CATEGORIES = [
     "🤖 机器人/具身智能",
-    "💡 AI技术/大厂策略",
+    "⚡ AI技术/大厂策略",
     "📈 品牌策略/GTM干货",
   ];
   if (!ALLOWED_CATEGORIES.includes(item.category)) {

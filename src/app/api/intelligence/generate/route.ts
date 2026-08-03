@@ -24,12 +24,12 @@ const INTELLIGENCE_TOPICS = [
     keywords: "人形机器人、具身智能、AI硬件、机器人商业化落地、特斯拉Optimus、宇树科技、智元机器人",
   },
   {
-    category: "💡 AI技术/大厂策略",
+    category: "⚡ AI技术/大厂策略",
     keywords: "大模型、AGI、OpenAI、DeepSeek、字节跳动AI、百度文心、AI Agent、MCP协议、RAG、多模态",
   },
   {
     category: "📈 品牌策略/GTM干货",
-    keywords: "品牌出海、跨境电商、DTC品牌、GTM策略、私域运营、内容营销、大湾区创业、人才生态",
+    keywords: "品牌出海、DTC品牌、GTM策略、私域运营、内容营销、GEO生成式搜索引擎优化、大湾区创业、人才生态",
   },
 ];
 
