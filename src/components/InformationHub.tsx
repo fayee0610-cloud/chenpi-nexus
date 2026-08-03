@@ -85,8 +85,11 @@ export default function InformationHub() {
         if (duplicatesRemoved > 0) {
           setAiMessage(`⚠️ 24h 内已有重复情报（跳过 ${duplicatesRemoved} 条），稍后再试或换个时间`);
         } else if (!result.success) {
-          const firstErr = (result.errors && result.errors[0]) || result.error || result.message || "未知错误";
-          setAiMessage(`❌ ${firstErr}`);
+          // 优先展示真实 Supabase 错误 + hint 修复指引
+          const realErr = result.error || (result.errors && result.errors[0]) || result.message || "未知错误";
+          // hint 太长，截取关键部分展示
+          const hint = result.hint ? ` | 修复：${result.hint.slice(0, 80)}...` : "";
+          setAiMessage(`❌ ${realErr}${hint}`);
         } else {
           setAiMessage(result.message || "暂无新情报，稍后再试");
         }

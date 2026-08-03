@@ -18,7 +18,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-// 复用项目内已配好的 Supabase 单例 + dataApi createInsightHub 作为兜底（处理好 Env 降级）
+// 服务端 Admin 客户端（使用 SUPABASE_SERVICE_ROLE_KEY，绕过 RLS）
+import { supabaseAdmin, hasServiceRoleKey } from "@/lib/supabaseAdmin";
+// 复用项目内已配好的 Supabase 单例 + dataApi createInsightHub 作为兜底
 import { createInsightHub } from "@/lib/dataApi";
 
 export const runtime = "nodejs";
@@ -278,96 +280,98 @@ async function deduplicateWithin24h(
   }
 }
 
-// ---------- 写入 Supabase：Service Role → Anon Key → dataApi 三层兜底 ----------
+// ---------- 写入 Supabase：Admin Client → Anon Key → dataApi 三层兜底 ----------
 async function writeWithFallback(
   items: SanitizedItem[]
-): Promise<{ inserted: number; errors: string[]; method: string }> {
+): Promise<{ inserted: number; errors: string[]; method: string; firstError: string | null }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   const errors: string[] = [];
   let inserted = 0;
   let method = "none";
+  let firstError: string | null = null;
 
-  // 策略 1：Service Role Key → 最高权限，绕过 RLS（推荐）
-  if (supabaseUrl && supabaseServiceKey) {
+  // 构造单条插入的 payload
+  const buildPayload = (item: SanitizedItem) => ({
+    id: genId(),
+    title: item.title,
+    category: item.category,
+    summary: item.summary,
+    source_name: item.source_name,
+    original_url: item.original_url,
+    published_at: item.published_at,
+    is_published: true,
+    is_featured: false,
+    api_source: "auto_bot",
+    tags: [],
+  });
+
+  // 策略 1：supabaseAdmin（使用 SUPABASE_SERVICE_ROLE_KEY，绕过 RLS）
+  if (supabaseAdmin) {
     method = "service_role";
-    const serverClient = createClient(supabaseUrl, supabaseServiceKey);
+    console.log("[cron/fetch-intelligence] 写入策略 1：supabaseAdmin (service_role)");
     for (const item of items) {
       try {
-        const id = genId();
-        const { error } = await serverClient.from("insights_hub").insert([
-          {
-            id,
-            title: item.title,
-            category: item.category,
-            summary: item.summary,
-            source_name: item.source_name,
-            original_url: item.original_url,
-            published_at: item.published_at,
-            is_published: true,
-            is_featured: false,
-            api_source: "auto_bot",
-            tags: [],
-          },
-        ]);
+        const { error } = await supabaseAdmin.from("insights_hub").insert([buildPayload(item)]);
         if (error) {
-          errors.push(`[${method}] ${item.title}: ${error.message}`);
+          const msg = `${item.title}: ${error.message}`;
+          errors.push(`[${method}] ${msg}`);
+          if (!firstError) firstError = msg;
         } else {
           inserted++;
         }
       } catch (err: any) {
-        errors.push(`[${method}] ${item.title}: ${err?.message || "写入异常"}`);
+        const msg = `${item.title}: ${err?.message || "写入异常"}`;
+        errors.push(`[${method}] ${msg}`);
+        if (!firstError) firstError = msg;
       }
     }
+    // 全部成功或没有数据则直接返回
     if (inserted === items.length || items.length === 0) {
-      return { inserted, errors, method };
+      return { inserted, errors, method, firstError };
     }
+    // 部分成功也直接返回（service_role 都写不进去说明是表结构问题，anon 更不可能成功）
+    if (inserted > 0) {
+      return { inserted, errors, method, firstError };
+    }
+    // service_role 全部失败，继续降级尝试
+    console.warn(`[cron/fetch-intelligence] service_role 写入全部失败，降级到 anon key`);
+  } else {
+    console.warn("[cron/fetch-intelligence] SUPABASE_SERVICE_ROLE_KEY 未配置，跳过 service_role 策略");
   }
 
-  // 策略 2：Anon Key（依赖 insights_hub 表的 INSERT RLS）
+  // 策略 2：Anon Key（依赖 insights_hub 表的 INSERT RLS Policy）
   if (supabaseUrl && supabaseAnonKey && inserted < items.length) {
-    method = supabaseServiceKey ? "service_role_fallback_anon" : "anon";
+    method = hasServiceRoleKey ? "service_role_failed_fallback_anon" : "anon";
+    console.log("[cron/fetch-intelligence] 写入策略 2：anon key");
     const anonClient = createClient(supabaseUrl, supabaseAnonKey);
-    const remaining = items.slice(inserted); // 仅写入前一步失败的
-    let extraInserted = 0;
+    const remaining = items.slice(inserted);
     for (const item of remaining) {
       try {
-        const id = genId();
-        const { error } = await anonClient.from("insights_hub").insert([
-          {
-            id,
-            title: item.title,
-            category: item.category,
-            summary: item.summary,
-            source_name: item.source_name,
-            original_url: item.original_url,
-            published_at: item.published_at,
-            is_published: true,
-            is_featured: false,
-            api_source: "auto_bot",
-            tags: [],
-          },
-        ]);
+        const { error } = await anonClient.from("insights_hub").insert([buildPayload(item)]);
         if (error) {
-          errors.push(`[${method}] ${item.title}: ${error.message}`);
+          const msg = `${item.title}: ${error.message}`;
+          errors.push(`[${method}] ${msg}`);
+          if (!firstError) firstError = msg;
         } else {
           inserted++;
-          extraInserted++;
         }
       } catch (err: any) {
-        errors.push(`[${method}] ${item.title}: ${err?.message || "写入异常"}`);
+        const msg = `${item.title}: ${err?.message || "写入异常"}`;
+        errors.push(`[${method}] ${msg}`);
+        if (!firstError) firstError = msg;
       }
     }
-    if (extraInserted > 0 || inserted > 0) {
-      return { inserted, errors, method };
+    if (inserted > 0) {
+      return { inserted, errors, method, firstError };
     }
   }
 
-  // 策略 3：dataApi.createInsightHub 兜底（复用项目已有的 Supabase 单例 + 错误处理）
+  // 策略 3：dataApi.createInsightHub 兜底（复用项目已有的 Supabase 单例）
   if (inserted === 0 && items.length > 0) {
     method = "dataApi_fallback";
+    console.log("[cron/fetch-intelligence] 写入策略 3：dataApi.createInsightHub");
     for (const item of items) {
       try {
         await createInsightHub({
@@ -384,19 +388,14 @@ async function writeWithFallback(
         });
         inserted++;
       } catch (err: any) {
-        errors.push(`[${method}] ${item.title}: ${err?.message || "dataApi 写入失败"}`);
+        const msg = `${item.title}: ${err?.message || "dataApi 写入失败"}`;
+        errors.push(`[${method}] ${msg}`);
+        if (!firstError) firstError = msg;
       }
     }
   }
 
-  // 如果全部为 0，给出统一的配置提示
-  if (inserted === 0 && items.length > 0) {
-    errors.unshift(
-      `写入失败：未找到可用的 Supabase 写入方式。请确保 SUPABASE_SERVICE_ROLE_KEY 已配置（推荐），或在 insights_hub 表上启用允许 anon INSERT 的 RLS Policy。`
-    );
-  }
-
-  return { inserted, errors, method };
+  return { inserted, errors, method, firstError };
 }
 
 // ---------- 权限校验：Vercel Cron 头 / CRON_SECRET ----------
@@ -496,21 +495,19 @@ async function handleCron(req: NextRequest) {
   }
 
   // 4. 写入数据库（三层兜底）
-  const { inserted, errors, method } = await writeWithFallback(deduped);
+  const { inserted, errors, method, firstError } = await writeWithFallback(deduped);
 
   const duration = Date.now() - startedAt;
   console.log(
     `[cron/fetch-intelligence] 完成！生成 ${rawItems.length} → 清洗 ${sanitized.length} → 去重+24h ${deduped.length} → 写入 ${inserted}/${deduped.length}（method=${method}），耗时 ${duration}ms`
   );
 
-  // 全部写入失败 → success=false，前台可提示错误
+  // 全部写入失败 → success=false，返回真实 Supabase 错误 + 修复指引
   const isOk = inserted > 0;
-  return NextResponse.json(
-    {
-      success: isOk,
-      message: isOk
-        ? `完成：生成 ${rawItems.length} → 清洗 ${sanitized.length} → 24h重复跳过 ${duplicatesRemoved} → 写入 ${inserted}/${deduped.length}`
-        : `写入失败：${errors[0] || "未知错误"}（请检查 .env.local 的 SUPABASE_SERVICE_ROLE_KEY）`,
+  if (isOk) {
+    return NextResponse.json({
+      success: true,
+      message: `完成：生成 ${rawItems.length} → 清洗 ${sanitized.length} → 24h重复跳过 ${duplicatesRemoved} → 写入 ${inserted}/${deduped.length}`,
       stats: {
         generated: rawItems.length,
         sanitized: sanitized.length,
@@ -522,7 +519,32 @@ async function handleCron(req: NextRequest) {
       },
       errors: errors.slice(0, 10),
       duration,
+    });
+  }
+
+  // 写入失败：返回真实错误 + 明确修复指引
+  const hint = hasServiceRoleKey
+    ? "Service Role Key 已配置但仍写入失败，请检查 insights_hub 表结构是否完整（id/title/category/summary/source_name/original_url/published_at/is_published/is_featured/api_source/tags/created_at）"
+    : "请在 .env.local 中添加 SUPABASE_SERVICE_ROLE_KEY=（Supabase Dashboard → Settings → API → service_role secret），或在 Supabase SQL Editor 运行 insights_hub 的 INSERT RLS 策略 SQL（见 src/lib/supabase.ts 注释）";
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: firstError || "写入失败：未知原因",
+      hint,
+      message: `写入失败：${firstError || "未知错误"}`,
+      stats: {
+        generated: rawItems.length,
+        sanitized: sanitized.length,
+        duplicatesRemoved,
+        afterDedup: deduped.length,
+        inserted: 0,
+        totalItems: deduped.length,
+        method,
+      },
+      errors: errors.slice(0, 10),
+      duration,
     },
-    { status: isOk ? 200 : 500 }
+    { status: 500 }
   );
 }

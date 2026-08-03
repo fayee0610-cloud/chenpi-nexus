@@ -2205,7 +2205,9 @@ function InsightHubEditor() {
         if (duplicatesRemoved > 0) {
           msg = `⚠️ 24h 内已有重复情报（跳过 ${duplicatesRemoved} 条）`;
         } else if (!result.success) {
-          msg = (result.errors && result.errors[0]) || result.error || result.message || "AI 生成/写入失败";
+          // 优先展示真实 Supabase 错误 + hint
+          const realErr = result.error || (result.errors && result.errors[0]) || result.message || "AI 生成/写入失败";
+          msg = result.hint ? `${realErr} | 修复指引：${result.hint}` : realErr;
         }
         setStatus({ type: "error", msg });
       }
