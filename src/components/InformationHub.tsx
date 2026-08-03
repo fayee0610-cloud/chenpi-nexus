@@ -9,14 +9,14 @@ import { siteData, type InsightHubItem, type InsightHubCategory } from "@/data/s
 const CATEGORY_TABS = [
   { key: "all", label: "全部分类", icon: Radar },
   { key: "🤖 机器人/具身智能", label: "机器人/具身智能", icon: Bot },
-  { key: "💡 AI技术/大厂", label: "AI技术/大厂", icon: Sparkles },
-  { key: "📈 品牌营销/SOP", label: "出海营销/SOP", icon: TrendingUp },
+  { key: "💡 AI技术/大厂策略", label: "AI技术/大厂策略", icon: Sparkles },
+  { key: "📈 品牌策略/GTM干货", label: "品牌策略/GTM干货", icon: TrendingUp },
 ] as const;
 
 const CATEGORY_STYLES: Record<string, { border: string; bg: string; text: string; glow: string }> = {
   "🤖 机器人/具身智能": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400", glow: "shadow-cyan-500/5" },
-  "💡 AI技术/大厂": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
-  "📈 品牌营销/SOP": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
+  "💡 AI技术/大厂策略": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
+  "📈 品牌策略/GTM干货": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
 };
 
 export default function InformationHub() {
@@ -135,6 +135,20 @@ export default function InformationHub() {
                       {item.summary}
                     </p>
                   </div>
+
+                  {/* 标签 */}
+                  {item.tags && item.tags.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-1">
+                      {item.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-[9px] text-zinc-500"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* 底部：来源 + 日期 + 查看原文 */}
                   <div className="flex items-center justify-between border-t border-zinc-800/60 pt-3">

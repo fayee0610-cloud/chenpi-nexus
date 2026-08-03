@@ -576,13 +576,15 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
     return data.map((row: any) => ({
       id: row.id,
       title: row.title || "",
-      category: row.category || "💡 AI技术/大厂",
+      category: row.category || "💡 AI技术/大厂策略",
       summary: row.summary || "",
       sourceName: row.source_name || "",
       originalUrl: row.original_url || "",
       publishedAt: row.published_at || "",
       isPublished: row.is_published ?? true,
       isFeatured: row.is_featured ?? false,
+      apiSource: row.api_source || "manual",
+      tags: row.tags ? (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags) : [],
     })) as InsightHubItem[];
   } catch {
     return siteData.insightsHub;
@@ -604,11 +606,76 @@ export async function createInsightHub(item: Partial<InsightHubItem>) {
         published_at: item.publishedAt,
         is_published: item.isPublished ?? true,
         is_featured: item.isFeatured ?? false,
+        api_source: item.apiSource || "manual",
+        tags: item.tags || [],
       },
     ])
     .select();
   if (error) throw error;
   return data;
+}
+
+// ---------- 服务端专用：API 自动化写入（使用 service_role key） ----------
+export async function createInsightHubViaAPI(item: {
+  title: string;
+  category: string;
+  summary: string;
+  source_name: string;
+  original_url: string;
+  tags?: string[];
+}, serviceRoleKey?: string): Promise<{ success: boolean; id?: string; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const supabaseServiceKey = serviceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { success: false, error: "Supabase service role not configured" };
+  }
+
+  // 允许的分类白名单
+  const ALLOWED_CATEGORIES = [
+    "🤖 机器人/具身智能",
+    "💡 AI技术/大厂策略",
+    "📈 品牌策略/GTM干货",
+  ];
+  if (!ALLOWED_CATEGORIES.includes(item.category)) {
+    return { success: false, error: `分类不合法，仅允许：${ALLOWED_CATEGORIES.join(" / ")}` };
+  }
+
+  // 品牌策略分类的内容过滤：严禁跨境电商类泛资讯
+  if (item.category === "📈 品牌策略/GTM干货") {
+    const blockedKeywords = ["跨境电商", "Shopee", "Shopee", "拉美", "东南亚电商", "代购", "铺货"];
+    const text = `${item.title} ${item.summary} ${item.source_name}`;
+    for (const kw of blockedKeywords) {
+      if (text.includes(kw)) {
+        return { success: false, error: `品牌策略分类禁止跨境电商类泛资讯（检测到关键词：${kw}）` };
+      }
+    }
+  }
+
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const serverClient = createClient(supabaseUrl, supabaseServiceKey);
+    const id = genId();
+    const { error } = await serverClient.from("insights_hub").insert([
+      {
+        id,
+        title: item.title,
+        category: item.category,
+        summary: item.summary,
+        source_name: item.source_name,
+        original_url: item.original_url,
+        published_at: new Date().toLocaleDateString("zh-CN").replace(/\//g, "."),
+        is_published: true,
+        is_featured: false,
+        api_source: "auto_bot",
+        tags: item.tags || [],
+      },
+    ]);
+    if (error) return { success: false, error: error.message };
+    return { success: true, id };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Unknown error" };
+  }
 }
 
 export async function deleteInsightHub(id: string) {

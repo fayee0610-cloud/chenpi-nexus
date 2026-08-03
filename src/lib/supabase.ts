@@ -84,11 +84,17 @@
  *   published_at TEXT,
  *   is_published BOOLEAN DEFAULT TRUE,
  *   is_featured BOOLEAN DEFAULT FALSE,
+ *   api_source TEXT DEFAULT 'manual',
+ *   tags JSONB DEFAULT '[]'::jsonb,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 若表已存在，补加新字段：
+ * -- ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS api_source TEXT DEFAULT 'manual';
+ * -- ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
  * ALTER TABLE public.insights_hub ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "insights_hub are readable by everyone" ON public.insights_hub
  *   FOR SELECT USING (true);
+ * -- 允许 API 路由通过 service_role 写入（anon 无写入权限）
  *
  * -- 3. 庇护所互动帖子表
  * CREATE TABLE IF NOT EXISTS public.sanctuary_posts (

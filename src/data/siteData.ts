@@ -98,7 +98,7 @@ export interface ResourceItem {
   date: string;
 }
 
-export type InsightHubCategory = "🤖 机器人/具身智能" | "💡 AI技术/大厂" | "📈 品牌营销/SOP";
+export type InsightHubCategory = "🤖 机器人/具身智能" | "💡 AI技术/大厂策略" | "📈 品牌策略/GTM干货";
 
 export interface InsightHubItem {
   id: string;
@@ -110,6 +110,8 @@ export interface InsightHubItem {
   publishedAt: string;
   isPublished: boolean;
   isFeatured?: boolean;
+  apiSource?: string; // 标识来源：'manual' | 'auto_bot'
+  tags?: string[]; // 标签数组，如 ['ToB营销', 'GTM策略', '品牌定位']
 }
 
 // ========== 1. 个人简介与 Hero 区 ==========
@@ -568,28 +570,34 @@ export const insightsHub: InsightHubItem[] = [
     publishedAt: "2025.07.20",
     isPublished: true,
     isFeatured: true,
+    apiSource: "manual",
+    tags: ["具身智能", "商用落地", "BOM成本"],
   },
   {
     id: "hub-2",
     title: "DeepSeek-V3 推理成本降至 GPT-4o 的 1/30，API 调用量周增 300%",
-    category: "💡 AI技术/大厂",
+    category: "💡 AI技术/大厂策略",
     summary: "MoE 架构 + FP8 混合精度训练，单次推理成本 $0.002。中小团队首次拥有可负担的深度推理能力，RAG 应用的商业闭环被彻底打开。",
     sourceName: "36Kr 深度",
     originalUrl: "https://example.com/deepseek-v3",
     publishedAt: "2025.07.18",
     isPublished: true,
     isFeatured: true,
+    apiSource: "manual",
+    tags: ["大厂策略", "推理降本", "RAG商业化"],
   },
   {
     id: "hub-3",
-    title: "字节跳动 TikTok Shop 巴西站 GMV 突破 10 亿美元，本地化达人矩阵跑通",
-    category: "📈 品牌营销/SOP",
-    summary: "巴西市场达人分销占比 73%，核心 SOP：本地达人筛选 → 样品寄测 → 15 秒原生短视频 → 直播转化。中国品牌出海拉美的可复制路径已验证。",
-    sourceName: "专家访谈 / 跨境出海白皮书",
-    originalUrl: "https://example.com/tiktok-brazil",
+    title: "华为云盘古大模型 5.0 发布：聚焦 ToB 行业大模型，主打场景化 GTM 策略",
+    category: "📈 品牌策略/GTM干货",
+    summary: "华为放弃通用 ToC 路线，以行业大模型（矿山/铁路/气象）为锚点切入 ToB 市场。GTM 核心：标杆案例 → 行业标准 → 生态伙伴，PLG 转 SLG 的经典路径。",
+    sourceName: "华为开发者大会 HDC 2025",
+    originalUrl: "https://example.com/huawei-pangu",
     publishedAt: "2025.07.15",
     isPublished: true,
     isFeatured: false,
+    apiSource: "manual",
+    tags: ["ToB营销", "GTM策略", "品牌定位", "SLG"],
   },
   {
     id: "hub-4",
@@ -601,28 +609,34 @@ export const insightsHub: InsightHubItem[] = [
     publishedAt: "2025.07.12",
     isPublished: true,
     isFeatured: false,
+    apiSource: "manual",
+    tags: ["具身智能", "量产", "关节直驱"],
   },
   {
     id: "hub-5",
     title: "OpenAI 发布 GPT-5 多模态实时推理，延迟降至 200ms 以内",
-    category: "💡 AI技术/大厂",
+    category: "💡 AI技术/大厂策略",
     summary: "GPT-5 原生支持语音+视觉流式推理，端到端延迟 200ms。实时 AI 助手、同声传译、机器人视觉交互的产品化门槛被大幅拉低。",
     sourceName: "OpenAI DevDay 2025",
     originalUrl: "https://example.com/gpt5",
     publishedAt: "2025.07.10",
     isPublished: true,
     isFeatured: false,
+    apiSource: "manual",
+    tags: ["大厂策略", "多模态", "实时推理"],
   },
   {
     id: "hub-6",
-    title: "SHEIN 半托管模式欧美站上线，招商门槛降至月 GMV 5 万美元",
-    category: "📈 品牌营销/SOP",
-    summary: "半托管模式让商家自主定价与运营，SHEIN 提供流量与物流。核心 SOP：选品上架 → 平台流量倾斜 → 海外仓 3 日达。适合中小品牌快速出海。",
-    sourceName: "SHEIN 招商大会",
-    originalUrl: "https://example.com/shein-semi",
+    title: "字节豆包大模型 ToB 品牌升级：Thought Leadership 矩阵打法全拆解",
+    category: "📈 品牌策略/GTM干货",
+    summary: "字节以豆包为核心，构建「技术白皮书 + 行业峰会 + KOL 矩阵」三件套，将 ToB 品牌从工具定位升级为 Thought Leader。核心 SOP：造概念 → 抢心智 → 建标准。",
+    sourceName: "字节跳动品牌战略分析",
+    originalUrl: "https://example.com/doubao-tob",
     publishedAt: "2025.07.08",
     isPublished: true,
     isFeatured: false,
+    apiSource: "manual",
+    tags: ["ToB营销", "品牌定位", "Thought Leadership", "GTM策略"],
   },
 ];
 
