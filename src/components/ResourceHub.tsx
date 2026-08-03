@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Download, Lock, X, Check, Package } from "lucide-react";
-import { fetchResources, incrementResourceDownload } from "@/lib/dataApi";
+import { FileText, Download, Lock, X, Package } from "lucide-react";
+import { fetchResources, incrementResourceDownload, createLead } from "@/lib/dataApi";
 import { siteData, type ResourceItem } from "@/data/siteData";
 
 export default function ResourceHub() {
@@ -11,8 +11,8 @@ export default function ResourceHub() {
   const [loading, setLoading] = useState(true);
   const [lockResource, setLockResource] = useState<ResourceItem | null>(null);
   const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [registered, setRegistered] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [hasSubmittedEmail, setHasSubmittedEmail] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -22,51 +22,53 @@ export default function ResourceHub() {
         setLoading(false);
       }
     });
-    // 检查是否已注册（localStorage）
-    const savedEmail = localStorage.getItem("user_email");
-    if (savedEmail) setRegistered(true);
+    // 检查是否已留存邮箱
+    if (localStorage.getItem("has_submitted_email") === "true") {
+      setHasSubmittedEmail(true);
+    }
     return () => { mounted = false; };
   }, []);
 
-  const handleDownload = useCallback(async (resource: ResourceItem) => {
-    // 需要登录但未注册 → 弹窗
-    if (resource.requireLogin && !registered) {
-      setLockResource(resource);
-      return;
-    }
-
-    // 已注册或无需登录 → 直接下载
+  const triggerDownload = useCallback(async (resource: ResourceItem) => {
     if (resource.fileUrl) {
       try {
         await incrementResourceDownload(resource.id);
-        const link = document.createElement("a");
-        link.href = resource.fileUrl;
-        link.download = resource.title;
-        link.target = "_blank";
-        link.click();
-      } catch {
-        // 降级：直接打开 URL
-        window.open(resource.fileUrl, "_blank");
-      }
+      } catch {}
+      const link = document.createElement("a");
+      link.href = resource.fileUrl;
+      link.download = resource.title;
+      link.target = "_blank";
+      link.click();
     } else {
-      // 无文件 URL（Mock 数据），提示
       alert("该资源文件正在准备中，敬请期待！");
     }
-  }, [registered]);
+  }, []);
 
-  const handleSubmitEmail = useCallback(() => {
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-    localStorage.setItem("user_email", email.trim());
-    setRegistered(true);
-    setSubmitted(true);
-    setTimeout(() => {
-      setLockResource(null);
-      setSubmitted(false);
-      setEmail("");
-      // 自动触发下载
-      if (lockResource) handleDownload(lockResource);
-    }, 1500);
-  }, [email, lockResource, handleDownload]);
+  const handleDownload = useCallback(async (resource: ResourceItem) => {
+    // 需要登录且未留存邮箱 → 弹窗
+    if (resource.requireLogin && !hasSubmittedEmail) {
+      setLockResource(resource);
+      return;
+    }
+    // 已留存或无需登录 → 直接下载
+    await triggerDownload(resource);
+  }, [hasSubmittedEmail, triggerDownload]);
+
+  const handleSubmitEmail = useCallback(async () => {
+    if (!email.trim() || !email.includes("@")) return;
+    setSubmitting(true);
+    // 静默写入线索
+    await createLead(email.trim(), lockResource?.id, lockResource?.title);
+    // 记录已提交状态
+    localStorage.setItem("has_submitted_email", "true");
+    setHasSubmittedEmail(true);
+    // 立即触发下载
+    if (lockResource) await triggerDownload(lockResource);
+    // 关闭弹窗
+    setLockResource(null);
+    setEmail("");
+    setSubmitting(false);
+  }, [email, lockResource, triggerDownload]);
 
   return (
     <section id="resources" className="relative mx-auto max-w-7xl px-6 py-20">
@@ -151,12 +153,12 @@ export default function ResourceHub() {
                   <button
                     onClick={() => handleDownload(resource)}
                     className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                      resource.requireLogin && !registered
+                      resource.requireLogin && !hasSubmittedEmail
                         ? "border border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-950/30"
                         : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:brightness-110"
                     }`}
                   >
-                    {resource.requireLogin && !registered ? (
+                    {resource.requireLogin && !hasSubmittedEmail ? (
                       <>
                         <Lock className="h-3 w-3" />
                         解锁 PDF
@@ -173,7 +175,7 @@ export default function ResourceHub() {
             ))}
       </div>
 
-      {/* 下载壁垒弹窗（邮箱注册引导） */}
+      {/* 下载壁垒弹窗（极简邮箱留存） */}
       <AnimatePresence>
         {lockResource && (
           <motion.div
@@ -190,61 +192,49 @@ export default function ResourceHub() {
               onClick={(e) => e.stopPropagation()}
               className="mx-4 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
             >
-              {submitted ? (
-                <div className="py-8 text-center">
-                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/15">
-                    <Check className="h-6 w-6 text-green-400" />
+              <div className="mb-5 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                    <Lock className="h-5 w-5 text-amber-400" />
                   </div>
-                  <p className="text-sm font-medium text-zinc-200">解锁成功！</p>
-                  <p className="mt-1 text-xs text-zinc-500">正在准备下载...</p>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-100">解锁完整版资料</h3>
+                    <p className="text-[11px] text-zinc-500">{lockResource.title}</p>
+                  </div>
                 </div>
-              ) : (
-                <>
-                  <div className="mb-5 flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                        <Lock className="h-5 w-5 text-amber-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-zinc-100">解锁完整资源</h3>
-                        <p className="text-[11px] text-zinc-500">{lockResource.title}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setLockResource(null)}
-                      className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+                <button
+                  onClick={() => setLockResource(null)}
+                  className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-                  <p className="mb-4 text-xs leading-relaxed text-zinc-400">
-                    留下你的邮箱，即可免费获取完整 PDF。陈皮同学会偶尔分享有价值的商业洞察，随时可取消订阅。
-                  </p>
+              <p className="mb-4 text-xs leading-relaxed text-zinc-400">
+                留下邮箱即可立即下载完整 PDF，无验证码、无密码。后续不再重复弹窗。
+              </p>
 
-                  <div className="space-y-3">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSubmitEmail()}
-                      placeholder="your@email.com"
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
-                    />
-                    <button
-                      onClick={handleSubmitEmail}
-                      disabled={!email.trim()}
-                      className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:brightness-110 disabled:opacity-40"
-                    >
-                      解锁并下载
-                    </button>
-                  </div>
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmitEmail()}
+                  placeholder="your@email.com"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
+                />
+                <button
+                  onClick={handleSubmitEmail}
+                  disabled={!email.trim() || !email.includes("@") || submitting}
+                  className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:brightness-110 disabled:opacity-40"
+                >
+                  {submitting ? "正在获取..." : "立即获取 PDF"}
+                </button>
+              </div>
 
-                  <p className="mt-3 text-center text-[10px] text-zinc-600">
-                    注册即表示同意接收偶尔的商业洞察邮件
-                  </p>
-                </>
-              )}
+              <p className="mt-3 text-center text-[10px] text-zinc-600">
+                邮箱仅用于发送资源与偶尔的商业洞察，随时可取消
+              </p>
             </motion.div>
           </motion.div>
         )}

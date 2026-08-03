@@ -29,6 +29,7 @@ import {
   Package,
   Upload,
   FileText,
+  Mail,
 } from "lucide-react";
 import {
   createProject,
@@ -48,11 +49,13 @@ import {
   createResource,
   deleteResource,
   uploadResourceFile,
+  fetchLeads,
+  deleteLead,
 } from "@/lib/dataApi";
-import type { SiteConfig } from "@/lib/dataApi";
+import type { SiteConfig, Lead } from "@/lib/dataApi";
 import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem } from "@/data/siteData";
 
-type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "config";
+type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "leads" | "config";
 
 // 列表项扩展 isPublished 字段（DB 返回，但 fetchProjects/fetchInsights 未映射，admin 页面自行管理）
 type AdminProject = PortfolioProject & { isPublished: boolean };
@@ -149,6 +152,7 @@ export default function AdminPage() {
             { key: "insights" as const, label: "灵感文章", icon: <Sparkles className="h-3.5 w-3.5" /> },
             { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
             { key: "resources" as const, label: "资源包", icon: <Package className="h-3.5 w-3.5" /> },
+            { key: "leads" as const, label: "线索", icon: <Mail className="h-3.5 w-3.5" /> },
             { key: "config" as const, label: "站点配置", icon: <Settings className="h-3.5 w-3.5" /> },
           ].map((tab) => (
             <button
@@ -212,6 +216,17 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <ResourceEditor />
+            </motion.div>
+          )}
+          {activeTab === "leads" && (
+            <motion.div
+              key="leads"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <LeadsManager />
             </motion.div>
           )}
           {activeTab === "config" && (
@@ -1476,6 +1491,150 @@ function SanctuaryManager() {
                   className="rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                 >
                   {deletingId === post.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========== Tab: 线索管理 (Leads) ==========
+function LeadsManager() {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadLeads = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchLeads();
+      setLeads(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLeads();
+  }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("确定要删除此条线索吗？此操作不可撤销。")) return;
+    setDeletingId(id);
+    try {
+      await deleteLead(id);
+      setLeads((prev) => prev.filter((l) => l.id !== id));
+    } catch {
+      alert("删除失败");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (leads.length === 0) return;
+    const csv = [
+      "邮箱,资源,提交时间",
+      ...leads.map((l) => `${l.email},${l.resourceTitle || ""},${l.createdAt}`),
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `leads-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-zinc-50">线索管理</h2>
+          <p className="mt-1 text-sm text-zinc-500">管理访客下载资源时提交的邮箱线索</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            disabled={leads.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            导出 CSV
+          </button>
+          <button
+            onClick={loadLeads}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            刷新
+          </button>
+        </div>
+      </div>
+
+      {/* 顶部统计 */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20">
+            <Mail className="h-5 w-5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-zinc-50">{leads.length}</p>
+            <p className="text-xs text-zinc-500">总线索数</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 线索列表 */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+          </div>
+        ) : leads.length === 0 ? (
+          <div className="py-20 text-center">
+            <Mail className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无线索数据</p>
+            <p className="mt-1 text-xs text-zinc-600">访客下载资源时提交的邮箱将显示在这里</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {/* 表头 */}
+            <div className="hidden gap-4 px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-zinc-500 md:flex">
+              <div className="flex-1">邮箱</div>
+              <div className="flex-1">下载资源</div>
+              <div className="w-40">提交时间</div>
+              <div className="w-10" />
+            </div>
+            {leads.map((lead) => (
+              <div key={lead.id} className="flex items-start gap-4 p-5">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-[10px] text-zinc-600 md:hidden">邮箱</span>
+                  <span className="truncate text-sm text-zinc-100">{lead.email}</span>
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-[10px] text-zinc-600 md:hidden">下载资源</span>
+                  <span className="truncate text-sm text-zinc-300">{lead.resourceTitle || "—"}</span>
+                </div>
+                <div className="flex w-40 flex-col">
+                  <span className="text-[10px] text-zinc-600 md:hidden">提交时间</span>
+                  <span className="truncate text-xs text-zinc-500">{lead.createdAt}</span>
+                </div>
+                <button
+                  onClick={() => handleDelete(lead.id)}
+                  disabled={deletingId === lead.id}
+                  className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === lead.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Trash2 className="h-4 w-4" />

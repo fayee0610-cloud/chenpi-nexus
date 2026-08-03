@@ -507,3 +507,57 @@ export async function uploadResourceFile(file: File): Promise<{ url: string; siz
   const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
   return { url: urlData.publicUrl, size: `${sizeMB} MB` };
 }
+
+// ---------- Leads / 线索收集 ----------
+export interface Lead {
+  id: string;
+  email: string;
+  resourceId?: string;
+  resourceTitle?: string;
+  createdAt: string;
+}
+
+export async function createLead(email: string, resourceId?: string, resourceTitle?: string): Promise<void> {
+  if (!supabase) {
+    // 未配置 Supabase 时静默成功（不影响用户下载）
+    return;
+  }
+  try {
+    await supabase.from("leads").insert([
+      {
+        id: genId(),
+        email,
+        resource_id: resourceId || null,
+        resource_title: resourceTitle || null,
+      },
+    ]);
+  } catch {
+    // 静默失败，不阻断下载流程
+  }
+}
+
+export async function fetchLeads(): Promise<Lead[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data.map((row: any) => ({
+      id: row.id,
+      email: row.email || "",
+      resourceId: row.resource_id || "",
+      resourceTitle: row.resource_title || "",
+      createdAt: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
+    })) as Lead[];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteLead(id: string) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase.from("leads").delete().eq("id", String(id));
+  if (error) throw error;
+}

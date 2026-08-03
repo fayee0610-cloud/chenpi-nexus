@@ -59,6 +59,20 @@
  * CREATE POLICY "resources are readable by everyone" ON public.resources
  *   FOR SELECT USING (true);
  *
+ * -- 6. 线索/邮箱订阅表（资源下载获客）
+ * CREATE TABLE IF NOT EXISTS public.leads (
+ *   id TEXT PRIMARY KEY,
+ *   email TEXT NOT NULL,
+ *   resource_id TEXT,
+ *   resource_title TEXT,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "leads are readable by everyone" ON public.leads
+ *   FOR SELECT USING (true);
+ * CREATE POLICY "anyone can submit lead" ON public.leads
+ *   FOR INSERT WITH CHECK (true);
+ *
  * -- 3. 庇护所互动帖子表
  * CREATE TABLE IF NOT EXISTS public.sanctuary_posts (
  *   id TEXT PRIMARY KEY,
