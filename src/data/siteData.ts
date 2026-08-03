@@ -84,6 +84,20 @@ export interface Incense {
   count: number;
 }
 
+export interface ResourceItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  outline: string[];
+  fileUrl?: string;
+  fileSize?: string;
+  category: string;
+  requireLogin: boolean;
+  isPublished: boolean;
+  downloadCount: number;
+  date: string;
+}
+
 // ========== 1. 个人简介与 Hero 区 ==========
 
 export const profile = {
@@ -474,6 +488,65 @@ export const mascot = {
   ],
 };
 
+// ========== 7. 资源包（Resource Hub）Mock 数据 ==========
+
+export const resources: ResourceItem[] = [
+  {
+    id: "res-1",
+    title: "AI 硬件 GEO 指南",
+    excerpt: "从 0 到 1 拆解 AI 硬件产品的搜索引擎优化策略，覆盖 GEO（Generative Engine Optimization）核心方法论。",
+    outline: [
+      "AI 硬件搜索生态现状",
+      "GEO vs 传统 SEO 差异",
+      "结构化数据标记实操",
+      "AI 助理收录优化清单",
+    ],
+    fileUrl: "",
+    fileSize: "2.4 MB",
+    category: "指南",
+    requireLogin: true,
+    isPublished: true,
+    downloadCount: 128,
+    date: "2025.07.15",
+  },
+  {
+    id: "res-2",
+    title: " OPC 超级个体运营手册",
+    excerpt: "一人公司（One Person Company）的全栈运营框架，含自动化工具链与增长杠杆清单。",
+    outline: [
+      "OPC 核心能力模型",
+      "自动化工具链选型",
+      "增长杠杆矩阵",
+      "一人团队时间管理",
+    ],
+    fileUrl: "",
+    fileSize: "1.8 MB",
+    category: "手册",
+    requireLogin: true,
+    isPublished: true,
+    downloadCount: 86,
+    date: "2025.06.28",
+  },
+  {
+    id: "res-3",
+    title: "品牌出海拉丁美洲速览",
+    excerpt: "拉美市场品牌进入策略速览，含消费者洞察、渠道选择与本地化关键点。",
+    outline: [
+      "拉美六国市场概览",
+      "消费者画像与决策路径",
+      "渠道优先级矩阵",
+      "本地化避坑清单",
+    ],
+    fileUrl: "",
+    fileSize: "3.1 MB",
+    category: "报告",
+    requireLogin: false,
+    isPublished: true,
+    downloadCount: 42,
+    date: "2025.05.10",
+  },
+];
+
 // ========== 统一导出 ==========
 
 export const siteData = {
@@ -483,4 +556,5 @@ export const siteData = {
   insights,
   sanctuary,
   mascot,
+  resources,
 };

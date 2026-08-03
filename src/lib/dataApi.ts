@@ -10,6 +10,7 @@ import {
   type InsightItem,
   type SanctuaryPost,
   type ContentBlock,
+  type ResourceItem,
 } from "@/data/siteData";
 
 // 生成 TEXT 主键
@@ -382,9 +383,127 @@ export async function createInsight(insight: Partial<InsightItem>) {
           ? serializeContent(insight.content as ContentBlock[])
           : "",
         audio_url: insight.listenTime ? insight.listenTime : null,
+        is_published: true,
       },
     ])
     .select();
   if (error) throw error;
   return data;
+}
+
+// ---------- 切换发布状态 ----------
+export async function toggleProjectPublish(id: string, isPublished: boolean) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase
+    .from("projects")
+    .update({ is_published: isPublished })
+    .eq("id", String(id));
+  if (error) throw error;
+}
+
+export async function toggleInsightPublish(id: string, isPublished: boolean) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase
+    .from("insights")
+    .update({ is_published: isPublished })
+    .eq("id", String(id));
+  if (error) throw error;
+}
+
+export async function toggleResourcePublish(id: string, isPublished: boolean) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase
+    .from("resources")
+    .update({ is_published: isPublished })
+    .eq("id", String(id));
+  if (error) throw error;
+}
+
+// ---------- Resources CRUD ----------
+export async function fetchResources(): Promise<ResourceItem[]> {
+  if (!supabase) return siteData.resources;
+
+  try {
+    const { data, error } = await supabase
+      .from("resources")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return siteData.resources;
+    }
+
+    return data.map((row: any) => ({
+      id: row.id,
+      title: row.title || "",
+      excerpt: row.excerpt || "",
+      outline: row.outline ? (typeof row.outline === "string" ? JSON.parse(row.outline) : row.outline) : [],
+      fileUrl: row.file_url || "",
+      fileSize: row.file_size || "",
+      category: row.category || "指南",
+      requireLogin: row.require_login ?? false,
+      isPublished: row.is_published ?? true,
+      downloadCount: row.download_count || 0,
+      date: row.created_at ? new Date(row.created_at).toLocaleDateString("zh-CN").replace(/\//g, ".") : "",
+    })) as ResourceItem[];
+  } catch {
+    return siteData.resources;
+  }
+}
+
+export async function createResource(resource: Partial<ResourceItem>) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data, error } = await supabase
+    .from("resources")
+    .insert([
+      {
+        id: genId(),
+        title: resource.title,
+        excerpt: resource.excerpt,
+        outline: resource.outline || [],
+        file_url: resource.fileUrl || null,
+        file_size: resource.fileSize || null,
+        category: resource.category || "指南",
+        require_login: resource.requireLogin ?? false,
+        is_published: resource.isPublished ?? true,
+        download_count: 0,
+      },
+    ])
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteResource(id: string) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { error } = await supabase.from("resources").delete().eq("id", String(id));
+  if (error) throw error;
+}
+
+export async function incrementResourceDownload(id: string) {
+  if (!supabase) return;
+  try {
+    await supabase.rpc("increment_download_count", { resource_id: String(id) });
+  } catch {
+    // RPC 可能不存在，用读+写替代
+    const { data } = await supabase.from("resources").select("download_count").eq("id", String(id)).single();
+    if (data) {
+      await supabase.from("resources").update({ download_count: (data.download_count || 0) + 1 }).eq("id", String(id));
+    }
+  }
+}
+
+// ---------- Supabase Storage 文件上传 ----------
+export async function uploadResourceFile(file: File): Promise<{ url: string; size: string } | null> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const ext = file.name.split(".").pop() || "pdf";
+  const fileName = `resources/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("resources").upload(fileName, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage.from("resources").getPublicUrl(fileName);
+  const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+  return { url: urlData.publicUrl, size: `${sizeMB} MB` };
 }

@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Portfolio from "@/components/Portfolio";
 import Insights from "@/components/Insights";
+import ResourceHub from "@/components/ResourceHub";
 import Sanctuary from "@/components/Sanctuary";
 import Connect from "@/components/Connect";
 import Mascot from "@/components/Mascot";
@@ -17,6 +18,7 @@ export default async function Home() {
         <Hero />
         {config.show_portfolio && <Portfolio />}
         {config.show_insights && <Insights />}
+        <ResourceHub />
         {config.show_sanctuary && (
           <Sanctuary showInspirationSign={config.show_inspiration_sign} />
         )}

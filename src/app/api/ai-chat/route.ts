@@ -221,6 +221,51 @@ function fallbackReply(message: string): string {
   return "陈皮 AI 正在充电中，请稍后再试或通过【联系我】直接与陈皮本人沟通。\n\n你也可以试试问我：\n- 陈皮的核心能力是什么？\n- 陶瓷品牌出海怎么做？\n- 什么是 OPC 超级个体？\n- 如何与陈皮合作？";
 }
 
+// ---------- 频次限制：未登录用户 3 次/天 ----------
+const DAILY_LIMIT = 3;
+
+function getTodayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function checkRateLimit(req: NextRequest): { allowed: boolean; remaining: number } {
+  // 已登录用户（admin token 有效）不限次
+  const adminToken = req.cookies.get("admin_token")?.value;
+  if (adminToken) {
+    try {
+      const payload = JSON.parse(atob(adminToken));
+      if (payload.role === "admin" && payload.exp > Date.now()) {
+        return { allowed: true, remaining: -1 };
+      }
+    } catch {}
+  }
+
+  // 未登录用户：基于 cookie 计数
+  const usageCookie = req.cookies.get("ai_chat_usage")?.value;
+  const today = getTodayStr();
+
+  if (usageCookie) {
+    try {
+      const usage = JSON.parse(usageCookie);
+      if (usage.date === today) {
+        const count = usage.count || 0;
+        if (count >= DAILY_LIMIT) {
+          return { allowed: false, remaining: 0 };
+        }
+        return { allowed: true, remaining: DAILY_LIMIT - count };
+      }
+    } catch {}
+  }
+
+  return { allowed: true, remaining: DAILY_LIMIT };
+}
+
+function buildUsageCookie(currentCount: number): string {
+  const today = getTodayStr();
+  const value = JSON.stringify({ date: today, count: currentCount + 1 });
+  return `ai_chat_usage=${encodeURIComponent(value)}; Path=/; Max-Age=86400; SameSite=Lax`;
+}
+
 // ---------- 主路由：SSE 流式响应 ----------
 export async function POST(req: NextRequest) {
   const controller = new AbortController();
@@ -236,6 +281,32 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 频次限制检查
+    const rateCheck = checkRateLimit(req);
+    if (!rateCheck.allowed) {
+      return new Response(
+        JSON.stringify({ error: "RATE_LIMIT_EXCEEDED", message: "今日对话次数已达上限（3次/天）" }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // 构建用量计数 Cookie（已登录用户不计数）
+    const usageCookie = req.cookies.get("ai_chat_usage")?.value;
+    const today = getTodayStr();
+    let currentCount = 0;
+    if (usageCookie) {
+      try {
+        const usage = JSON.parse(usageCookie);
+        if (usage.date === today) currentCount = usage.count || 0;
+      } catch {}
+    }
+    const setCookieHeader = rateCheck.remaining === -1
+      ? ""
+      : buildUsageCookie(currentCount);
+
     // 1. 拉取知识库
     const kb = await fetchKnowledgeBase();
     const systemPrompt = buildSystemPrompt(kb);
@@ -243,14 +314,14 @@ export async function POST(req: NextRequest) {
     // 2. 尝试流式调用 LLM
     try {
       const stream = await streamLLM(systemPrompt, message, controller);
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive",
-          "X-Stream-Mode": "llm",
-        },
-      });
+      const headers: Record<string, string> = {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Stream-Mode": "llm",
+      };
+      if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
+      return new Response(stream, { headers });
     } catch (err) {
       console.log("[ai-chat] LLM 降级:", (err as Error).message);
       const reply = fallbackReply(message);
@@ -262,14 +333,14 @@ export async function POST(req: NextRequest) {
           ctrl.close();
         },
       });
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive",
-          "X-Stream-Mode": "fallback",
-        },
-      });
+      const headers: Record<string, string> = {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Stream-Mode": "fallback",
+      };
+      if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
+      return new Response(stream, { headers });
     }
   } catch (err) {
     console.error("[ai-chat] 致命错误:", err);

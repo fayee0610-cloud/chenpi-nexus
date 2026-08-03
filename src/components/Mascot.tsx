@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Bot } from "lucide-react";
+import { X, Send, Bot, Lock } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { siteData } from "@/data/siteData";
@@ -21,6 +21,7 @@ export default function Mascot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showRateLimit, setShowRateLimit] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 浮动气泡轮播
@@ -56,6 +57,14 @@ export default function Mascot() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
       });
+
+      // 频次限制：429 响应
+      if (res.status === 429) {
+        // 移除空 AI 消息
+        setMessages((prev) => prev.slice(0, -1));
+        setShowRateLimit(true);
+        return;
+      }
 
       if (!res.ok) throw new Error("REQUEST_FAILED");
 
@@ -277,6 +286,52 @@ export default function Mascot() {
                 </button>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 频次限制弹窗 */}
+      <AnimatePresence>
+        {showRateLimit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowRateLimit(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="mx-4 w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-center shadow-2xl"
+            >
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                <Lock className="h-6 w-6 text-amber-400" />
+              </div>
+              <h3 className="mb-2 text-base font-bold text-zinc-100">
+                今日对话次数已达上限
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-zinc-400">
+                未登录用户每天限 3 次对话。注册解锁无限次
+                <span className="font-medium text-purple-400">【陈皮 AI 商业策略深度诊断】</span>。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowRateLimit(false)}
+                  className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+                >
+                  知道了
+                </button>
+                <a
+                  href="/admin"
+                  className="flex-1 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:brightness-110"
+                >
+                  注册解锁
+                </a>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

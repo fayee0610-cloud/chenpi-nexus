@@ -26,6 +26,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Package,
+  Upload,
+  FileText,
 } from "lucide-react";
 import {
   createProject,
@@ -38,11 +41,22 @@ import {
   deleteProject,
   deleteInsight,
   deleteSanctuaryPost,
+  toggleProjectPublish,
+  toggleInsightPublish,
+  toggleResourcePublish,
+  fetchResources,
+  createResource,
+  deleteResource,
+  uploadResourceFile,
 } from "@/lib/dataApi";
 import type { SiteConfig } from "@/lib/dataApi";
-import type { PortfolioProject, InsightItem, SanctuaryPost } from "@/data/siteData";
+import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem } from "@/data/siteData";
 
-type AdminTab = "portfolio" | "insights" | "sanctuary" | "config";
+type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "config";
+
+// 列表项扩展 isPublished 字段（DB 返回，但 fetchProjects/fetchInsights 未映射，admin 页面自行管理）
+type AdminProject = PortfolioProject & { isPublished: boolean };
+type AdminInsight = InsightItem & { isPublished: boolean };
 
 const TOKEN_KEY = "admin_token";
 
@@ -134,6 +148,7 @@ export default function AdminPage() {
             { key: "portfolio" as const, label: "作品案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
             { key: "insights" as const, label: "灵感文章", icon: <Sparkles className="h-3.5 w-3.5" /> },
             { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
+            { key: "resources" as const, label: "资源包", icon: <Package className="h-3.5 w-3.5" /> },
             { key: "config" as const, label: "站点配置", icon: <Settings className="h-3.5 w-3.5" /> },
           ].map((tab) => (
             <button
@@ -186,6 +201,17 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <SanctuaryManager />
+            </motion.div>
+          )}
+          {activeTab === "resources" && (
+            <motion.div
+              key="resources"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ResourceEditor />
             </motion.div>
           )}
           {activeTab === "config" && (
@@ -296,7 +322,7 @@ function PortfolioEditor() {
   });
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [projectList, setProjectList] = useState<PortfolioProject[]>([]);
+  const [projectList, setProjectList] = useState<AdminProject[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
@@ -304,7 +330,8 @@ function PortfolioEditor() {
     setListLoading(true);
     try {
       const data = await fetchProjects();
-      setProjectList(data);
+      // fetchProjects 未映射 is_published 字段，此处补充默认值 true
+      setProjectList(data.map((p) => ({ ...p, isPublished: true })));
     } catch (err) {
       console.error(err);
     } finally {
@@ -315,6 +342,17 @@ function PortfolioEditor() {
   useEffect(() => {
     loadProjects();
   }, []);
+
+  const handleToggleProjectPublish = async (id: string | number, current: boolean) => {
+    try {
+      await toggleProjectPublish(String(id), !current);
+      setProjectList((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, isPublished: !current } : p))
+      );
+    } catch {
+      alert("切换失败");
+    }
+  };
 
   const handleDeleteProject = async (id: string | number) => {
     if (!window.confirm("确定要彻底删除此项作品案例吗？此操作不可撤销。")) return;
@@ -595,6 +633,18 @@ function PortfolioEditor() {
                   <h4 className="truncate text-sm font-medium text-zinc-100">{p.title}</h4>
                   {p.subTitle && <p className="mt-0.5 truncate text-xs text-zinc-500">{p.subTitle}</p>}
                 </div>
+                {/* 发布状态开关 */}
+                <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  <span className={`text-[10px] ${p.isPublished ? "text-green-400" : "text-zinc-500"}`}>
+                    {p.isPublished ? "已发布" : "未发布"}
+                  </span>
+                  <button
+                    onClick={() => handleToggleProjectPublish(p.id, p.isPublished)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${p.isPublished ? "bg-green-500" : "bg-zinc-600"}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${p.isPublished ? "translate-x-4" : "translate-x-1"}`} />
+                  </button>
+                </div>
                 <button
                   onClick={() => handleDeleteProject(p.id)}
                   disabled={deletingId === p.id}
@@ -629,7 +679,7 @@ function InsightsEditor() {
   });
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [insightList, setInsightList] = useState<InsightItem[]>([]);
+  const [insightList, setInsightList] = useState<AdminInsight[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
@@ -637,7 +687,8 @@ function InsightsEditor() {
     setListLoading(true);
     try {
       const data = await fetchInsights();
-      setInsightList(data);
+      // fetchInsights 未映射 is_published 字段，此处补充默认值 true
+      setInsightList(data.map((i) => ({ ...i, isPublished: true })));
     } catch (err) {
       console.error(err);
     } finally {
@@ -648,6 +699,17 @@ function InsightsEditor() {
   useEffect(() => {
     loadInsights();
   }, []);
+
+  const handleToggleInsightPublish = async (id: string | number, current: boolean) => {
+    try {
+      await toggleInsightPublish(String(id), !current);
+      setInsightList((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, isPublished: !current } : i))
+      );
+    } catch {
+      alert("切换失败");
+    }
+  };
 
   const handleDeleteInsight = async (id: string | number) => {
     if (!window.confirm("确定要彻底删除此项灵感文章吗？此操作不可撤销。")) return;
@@ -858,12 +920,457 @@ function InsightsEditor() {
                   <h4 className="truncate text-sm font-medium text-zinc-100">{i.title}</h4>
                   {i.excerpt && <p className="mt-0.5 truncate text-xs text-zinc-500">{i.excerpt}</p>}
                 </div>
+                {/* 发布状态开关 */}
+                <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  <span className={`text-[10px] ${i.isPublished ? "text-green-400" : "text-zinc-500"}`}>
+                    {i.isPublished ? "已发布" : "未发布"}
+                  </span>
+                  <button
+                    onClick={() => handleToggleInsightPublish(i.id, i.isPublished)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${i.isPublished ? "bg-green-500" : "bg-zinc-600"}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${i.isPublished ? "translate-x-4" : "translate-x-1"}`} />
+                  </button>
+                </div>
                 <button
                   onClick={() => handleDeleteInsight(i.id)}
                   disabled={deletingId === i.id}
                   className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                 >
                   {deletingId === i.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========== Tab: 资源包编辑器 ==========
+function ResourceEditor() {
+  const [form, setForm] = useState({
+    title: "",
+    excerpt: "",
+    outline: ["", ""] as string[],
+    category: "指南",
+    requireLogin: false,
+  });
+  const [fileInfo, setFileInfo] = useState<{ url: string; size: string; name: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [resourceList, setResourceList] = useState<ResourceItem[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const loadResources = async () => {
+    setListLoading(true);
+    try {
+      const data = await fetchResources();
+      setResourceList(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadResources();
+  }, []);
+
+  const updateField = (field: string, value: any) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const addOutlineItem = () => {
+    setForm((prev) => ({ ...prev, outline: [...prev.outline, ""] }));
+  };
+  const removeOutlineItem = (i: number) => {
+    setForm((prev) => ({ ...prev, outline: prev.outline.filter((_, idx) => idx !== i) }));
+  };
+  const updateOutlineItem = (i: number, val: string) => {
+    setForm((prev) => ({
+      ...prev,
+      outline: prev.outline.map((o, idx) => (idx === i ? val : o)),
+    }));
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setStatus({ type: "error", msg: "仅支持 PDF 文件" });
+      return;
+    }
+    setUploading(true);
+    setStatus(null);
+    try {
+      const result = await uploadResourceFile(file);
+      if (result) {
+        setFileInfo({ url: result.url, size: result.size, name: file.name });
+        setStatus({ type: "success", msg: "文件上传成功" });
+      }
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "文件上传失败" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) {
+      setStatus({ type: "error", msg: "请填写资源标题" });
+      return;
+    }
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      const resource: Partial<ResourceItem> = {
+        title: form.title,
+        excerpt: form.excerpt,
+        outline: form.outline.filter(Boolean),
+        category: form.category,
+        requireLogin: form.requireLogin,
+        isPublished: true,
+        fileUrl: fileInfo?.url,
+        fileSize: fileInfo?.size,
+      };
+      await createResource(resource);
+      setStatus({ type: "success", msg: "资源包发布成功！" });
+      setForm({
+        title: "",
+        excerpt: "",
+        outline: ["", ""],
+        category: "指南",
+        requireLogin: false,
+      });
+      setFileInfo(null);
+      loadResources();
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "发布失败" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("确定要彻底删除此资源包吗？此操作不可撤销。")) return;
+    setDeletingId(id);
+    try {
+      await deleteResource(id);
+      setResourceList((prev) => prev.filter((r) => r.id !== id));
+      setStatus({ type: "success", msg: "资源包已删除" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "删除失败" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleTogglePublish = async (id: string, current: boolean) => {
+    setTogglingId(id);
+    try {
+      await toggleResourcePublish(id, !current);
+      setResourceList((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, isPublished: !current } : r))
+      );
+    } catch {
+      alert("切换失败");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-50">发布资源包</h2>
+        <p className="mt-1 text-sm text-zinc-500">新增一个资源包（指南 / 手册 / 报告），支持 PDF 上传至 Supabase Storage</p>
+      </div>
+
+      <div className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+        {/* 基础信息 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="资源标题 *">
+            <input
+              value={form.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              placeholder="如：AI 硬件 GEO 指南"
+              className="input-resource"
+            />
+          </FormField>
+          <FormField label="资源分类">
+            <select
+              value={form.category}
+              onChange={(e) => updateField("category", e.target.value)}
+              className="input-resource"
+            >
+              <option value="指南">指南</option>
+              <option value="手册">手册</option>
+              <option value="报告">报告</option>
+            </select>
+          </FormField>
+        </div>
+
+        {/* 精炼摘要 */}
+        <FormField label="精炼摘要（Excerpt）">
+          <textarea
+            value={form.excerpt}
+            onChange={(e) => updateField("excerpt", e.target.value)}
+            rows={3}
+            placeholder="一句话概括资源核心价值..."
+            className="input-resource resize-none"
+          />
+        </FormField>
+
+        {/* 核心目录 */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-300">核心目录（Outline）</label>
+            <button
+              onClick={addOutlineItem}
+              className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+            >
+              <Plus className="h-3 w-3" /> 添加条目
+            </button>
+          </div>
+          <div className="space-y-2">
+            {form.outline.map((item, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  value={item}
+                  onChange={(e) => updateOutlineItem(i, e.target.value)}
+                  placeholder={`目录条目 ${i + 1}`}
+                  className="input-resource flex-1"
+                />
+                {form.outline.length > 1 && (
+                  <button
+                    onClick={() => removeOutlineItem(i)}
+                    className="rounded-lg border border-zinc-800 px-3 text-zinc-500 hover:border-red-500/50 hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 下载权限 */}
+        <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/40 px-5 py-4">
+          <div className="flex-1 pr-4">
+            <h4 className="text-sm font-semibold text-zinc-100">下载需登录</h4>
+            <p className="mt-1 text-xs text-zinc-500">开启后，访客需登录才可下载该资源</p>
+          </div>
+          <button
+            onClick={() => updateField("requireLogin", !form.requireLogin)}
+            role="switch"
+            aria-checked={form.requireLogin}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+              form.requireLogin
+                ? "bg-gradient-to-r from-blue-500 to-purple-500"
+                : "bg-zinc-700"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                form.requireLogin ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* PDF 文件上传 */}
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">PDF 文件上传</label>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            className={`relative rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+              dragging
+                ? "border-purple-500/60 bg-purple-500/5"
+                : "border-zinc-700 bg-zinc-950/40"
+            }`}
+          >
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={handleFileInput}
+              className="hidden"
+              id="resource-pdf-upload"
+            />
+            {uploading ? (
+              <div className="flex flex-col items-center gap-2 py-2">
+                <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                <p className="text-xs text-zinc-500">上传中...</p>
+              </div>
+            ) : fileInfo ? (
+              <div className="flex flex-col items-center gap-2 py-1">
+                <div className="flex items-center gap-2 text-sm text-green-400">
+                  <FileText className="h-4 w-4" />
+                  <span className="max-w-xs truncate">{fileInfo.name}</span>
+                </div>
+                <p className="text-xs text-zinc-500">
+                  大小：{fileInfo.size} ·{" "}
+                  <a
+                    href={fileInfo.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-purple-400 hover:underline"
+                  >
+                    查看文件
+                  </a>
+                </p>
+                <button
+                  onClick={() => setFileInfo(null)}
+                  className="text-xs text-zinc-500 hover:text-red-400"
+                >
+                  移除文件
+                </button>
+              </div>
+            ) : (
+              <label
+                htmlFor="resource-pdf-upload"
+                className="flex cursor-pointer flex-col items-center gap-2 py-2"
+              >
+                <Upload className="h-6 w-6 text-zinc-500" />
+                <p className="text-sm text-zinc-400">点击或拖拽 PDF 文件到此处上传</p>
+                <p className="text-[10px] text-zinc-600">仅支持 .pdf 格式</p>
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* 状态提示 */}
+        {status && (
+          <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+            status.type === "success"
+              ? "border border-green-500/30 bg-green-500/10 text-green-400"
+              : "border border-red-500/30 bg-red-500/10 text-red-400"
+          }`}>
+            {status.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {status.msg}
+          </div>
+        )}
+
+        {/* 提交按钮 */}
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+        >
+          {submitting ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> 发布中...</>
+          ) : (
+            <><Save className="h-4 w-4" /> 发布资源包</>
+          )}
+        </button>
+      </div>
+
+      <style jsx>{`
+        .input-resource {
+          width: 100%;
+          border-radius: 0.75rem;
+          border: 1px solid rgb(39 39 42);
+          background-color: rgb(9 9 11);
+          padding: 0.625rem 0.875rem;
+          font-size: 0.875rem;
+          color: rgb(244 244 245);
+          outline: none;
+          transition: all 0.15s;
+        }
+        .input-resource::placeholder {
+          color: rgb(82 82 91);
+        }
+        .input-resource:focus {
+          border-color: rgba(168, 85, 247, 0.5);
+        }
+      `}</style>
+
+      {/* 已发布资源列表 */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+          <h3 className="text-sm font-semibold text-zinc-200">已发布资源（{resourceList.length}）</h3>
+          <button
+            onClick={loadResources}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            刷新
+          </button>
+        </div>
+        {listLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+          </div>
+        ) : resourceList.length === 0 ? (
+          <div className="py-16 text-center">
+            <Package className="mx-auto mb-3 h-8 w-8 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无资源数据</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {resourceList.map((r) => (
+              <div key={r.id} className="flex items-start gap-4 p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                      {r.category}
+                    </span>
+                    {r.fileSize && <span className="text-[10px] text-zinc-600">{r.fileSize}</span>}
+                    <span className="text-[10px] text-zinc-600">下载 {r.downloadCount} 次</span>
+                    {r.requireLogin && (
+                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
+                        需登录
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="truncate text-sm font-medium text-zinc-100">{r.title}</h4>
+                  {r.excerpt && <p className="mt-0.5 truncate text-xs text-zinc-500">{r.excerpt}</p>}
+                </div>
+                {/* 发布状态开关 */}
+                <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  <span className={`text-[10px] ${r.isPublished ? "text-green-400" : "text-zinc-500"}`}>
+                    {r.isPublished ? "已发布" : "未发布"}
+                  </span>
+                  <button
+                    onClick={() => handleTogglePublish(r.id, r.isPublished)}
+                    disabled={togglingId === r.id}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${r.isPublished ? "bg-green-500" : "bg-zinc-600"}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${r.isPublished ? "translate-x-4" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleDelete(r.id)}
+                  disabled={deletingId === r.id}
+                  className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === r.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Trash2 className="h-4 w-4" />

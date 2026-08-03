@@ -19,8 +19,11 @@
  *   strategy JSONB DEFAULT '[]'::jsonb,
  *   demo_url TEXT,
  *   image_url TEXT,
+ *   is_published BOOLEAN DEFAULT TRUE,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 若表已存在，补加 is_published 列：
+ * -- ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  *
  * -- 2. 灵感文章表
  * CREATE TABLE IF NOT EXISTS public.insights (
@@ -33,8 +36,28 @@
  *   author TEXT,
  *   content TEXT,
  *   audio_url TEXT,
+ *   is_published BOOLEAN DEFAULT TRUE,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
+ *
+ * -- 5. 资源包表（PDF 资源管理）
+ * CREATE TABLE IF NOT EXISTS public.resources (
+ *   id TEXT PRIMARY KEY,
+ *   title TEXT NOT NULL,
+ *   excerpt TEXT,
+ *   outline TEXT,
+ *   file_url TEXT,
+ *   file_size TEXT,
+ *   category TEXT DEFAULT '指南',
+ *   require_login BOOLEAN DEFAULT FALSE,
+ *   is_published BOOLEAN DEFAULT TRUE,
+ *   download_count INT DEFAULT 0,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "resources are readable by everyone" ON public.resources
+ *   FOR SELECT USING (true);
  *
  * -- 3. 庇护所互动帖子表
  * CREATE TABLE IF NOT EXISTS public.sanctuary_posts (
