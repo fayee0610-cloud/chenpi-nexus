@@ -756,28 +756,55 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
   }
 }
 
+const DATAAPI_MISSING_COLS_CACHE = new Set<string>();
+const DATAAPI_HUB_KNOWN_COLS = [
+  "id", "title", "category", "summary", "source_name", "original_url",
+  "published_at", "is_published", "is_featured", "api_source", "tags",
+];
+
 export async function createInsightHub(item: Partial<InsightHubItem>) {
   if (!supabase) throw new Error("Supabase not configured");
-  const { data, error } = await supabase
-    .from("insights_hub")
-    .insert([
-      {
-        id: genId(),
-        title: item.title,
-        category: item.category,
-        summary: item.summary,
-        source_name: item.sourceName,
-        original_url: item.originalUrl,
-        published_at: item.publishedAt,
-        is_published: item.isPublished ?? true,
-        is_featured: item.isFeatured ?? false,
-        api_source: item.apiSource || "manual",
-        tags: item.tags || [],
-      },
-    ])
-    .select();
-  if (error) throw error;
-  return data;
+
+  const id = genId();
+  const MAX_TRIES = DATAAPI_HUB_KNOWN_COLS.length + 1;
+
+  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+    const payload: Record<string, any> = { id };
+    const maybeAdd = (col: string, value: any) => {
+      if (value === undefined || value === null) return;
+      if (DATAAPI_MISSING_COLS_CACHE.has(col)) return;
+      payload[col] = value;
+    };
+    maybeAdd("title", item.title);
+    maybeAdd("category", item.category);
+    maybeAdd("summary", item.summary);
+    maybeAdd("source_name", item.sourceName);
+    maybeAdd("original_url", item.originalUrl);
+    maybeAdd("published_at", item.publishedAt);
+    maybeAdd("is_published", item.isPublished ?? true);
+    maybeAdd("is_featured", item.isFeatured ?? false);
+    maybeAdd("api_source", item.apiSource || "manual");
+    maybeAdd("tags", item.tags || []);
+
+    const { data, error } = await supabase
+      .from("insights_hub")
+      .insert([payload])
+      .select();
+
+    if (!error) return data;
+
+    // 检测缺列错误 → 加入黑名单后重试
+    const m1 = error.message?.match(/find the '([^']+)' column/);
+    const m2 = error.message?.match(/column "([^"]+)" of relation/);
+    const missing = (m1?.[1] || m2?.[1]) as string | undefined;
+    if (missing && DATAAPI_HUB_KNOWN_COLS.includes(missing) && !DATAAPI_MISSING_COLS_CACHE.has(missing)) {
+      DATAAPI_MISSING_COLS_CACHE.add(missing);
+      console.warn(`[dataApi/createInsightHub] 列"${missing}"缺失，移除后重试`);
+      continue;
+    }
+    throw error;
+  }
+  throw new Error("createInsightHub 超过最大重试次数：请补全 insights_hub 表列（ALTER TABLE）");
 }
 
 // ---------- 服务端专用：API 自动化写入（使用 service_role key） ----------

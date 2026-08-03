@@ -280,6 +280,150 @@ async function deduplicateWithin24h(
   }
 }
 
+// ---------- 智能写入：列发现 + 自动降级 ----------
+const CORE_COLUMNS = ["id", "title", "category", "summary", "source_name", "original_url", "published_at"];
+const OPTIONAL_COLUMNS = ["is_published", "is_featured", "api_source", "tags"];
+const ALL_KNOWN_COLUMNS = [...CORE_COLUMNS, ...OPTIONAL_COLUMNS];
+
+// 模块级缓存：已确认 EXISTS / MISSING 的列，避免重复探测
+let EXISTING_COLUMNS_CACHE: Set<string> | null = null;
+let MISSING_COLUMNS_FOR_HINT: string[] = [];
+
+function parseMissingColumn(errMessage: string): string | null {
+  const m1 = errMessage.match(/find the '([^']+)' column/);
+  if (m1) return m1[1];
+  const m2 = errMessage.match(/column "([^"]+)" of relation/);
+  if (m2) return m2[1];
+  return null;
+}
+
+/**
+ * 启动时自动发现 insights_hub 表实际存在的列：
+ * 用 SELECT * LIMIT 1 取任意一行，从返回对象的 key 中提取真实列名。
+ * 失败时回退为空缓存（后续走逐列降级策略）。
+ */
+async function discoverExistingColumns(client: any): Promise<Set<string> | null> {
+  if (EXISTING_COLUMNS_CACHE) return EXISTING_COLUMNS_CACHE;
+  try {
+    // 取任意一行，从 data 返回的 key 得到真实列
+    const { data, error } = await client.from("insights_hub").select("*").limit(1);
+    if (error || !data || data.length === 0) {
+      // 没有数据时，尝试一次无数据的 select id 查询确认表可访问；列发现置空，走逐列降级
+      const r = await client.from("insights_hub").select("id").limit(0);
+      if (r.error) console.warn("[cron/fetch-intelligence] 表访问失败，跳过列发现:", r.error.message);
+      return null;
+    }
+    const cols = new Set(Object.keys(data[0] || {}));
+    EXISTING_COLUMNS_CACHE = cols;
+    MISSING_COLUMNS_FOR_HINT = ALL_KNOWN_COLUMNS.filter((c) => !cols.has(c));
+    console.log(
+      `[cron/fetch-intelligence] insights_hub 列发现：实际存在 ${cols.size} 列（${[...cols].join(",")}），缺失 ${MISSING_COLUMNS_FOR_HINT.length} 列（${MISSING_COLUMNS_FOR_HINT.join(",") || "无"}）`
+    );
+    return cols;
+  } catch (e: any) {
+    console.warn("[cron/fetch-intelligence] 列发现异常，后续走逐列降级:", e?.message);
+    return null;
+  }
+}
+
+/** 构造 payload：只写实际存在的列（优先用"列发现"结果，否则先写全部再逐列降级） */
+function buildSafePayload(item: SanitizedItem, existingCols: Set<string> | null) {
+  const payload: Record<string, any> = {};
+  const tryAdd = (col: string, value: any) => {
+    if (existingCols === null) {
+      // 还没发现，全加，失败时逐列移除
+      payload[col] = value;
+      return;
+    }
+    if (existingCols.has(col)) payload[col] = value;
+  };
+  tryAdd("id", genId());
+  tryAdd("title", item.title);
+  tryAdd("category", item.category);
+  tryAdd("summary", item.summary);
+  tryAdd("source_name", item.source_name);
+  tryAdd("original_url", item.original_url);
+  tryAdd("published_at", item.published_at);
+  // 可选列：有默认值
+  tryAdd("is_published", true);
+  tryAdd("is_featured", false);
+  tryAdd("api_source", "auto_bot");
+  tryAdd("tags", []);
+  return payload;
+}
+
+// 逐列降级缓存：当列发现未生效时，记录已确认不存在的列
+const COL_NOT_FOUND_FALLBACK = new Set<string>();
+
+/**
+ * 智能写入：
+ * 1. 优先使用"列发现"得到的真实列集合构造 payload
+ * 2. 若列发现失败或写入抛错，逐列捕获 column not found 并黑掉该列后重试
+ * 3. 最终保证最少核心列集合(id/title/category/summary) 能写入即可
+ */
+async function safeInsert(client: any, item: SanitizedItem): Promise<{ success: boolean; error: string | null }> {
+  const existingCols = EXISTING_COLUMNS_CACHE;
+  let payload = buildSafePayload(item, existingCols);
+  const MAX_TRIES = ALL_KNOWN_COLUMNS.length + 1;
+
+  for (let tries = 0; tries < MAX_TRIES; tries++) {
+    try {
+      // 应用"逐列降级"发现的黑名单（在列发现失败时生效）
+      if (COL_NOT_FOUND_FALLBACK.size > 0) {
+        for (const bad of COL_NOT_FOUND_FALLBACK) {
+          delete payload[bad];
+        }
+      }
+      const { error } = await client.from("insights_hub").insert([payload]);
+      if (!error) return { success: true, error: null };
+
+      const missingCol = parseMissingColumn(error.message);
+      if (missingCol && ALL_KNOWN_COLUMNS.includes(missingCol)) {
+        COL_NOT_FOUND_FALLBACK.add(missingCol);
+        console.warn(`[cron/fetch-intelligence] 列"${missingCol}"不存在，从 payload 移除后重试`);
+        delete payload[missingCol];
+        continue;
+      }
+      // 非"列不存在"的错误
+      return { success: false, error: error.message };
+    } catch (e: any) {
+      return { success: false, error: e?.message || "写入异常" };
+    }
+  }
+  return { success: false, error: "超过最大重试次数，insights_hub 表缺少必要列，请执行 supabase.ts 中的 ALTER TABLE SQL" };
+}
+
+/** 返回用户提示：哪些列缺失 + 修复 SQL */
+function getSchemaHint(): string | null {
+  const missing = MISSING_COLUMNS_FOR_HINT.length > 0
+    ? MISSING_COLUMNS_FOR_HINT
+    : [...COL_NOT_FOUND_FALLBACK];
+  if (missing.length === 0) return null;
+  const addColsSQL = missing
+    .map((col) => {
+      switch (col) {
+        case "is_published":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;";
+        case "is_featured":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE;";
+        case "api_source":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS api_source TEXT DEFAULT 'manual';";
+        case "tags":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;";
+        case "source_name":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS source_name TEXT;";
+        case "original_url":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS original_url TEXT;";
+        case "published_at":
+          return "ALTER TABLE public.insights_hub ADD COLUMN IF NOT EXISTS published_at DATE;";
+        default:
+          return `-- 未知列：${col}`;
+      }
+    })
+    .join(" ");
+  return `表缺少列（${missing.join(",")}），请在 Supabase SQL Editor 执行：${addColsSQL}`;
+}
+
 // ---------- 写入 Supabase：Admin Client → Anon Key → dataApi 三层兜底 ----------
 async function writeWithFallback(
   items: SanitizedItem[]
@@ -292,50 +436,31 @@ async function writeWithFallback(
   let method = "none";
   let firstError: string | null = null;
 
-  // 构造单条插入的 payload
-  const buildPayload = (item: SanitizedItem) => ({
-    id: genId(),
-    title: item.title,
-    category: item.category,
-    summary: item.summary,
-    source_name: item.source_name,
-    original_url: item.original_url,
-    published_at: item.published_at,
-    is_published: true,
-    is_featured: false,
-    api_source: "auto_bot",
-    tags: [],
-  });
+  // ★ 写前列发现：探测 insights_hub 真实列，后续 payload 只写存在的列
+  const probeClient: any = supabaseAdmin || (supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null);
+  if (probeClient) await discoverExistingColumns(probeClient);
 
   // 策略 1：supabaseAdmin（使用 SUPABASE_SERVICE_ROLE_KEY，绕过 RLS）
   if (supabaseAdmin) {
     method = "service_role";
     console.log("[cron/fetch-intelligence] 写入策略 1：supabaseAdmin (service_role)");
     for (const item of items) {
-      try {
-        const { error } = await supabaseAdmin.from("insights_hub").insert([buildPayload(item)]);
-        if (error) {
-          const msg = `${item.title}: ${error.message}`;
-          errors.push(`[${method}] ${msg}`);
-          if (!firstError) firstError = msg;
-        } else {
-          inserted++;
-        }
-      } catch (err: any) {
-        const msg = `${item.title}: ${err?.message || "写入异常"}`;
+      const result = await safeInsert(supabaseAdmin, item);
+      if (result.success) {
+        inserted++;
+      } else {
+        const msg = `${item.title}: ${result.error}`;
         errors.push(`[${method}] ${msg}`);
         if (!firstError) firstError = msg;
       }
     }
-    // 全部成功或没有数据则直接返回
     if (inserted === items.length || items.length === 0) {
       return { inserted, errors, method, firstError };
     }
-    // 部分成功也直接返回（service_role 都写不进去说明是表结构问题，anon 更不可能成功）
     if (inserted > 0) {
+      // 有部分成功也返回（服务端列缺失缓存全局生效，下次 cron 自动用更安全的 payload）
       return { inserted, errors, method, firstError };
     }
-    // service_role 全部失败，继续降级尝试
     console.warn(`[cron/fetch-intelligence] service_role 写入全部失败，降级到 anon key`);
   } else {
     console.warn("[cron/fetch-intelligence] SUPABASE_SERVICE_ROLE_KEY 未配置，跳过 service_role 策略");
@@ -348,17 +473,11 @@ async function writeWithFallback(
     const anonClient = createClient(supabaseUrl, supabaseAnonKey);
     const remaining = items.slice(inserted);
     for (const item of remaining) {
-      try {
-        const { error } = await anonClient.from("insights_hub").insert([buildPayload(item)]);
-        if (error) {
-          const msg = `${item.title}: ${error.message}`;
-          errors.push(`[${method}] ${msg}`);
-          if (!firstError) firstError = msg;
-        } else {
-          inserted++;
-        }
-      } catch (err: any) {
-        const msg = `${item.title}: ${err?.message || "写入异常"}`;
+      const result = await safeInsert(anonClient, item);
+      if (result.success) {
+        inserted++;
+      } else {
+        const msg = `${item.title}: ${result.error}`;
         errors.push(`[${method}] ${msg}`);
         if (!firstError) firstError = msg;
       }
@@ -368,7 +487,7 @@ async function writeWithFallback(
     }
   }
 
-  // 策略 3：dataApi.createInsightHub 兜底（复用项目已有的 Supabase 单例）
+  // 策略 3：dataApi.createInsightHub 兜底（复用项目已有的 Supabase 单例，只做最少字段）
   if (inserted === 0 && items.length > 0) {
     method = "dataApi_fallback";
     console.log("[cron/fetch-intelligence] 写入策略 3：dataApi.createInsightHub");
@@ -502,12 +621,15 @@ async function handleCron(req: NextRequest) {
     `[cron/fetch-intelligence] 完成！生成 ${rawItems.length} → 清洗 ${sanitized.length} → 去重+24h ${deduped.length} → 写入 ${inserted}/${deduped.length}（method=${method}），耗时 ${duration}ms`
   );
 
-  // 全部写入失败 → success=false，返回真实 Supabase 错误 + 修复指引
+  // 成功/失败都统一返回 hint（schema 提示），方便用户自助修复
+  const schemaHint = getSchemaHint();
   const isOk = inserted > 0;
+
   if (isOk) {
     return NextResponse.json({
       success: true,
-      message: `完成：生成 ${rawItems.length} → 清洗 ${sanitized.length} → 24h重复跳过 ${duplicatesRemoved} → 写入 ${inserted}/${deduped.length}`,
+      message: `完成：生成 ${rawItems.length} → 清洗 ${sanitized.length} → 24h重复跳过 ${duplicatesRemoved} → 写入 ${inserted}/${deduped.length}${schemaHint ? "（部分列缺失，已自动降级写入，建议补 ALTER TABLE）" : ""}`,
+      hint: schemaHint || "表结构完整，无需修复",
       stats: {
         generated: rawItems.length,
         sanitized: sanitized.length,
@@ -523,15 +645,16 @@ async function handleCron(req: NextRequest) {
   }
 
   // 写入失败：返回真实错误 + 明确修复指引
-  const hint = hasServiceRoleKey
-    ? "Service Role Key 已配置但仍写入失败，请检查 insights_hub 表结构是否完整（id/title/category/summary/source_name/original_url/published_at/is_published/is_featured/api_source/tags/created_at）"
-    : "请在 .env.local 中添加 SUPABASE_SERVICE_ROLE_KEY=（Supabase Dashboard → Settings → API → service_role secret），或在 Supabase SQL Editor 运行 insights_hub 的 INSERT RLS 策略 SQL（见 src/lib/supabase.ts 注释）";
+  const svcHint = hasServiceRoleKey
+    ? ""
+    : "请在 .env.local 中添加 SUPABASE_SERVICE_ROLE_KEY=（Supabase Dashboard → Settings → API → service_role secret）";
+  const finalHint = [schemaHint, svcHint].filter(Boolean).join(" | ");
 
   return NextResponse.json(
     {
       success: false,
       error: firstError || "写入失败：未知原因",
-      hint,
+      hint: finalHint || "请检查 Supabase 表结构与网络连接",
       message: `写入失败：${firstError || "未知错误"}`,
       stats: {
         generated: rawItems.length,
