@@ -55,6 +55,8 @@
  *   download_count INT DEFAULT 0,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 若表已存在，补加 is_published 列：
+ * -- ALTER TABLE public.resources ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  * ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "resources are readable by everyone" ON public.resources
  *   FOR SELECT USING (true);
@@ -104,8 +106,11 @@
  *   tag TEXT,
  *   content TEXT NOT NULL,
  *   likes INT DEFAULT 0,
+ *   is_published BOOLEAN DEFAULT TRUE,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 若表已存在，补加 is_published 列：
+ * -- ALTER TABLE public.sanctuary_posts ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  *
  * -- RLS 配置（允许公开读，写入通过 admin 后台）
  * ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
@@ -184,7 +189,7 @@ function isValidSupabaseUrl(url: string): boolean {
 }
 
 // 初始化 Supabase 客户端
-// - URL 格式不合法或 key 缺失时返回 null（调用方降级到 siteData）
+// - URL 格式不合法或 key 缺失时返回 null（调用方返回空数组，无 Mock 降级）
 // - 启动时打印一次诊断日志，方便排查配置问题
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 
@@ -193,12 +198,12 @@ if (supabaseUrl && supabaseAnonKey) {
     try {
       supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
     } catch (err) {
-      console.warn("[supabase] 客户端初始化失败，已降级到静态数据:", err);
+      console.warn("[supabase] 客户端初始化失败，数据将返回空数组:", err);
       supabaseClient = null;
     }
   } else {
     console.warn(
-      `[supabase] NEXT_PUBLIC_SUPABASE_URL 格式不合法（应为 https://xxxxx.supabase.co），已降级到静态数据。当前值: "${supabaseUrl}"`
+      `[supabase] NEXT_PUBLIC_SUPABASE_URL 格式不合法（应为 https://xxxxx.supabase.co），数据将返回空数组。当前值: "${supabaseUrl}"`
     );
   }
 }

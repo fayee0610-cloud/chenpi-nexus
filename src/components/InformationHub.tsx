@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExternalLink, Radar, Sparkles, TrendingUp, Bot } from "lucide-react";
 import { fetchInsightsHub } from "@/lib/dataApi";
-import { siteData, type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
+import { type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
 
 const CATEGORY_TABS = [
   { key: "all", label: "全部分类", icon: Radar },
@@ -20,7 +20,7 @@ const CATEGORY_STYLES: Record<string, { border: string; bg: string; text: string
 };
 
 export default function InformationHub() {
-  const [items, setItems] = useState<InsightHubItem[]>(siteData.insightsHub);
+  const [items, setItems] = useState<InsightHubItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>("all");
 

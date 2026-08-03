@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Zap,
   ArrowUpRight,
+  Loader2,
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
@@ -22,18 +23,23 @@ import { fetchProjects } from "@/lib/dataApi";
 type TabKey = "brand" | "ai" | "experiment";
 
 const tabs = siteData.portfolio.categories;
-const staticProjects: PortfolioProject[] = siteData.portfolio.projects;
 
 export default function Portfolio() {
   const [activeTab, setActiveTab] = useState<TabKey>("brand");
   const [selectedProject, setSelectedProject] = useState<PortfolioProject | null>(null);
-  const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>(staticProjects);
+  const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 从 Supabase 加载数据，失败则降级为静态数据
+  // 从 Supabase 加载真实数据
   useEffect(() => {
     let mounted = true;
     fetchProjects().then((data) => {
-      if (mounted) setPortfolioProjects(data);
+      if (mounted) {
+        setPortfolioProjects(data);
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (mounted) setLoading(false);
     });
     return () => { mounted = false; };
   }, []);
@@ -107,6 +113,18 @@ export default function Portfolio() {
         </div>
 
         {/* Projects Grid */}
+        {loading ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-64 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-20 text-center">
+            <Target className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
+            <p className="text-sm text-zinc-500">该分类下暂无作品</p>
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -187,6 +205,7 @@ export default function Portfolio() {
             ))}
           </motion.div>
         </AnimatePresence>
+        )}
       </div>
 
       {/* ========== 作品案例详情 Modal ========== */}

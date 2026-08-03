@@ -22,7 +22,6 @@ import {
   Check,
   ArrowUpRight,
 } from "lucide-react";
-import { siteData } from "@/data/siteData";
 import type { InsightItem } from "@/data/siteData";
 import { fetchInsights } from "@/lib/dataApi";
 
@@ -35,8 +34,6 @@ const filters: { key: FilterKey; label: string }[] = [
   { key: "short", label: "短观点" },
   { key: "podcast", label: "播客与音频" },
 ];
-
-const staticInsights: InsightItem[] = siteData.insights;
 
 const typeIcon: Record<string, React.ReactNode> = {
   article: <BookOpen className="h-3.5 w-3.5" />,
@@ -58,13 +55,19 @@ export default function Insights() {
   const [showLikeFloat, setShowLikeFloat] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [insightsData, setInsightsData] = useState<InsightItem[]>(staticInsights);
+  const [insightsData, setInsightsData] = useState<InsightItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 从 Supabase 加载数据，失败则降级为静态数据
+  // 从 Supabase 加载真实数据，无 Mock 降级
   useEffect(() => {
     let mounted = true;
     fetchInsights().then((data) => {
-      if (mounted) setInsightsData(data);
+      if (mounted) {
+        setInsightsData(data);
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (mounted) setLoading(false);
     });
     return () => { mounted = false; };
   }, []);
@@ -177,6 +180,19 @@ export default function Insights() {
           ))}
         </div>
 
+        {loading ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-56 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
+            ))}
+          </div>
+        ) : insightsData.length === 0 ? (
+          <div className="py-20 text-center">
+            <BookOpen className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无灵感内容</p>
+          </div>
+        ) : (
+        <>
         {/* Featured Focus Area */}
         {(filter === "all" || filter === "featured") && heroFeatured && (
           <div className="mb-10 grid gap-6 lg:grid-cols-3">
@@ -335,6 +351,8 @@ export default function Insights() {
             ))}
           </motion.div>
         </AnimatePresence>
+        </>
+        )}
       </div>
 
       {/* ========== 沉浸式阅读器 Modal ========== */}

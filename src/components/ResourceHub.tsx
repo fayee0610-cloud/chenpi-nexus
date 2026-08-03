@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Download, Lock, X, Package } from "lucide-react";
 import { fetchResources, incrementResourceDownload, createLead } from "@/lib/dataApi";
-import { siteData, type ResourceItem } from "@/data/siteData";
+import { type ResourceItem } from "@/data/siteData";
 
 export default function ResourceHub() {
-  const [resources, setResources] = useState<ResourceItem[]>(siteData.resources);
+  const [resources, setResources] = useState<ResourceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [lockResource, setLockResource] = useState<ResourceItem | null>(null);
   const [email, setEmail] = useState("");
@@ -87,15 +87,23 @@ export default function ResourceHub() {
       </div>
 
       {/* 资源卡片列表 */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {loading
-          ? [1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-64 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40"
-              />
-            ))
-          : resources.map((resource, i) => (
+      {loading ? (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-64 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40"
+            />
+          ))}
+        </div>
+      ) : resources.length === 0 ? (
+        <div className="py-20 text-center">
+          <Package className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
+          <p className="text-sm text-zinc-500">资源包正在准备中，敬请期待</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {resources.map((resource, i) => (
               <motion.div
                 key={resource.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -173,7 +181,8 @@ export default function ResourceHub() {
                 </div>
               </motion.div>
             ))}
-      </div>
+        </div>
+      )}
 
       {/* 下载壁垒弹窗（极简邮箱留存） */}
       <AnimatePresence>

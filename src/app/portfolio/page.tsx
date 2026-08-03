@@ -5,7 +5,6 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, TrendingUp, Tag, Loader2 } from "lucide-react";
 import Header from "@/components/Header";
-import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
 import { fetchProjects } from "@/lib/dataApi";
 
@@ -18,11 +17,9 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "experiment", label: "阶段性创意实验" },
 ];
 
-const staticProjects: PortfolioProject[] = siteData.portfolio.projects;
-
 export default function PortfolioListPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [projects, setProjects] = useState<PortfolioProject[]>(staticProjects);
+  const [projects, setProjects] = useState<PortfolioProject[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -14,7 +14,6 @@ import {
   Eye,
 } from "lucide-react";
 import Header from "@/components/Header";
-import { siteData } from "@/data/siteData";
 import type { InsightItem } from "@/data/siteData";
 import { fetchInsights } from "@/lib/dataApi";
 
@@ -39,12 +38,10 @@ const typeLabel: Record<string, string> = {
   podcast: "播客",
 };
 
-const staticInsights: InsightItem[] = siteData.insights;
-
 export default function InsightsListPage() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [insights, setInsights] = useState<InsightItem[]>(staticInsights);
+  const [insights, setInsights] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

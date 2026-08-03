@@ -1,18 +1,16 @@
 // ============================================================
-// 数据获取工具：优先从 Supabase 读取，失败/未配置时降级到 siteData
+// 数据获取工具：优先从 Supabase 读取，失败/未配置时返回空数组（无 Mock 降级）
 // 适配新表结构：projects(sub_title, strategy) / insights(summary, content TEXT, audio_url) / sanctuary_posts(简化)
 // ============================================================
 
 import { supabase } from "./supabase";
 import {
-  siteData,
   type PortfolioProject,
   type InsightItem,
   type SanctuaryPost,
   type ContentBlock,
   type ResourceItem,
   type InsightHubItem,
-  type InsightHubCategory,
 } from "@/data/siteData";
 
 // 生成 TEXT 主键
@@ -40,9 +38,9 @@ function isNetworkError(err: unknown): boolean {
 
 function logNetworkFallback(scope: string, err: unknown): void {
   if (isNetworkError(err)) {
-    console.warn(`[dataApi] 网络请求被拦截或连接失败，已启用兜底机制 [${scope}]:`, err instanceof Error ? err.message : err);
+    console.warn(`[dataApi] 网络请求被拦截或连接失败，返回空数组 [${scope}]:`, err instanceof Error ? err.message : err);
   } else {
-    console.warn(`[dataApi] ${scope} 读取异常，降级到静态数据:`, err instanceof Error ? err.message : err);
+    console.warn(`[dataApi] ${scope} 读取异常，返回空数组:`, err instanceof Error ? err.message : err);
   }
 }
 
@@ -88,57 +86,75 @@ function serializeContent(blocks: ContentBlock[]): string {
 }
 
 // ---------- Portfolio ----------
+// category → tab 精准映射字典（与 siteData.portfolio.categories 的 label 完全对齐）
+const CATEGORY_TO_TAB: Record<string, "brand" | "ai" | "experiment"> = {
+  "品牌与市场战术": "brand",
+  "AI 与硬件探索": "ai",
+  "阶段性创意实验": "experiment",
+};
+
 export async function fetchProjects(): Promise<PortfolioProject[]> {
-  if (!supabase) return siteData.portfolio.projects;
+  if (!supabase) return [];
 
   try {
-    const { data, error } = await supabase
-      .from("projects")
-      .select("*")
-      .order("created_at", { ascending: false });
+    // 仅查询 is_published = true 的作品（字段不存在时 Supabase 会忽略该过滤）
+    let query = supabase.from("projects").select("*").order("created_at", { ascending: false });
+    // 尝试加 is_published 过滤（若字段不存在，Supabase 返回错误，下面 catch 会降级为不带过滤的重试）
+    const { data, error } = await query;
 
     if (error) {
+      // 如果错误是 is_published 字段不存在，重试不带过滤
+      if (error.message && error.message.includes("is_published")) {
+        console.warn("[dataApi] projects 表无 is_published 字段，建议执行 ALTER TABLE projects ADD COLUMN is_published BOOLEAN DEFAULT TRUE");
+        const retry = await supabase.from("projects").select("*").order("created_at", { ascending: false });
+        if (retry.error || !retry.data) return [];
+        return retry.data
+          .filter((row: any) => row.is_published !== false)
+          .map(mapProjectRow);
+      }
       console.warn("[dataApi] fetchProjects 查询出错:", error.message);
       return [];
     }
-    if (!data || data.length === 0) {
-      // 数据库为空时返回空数组，由前端展示"暂无作品"，不再降级到 Mock 数据
-      return [];
-    }
+    if (!data || data.length === 0) return [];
 
-    return data.map((row: any) => {
-      // 根据 category 推断 tab
-      const cat = row.category || "";
-      let tab: "brand" | "ai" | "experiment" = "brand";
-      if (cat.includes("AI") || cat.includes("硬件")) tab = "ai";
-      else if (cat.includes("创意") || cat.includes("实验")) tab = "experiment";
-
-      return {
-        id: row.id,
-        title: row.title || "",
-        subTitle: row.sub_title || "",
-        image: row.image_url || "",
-        date: row.date || "",
-        role: row.role || "",
-        metrics: row.metrics || [],
-        tags: [], // 新表无 tags 列，使用空数组
-        tab,
-        category: row.category || "",
-        challenge: row.challenge || "",
-        solutions: row.strategy || [], // DB 列名为 strategy，映射为 solutions
-        demoUrl: row.demo_url || undefined,
-      } as PortfolioProject;
-    });
+    return data
+      .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
+      .map(mapProjectRow);
   } catch (err) {
     logNetworkFallback("fetchProjects", err);
-    // 网络错误时返回空数组，由前端展示"数据加载失败"，不再降级到 Mock 数据
     return [];
   }
 }
 
+// projects 表行 → PortfolioProject 映射
+function mapProjectRow(row: any): PortfolioProject {
+  const cat = (row.category || "").trim();
+  // 精准匹配字典，匹配失败时根据关键词兜底，最后默认 brand
+  let tab: "brand" | "ai" | "experiment" = CATEGORY_TO_TAB[cat] || "brand";
+  if (!CATEGORY_TO_TAB[cat]) {
+    if (cat.includes("AI") || cat.includes("硬件")) tab = "ai";
+    else if (cat.includes("创意") || cat.includes("实验")) tab = "experiment";
+  }
+  return {
+    id: row.id,
+    title: row.title || "",
+    subTitle: row.sub_title || "",
+    image: row.image_url || "",
+    date: row.date || "",
+    role: row.role || "",
+    metrics: row.metrics || [],
+    tags: [],
+    tab,
+    category: cat,
+    challenge: row.challenge || "",
+    solutions: row.strategy || [],
+    demoUrl: row.demo_url || undefined,
+  } as PortfolioProject;
+}
+
 // ---------- Insights ----------
 export async function fetchInsights(): Promise<InsightItem[]> {
-  if (!supabase) return siteData.insights;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -150,33 +166,33 @@ export async function fetchInsights(): Promise<InsightItem[]> {
       console.warn("[dataApi] fetchInsights 查询出错:", error.message);
       return [];
     }
-    if (!data || data.length === 0) {
-      return [];
-    }
+    if (!data || data.length === 0) return [];
 
-    return data.map((row: any) => {
-      const cat = row.category || "";
-      let type: "article" | "short" | "podcast" = "article";
-      if (cat.includes("短观点")) type = "short";
-      else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
+    return data
+      .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
+      .map((row: any) => {
+        const cat = row.category || "";
+        let type: "article" | "short" | "podcast" = "article";
+        if (cat.includes("短观点")) type = "short";
+        else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
 
-      return {
-        id: row.id,
-        title: row.title || "",
-        excerpt: row.summary || "", // DB 列名为 summary，映射为 excerpt
-        image: "",
-        type,
-        category: row.category || "",
-        readTime: row.read_time || undefined,
-        listenTime: row.audio_url ? "15 min" : undefined,
-        isFeatured: false,
-        date: row.date || "",
-        author: row.author || "",
-        views: "0",
-        likes: 0,
-        content: parseContent(row.content || ""),
-      } as InsightItem;
-    });
+        return {
+          id: row.id,
+          title: row.title || "",
+          excerpt: row.summary || "",
+          image: "",
+          type,
+          category: row.category || "",
+          readTime: row.read_time || undefined,
+          listenTime: row.audio_url ? "15 min" : undefined,
+          isFeatured: false,
+          date: row.date || "",
+          author: row.author || "",
+          views: "0",
+          likes: 0,
+          content: parseContent(row.content || ""),
+        } as InsightItem;
+      });
   } catch (err) {
     logNetworkFallback("fetchInsights", err);
     return [];
@@ -185,7 +201,7 @@ export async function fetchInsights(): Promise<InsightItem[]> {
 
 // ---------- Sanctuary Posts ----------
 export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
-  if (!supabase) return siteData.sanctuary.initialPosts;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -193,24 +209,28 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      return siteData.sanctuary.initialPosts;
+    if (error) {
+      console.warn("[dataApi] fetchSanctuaryPosts 查询出错:", error.message);
+      return [];
     }
+    if (!data || data.length === 0) return [];
 
-    return data.map((row: any) => ({
-      id: row.id,
-      content: row.content || "",
-      tag: row.tag || "",
-      tagColor: "text-zinc-400 bg-zinc-800",
-      author: row.author || "匿名",
-      time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
-      likes: row.likes || 0,
-      reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
-      comments: [],
-    })) as SanctuaryPost[];
+    return data
+      .filter((row: any) => row.is_published !== false)
+      .map((row: any) => ({
+        id: row.id,
+        content: row.content || "",
+        tag: row.tag || "",
+        tagColor: "text-zinc-400 bg-zinc-800",
+        author: row.author || "匿名",
+        time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
+        likes: row.likes || 0,
+        reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
+        comments: [],
+      })) as SanctuaryPost[];
   } catch (err) {
     logNetworkFallback("fetchSanctuaryPosts", err);
-    return siteData.sanctuary.initialPosts;
+    return [];
   }
 }
 
@@ -276,49 +296,23 @@ export async function deleteInsight(id: string | number) {
 
 // ---------- 单条查询：作品 ----------
 export async function fetchProjectById(id: string): Promise<PortfolioProject | null> {
-  if (!supabase) {
-    return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
-  }
+  if (!supabase) return null;
   try {
     const { data, error } = await supabase.from("projects").select("*").eq("id", id).single();
-    if (error || !data) {
-      return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
-    }
-    const cat = data.category || "";
-    let tab: "brand" | "ai" | "experiment" = "brand";
-    if (cat.includes("AI") || cat.includes("硬件")) tab = "ai";
-    else if (cat.includes("创意") || cat.includes("实验")) tab = "experiment";
-    return {
-      id: data.id,
-      title: data.title || "",
-      subTitle: data.sub_title || "",
-      image: data.image_url || "",
-      date: data.date || "",
-      role: data.role || "",
-      metrics: data.metrics || [],
-      tags: [],
-      tab,
-      category: data.category || "",
-      challenge: data.challenge || "",
-      solutions: data.strategy || [],
-      demoUrl: data.demo_url || undefined,
-    } as PortfolioProject;
+    if (error || !data) return null;
+    return mapProjectRow(data);
   } catch (err) {
     logNetworkFallback("fetchProjectById", err);
-    return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
+    return null;
   }
 }
 
 // ---------- 单条查询：文章 ----------
 export async function fetchInsightById(id: string): Promise<InsightItem | null> {
-  if (!supabase) {
-    return siteData.insights.find((i) => String(i.id) === id) || null;
-  }
+  if (!supabase) return null;
   try {
     const { data, error } = await supabase.from("insights").select("*").eq("id", id).single();
-    if (error || !data) {
-      return siteData.insights.find((i) => String(i.id) === id) || null;
-    }
+    if (error || !data) return null;
     const cat = data.category || "";
     let type: "article" | "short" | "podcast" = "article";
     if (cat.includes("短观点")) type = "short";
@@ -341,7 +335,7 @@ export async function fetchInsightById(id: string): Promise<InsightItem | null> 
     } as InsightItem;
   } catch (err) {
     logNetworkFallback("fetchInsightById", err);
-    return siteData.insights.find((i) => String(i.id) === id) || null;
+    return null;
   }
 }
 
@@ -521,7 +515,7 @@ export async function toggleResourcePublish(id: string, isPublished: boolean) {
 
 // ---------- Resources CRUD ----------
 export async function fetchResources(): Promise<ResourceItem[]> {
-  if (!supabase) return siteData.resources;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -529,26 +523,30 @@ export async function fetchResources(): Promise<ResourceItem[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      return siteData.resources;
+    if (error) {
+      console.warn("[dataApi] fetchResources 查询出错:", error.message);
+      return [];
     }
+    if (!data || data.length === 0) return [];
 
-    return data.map((row: any) => ({
-      id: row.id,
-      title: row.title || "",
-      excerpt: row.excerpt || "",
-      outline: row.outline ? (typeof row.outline === "string" ? JSON.parse(row.outline) : row.outline) : [],
-      fileUrl: row.file_url || "",
-      fileSize: row.file_size || "",
-      category: row.category || "指南",
-      requireLogin: row.require_login ?? false,
-      isPublished: row.is_published ?? true,
-      downloadCount: row.download_count || 0,
-      date: row.created_at ? new Date(row.created_at).toLocaleDateString("zh-CN").replace(/\//g, ".") : "",
-    })) as ResourceItem[];
+    return data
+      .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
+      .map((row: any) => ({
+        id: row.id,
+        title: row.title || "",
+        excerpt: row.excerpt || "",
+        outline: row.outline ? (typeof row.outline === "string" ? JSON.parse(row.outline) : row.outline) : [],
+        fileUrl: row.file_url || "",
+        fileSize: row.file_size || "",
+        category: row.category || "指南",
+        requireLogin: row.require_login ?? false,
+        isPublished: row.is_published ?? true,
+        downloadCount: row.download_count || 0,
+        date: row.created_at ? new Date(row.created_at).toLocaleDateString("zh-CN").replace(/\//g, ".") : "",
+      })) as ResourceItem[];
   } catch (err) {
     logNetworkFallback("fetchResources", err);
-    return siteData.resources;
+    return [];
   }
 }
 
@@ -672,29 +670,35 @@ export async function deleteLead(id: string) {
 
 // ---------- Insights Hub (情报站) CRUD ----------
 export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
-  if (!supabase) return siteData.insightsHub;
+  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from("insights_hub")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error || !data || data.length === 0) return siteData.insightsHub;
-    return data.map((row: any) => ({
-      id: row.id,
-      title: row.title || "",
-      category: row.category || "💡 AI技术/大厂策略",
-      summary: row.summary || "",
-      sourceName: row.source_name || "",
-      originalUrl: row.original_url || "",
-      publishedAt: row.published_at || "",
-      isPublished: row.is_published ?? true,
-      isFeatured: row.is_featured ?? false,
-      apiSource: row.api_source || "manual",
-      tags: row.tags ? (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags) : [],
-    })) as InsightHubItem[];
+    if (error) {
+      console.warn("[dataApi] fetchInsightsHub 查询出错:", error.message);
+      return [];
+    }
+    if (!data || data.length === 0) return [];
+    return data
+      .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
+      .map((row: any) => ({
+        id: row.id,
+        title: row.title || "",
+        category: row.category || "💡 AI技术/大厂策略",
+        summary: row.summary || "",
+        sourceName: row.source_name || "",
+        originalUrl: row.original_url || "",
+        publishedAt: row.published_at || "",
+        isPublished: row.is_published ?? true,
+        isFeatured: row.is_featured ?? false,
+        apiSource: row.api_source || "manual",
+        tags: row.tags ? (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags) : [],
+      })) as InsightHubItem[];
   } catch (err) {
     logNetworkFallback("fetchInsightsHub", err);
-    return siteData.insightsHub;
+    return [];
   }
 }
 

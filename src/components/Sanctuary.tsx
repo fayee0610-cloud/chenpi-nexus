@@ -26,11 +26,10 @@ import { siteData } from "@/data/siteData";
 import type { Incense, SanctuaryPost } from "@/data/siteData";
 import { fetchSanctuaryPosts, createSanctuaryPost } from "@/lib/dataApi";
 
-// ========== 常量数据（从 siteData 导入）==========
+// ========== 常量数据（从 siteData 导入：仅 UI 配置，非数据库内容）==========
 const buffs = siteData.sanctuary.incenseBuffs;
 const fortuneCategories = siteData.sanctuary.fortuneLibrary;
 const initialIncenses: Incense[] = siteData.sanctuary.incenses;
-const initialFarts: SanctuaryPost[] = siteData.sanctuary.initialPosts;
 const postTagOptions = siteData.sanctuary.postTagOptions;
 
 const reactionButtons = [
@@ -347,7 +346,8 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   const [fortuneHash, setFortuneHash] = useState<string>("");
   const [tiltStyle, setTiltStyle] = useState<React.CSSProperties>({});
   const [totalEnergy, setTotalEnergy] = useState(siteData.sanctuary.initialEnergy);
-  const [farts, setFarts] = useState<SanctuaryPost[]>(initialFarts);
+  const [farts, setFarts] = useState<SanctuaryPost[]>([]);
+  const [loadingFarts, setLoadingFarts] = useState(true);
   const [postContent, setPostContent] = useState("");
   const [postTag, setPostTag] = useState("💡 概念萌芽");
   const [posting, setPosting] = useState(false);
@@ -361,7 +361,12 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   useEffect(() => {
     let mounted = true;
     fetchSanctuaryPosts().then((data) => {
-      if (mounted && data.length > 0) setFarts(data);
+      if (mounted) {
+        setFarts(data);
+        setLoadingFarts(false);
+      }
+    }).catch(() => {
+      if (mounted) setLoadingFarts(false);
     });
     return () => { mounted = false; };
   }, []);
@@ -769,6 +774,18 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
           </div>
 
           {/* 卡片列表 */}
+          {loadingFarts ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-48 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
+              ))}
+            </div>
+          ) : farts.length === 0 ? (
+            <div className="py-16 text-center">
+              <MessageSquare className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
+              <p className="text-sm text-zinc-500">还没有人留下脑洞，来抢沙发吧</p>
+            </div>
+          ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence>
               {farts.map((fart) => (
@@ -782,6 +799,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
               ))}
             </AnimatePresence>
           </div>
+          )}
 
           {/* 独立海报生成按钮（与上香解耦，仅主动点击才弹出 9:16 海报 Modal） */}
           <div className="mt-10 flex justify-center">
