@@ -138,20 +138,26 @@
  *   FOR UPDATE USING (true);
  *
  * -- 8. Storage Bucket: portfolio-covers（作品集封面图公开存储桶）
- * -- 在 Supabase Dashboard → Storage → New bucket 手动创建，或运行以下 SQL：
+ * -- 【必须在 Supabase Dashboard → SQL Editor 中运行以下 SQL 才能生效】
+ * -- Step 1: 创建 Public Bucket
  * INSERT INTO storage.buckets (id, name, public)
  * VALUES ('portfolio-covers', 'portfolio-covers', true)
  * ON CONFLICT (id) DO NOTHING;
- * -- RLS 策略：允许匿名读取（前台展示）、登录用户上传（admin 后台）
- * CREATE POLICY "portfolio-covers are publicly readable" ON storage.objects
- *   FOR SELECT USING (bucket_id = 'portfolio-covers');
- * CREATE POLICY "authenticated can upload portfolio-covers" ON storage.objects
- *   FOR INSERT TO authenticated WITH CHECK (bucket_id = 'portfolio-covers');
- * -- 若 admin 后台使用 anon key 上传（无认证），则放开匿名 INSERT：
- * CREATE POLICY "anon can upload portfolio-covers" ON storage.objects
- *   FOR INSERT WITH CHECK (bucket_id = 'portfolio-covers');
- * CREATE POLICY "anon can update portfolio-covers" ON storage.objects
- *   FOR UPDATE USING (bucket_id = 'portfolio-covers');
+ *
+ * -- Step 2: 允许匿名读取（前台展示封面图）
+ * CREATE POLICY IF NOT EXISTS "portfolio-covers public read"
+ *   ON storage.objects FOR SELECT
+ *   USING (bucket_id = 'portfolio-covers');
+ *
+ * -- Step 3: 允许匿名上传（admin 后台使用 anon key 直传）
+ * CREATE POLICY IF NOT EXISTS "portfolio-covers anon upload"
+ *   ON storage.objects FOR INSERT
+ *   WITH CHECK (bucket_id = 'portfolio-covers');
+ *
+ * -- Step 4: 允许匿名更新（admin 后台替换封面图）
+ * CREATE POLICY IF NOT EXISTS "portfolio-covers anon update"
+ *   ON storage.objects FOR UPDATE
+ *   USING (bucket_id = 'portfolio-covers');
  * ============================================================
  */
 

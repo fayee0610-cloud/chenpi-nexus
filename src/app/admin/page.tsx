@@ -36,7 +36,6 @@ import {
   Link2,
 } from "lucide-react";
 import {
-  createProject,
   createInsight,
   fetchProjects,
   fetchInsights,
@@ -59,7 +58,6 @@ import {
   createInsightHub,
   deleteInsightHub,
   toggleInsightHubPublish,
-  updateProject,
   uploadPortfolioCover,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
@@ -449,7 +447,7 @@ function PortfolioEditor() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const project: Partial<PortfolioProject> = {
+      const payload = {
         title: form.title,
         subTitle: form.subTitle,
         category: form.category,
@@ -460,8 +458,17 @@ function PortfolioEditor() {
         metrics: form.metrics.filter((m) => m.value),
         solutions: form.solutions.filter((s) => s.title),
       };
-      await createProject(project);
-      setStatus({ type: "success", msg: "作品案例发布成功！" });
+      // 走 API 路由以触发 revalidatePath 刷新前台缓存
+      const res = await fetch("/api/projects/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "创建失败");
+      }
+      setStatus({ type: "success", msg: "作品案例发布成功！前台缓存已刷新" });
       setForm({
         title: "", subTitle: "", category: "品牌与市场战术",
         role: "", date: "", image: "", challenge: "",
@@ -523,7 +530,8 @@ function PortfolioEditor() {
     }
     setEditSubmitting(true);
     try {
-      await updateProject(String(editingProject.id), {
+      const payload = {
+        id: String(editingProject.id),
         title: editForm.title,
         subTitle: editForm.subTitle,
         category: editForm.category,
@@ -533,7 +541,17 @@ function PortfolioEditor() {
         challenge: editForm.challenge,
         metrics: editForm.metrics.filter((m) => m.value),
         solutions: editForm.solutions.filter((s) => s.title),
+      };
+      // 走 API 路由以触发 revalidatePath 刷新前台缓存
+      const res = await fetch("/api/projects/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "更新失败");
+      }
       setStatus({ type: "success", msg: "作品案例已更新，前台缓存已刷新！" });
       setEditingProject(null);
       setEditForm(null);

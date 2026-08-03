@@ -97,8 +97,13 @@ export async function fetchProjects(): Promise<PortfolioProject[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      return siteData.portfolio.projects;
+    if (error) {
+      console.warn("[dataApi] fetchProjects 查询出错:", error.message);
+      return [];
+    }
+    if (!data || data.length === 0) {
+      // 数据库为空时返回空数组，由前端展示"暂无作品"，不再降级到 Mock 数据
+      return [];
     }
 
     return data.map((row: any) => {
@@ -126,7 +131,8 @@ export async function fetchProjects(): Promise<PortfolioProject[]> {
     });
   } catch (err) {
     logNetworkFallback("fetchProjects", err);
-    return siteData.portfolio.projects;
+    // 网络错误时返回空数组，由前端展示"数据加载失败"，不再降级到 Mock 数据
+    return [];
   }
 }
 
@@ -140,8 +146,12 @@ export async function fetchInsights(): Promise<InsightItem[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      return siteData.insights;
+    if (error) {
+      console.warn("[dataApi] fetchInsights 查询出错:", error.message);
+      return [];
+    }
+    if (!data || data.length === 0) {
+      return [];
     }
 
     return data.map((row: any) => {
@@ -169,7 +179,7 @@ export async function fetchInsights(): Promise<InsightItem[]> {
     });
   } catch (err) {
     logNetworkFallback("fetchInsights", err);
-    return siteData.insights;
+    return [];
   }
 }
 
@@ -423,23 +433,34 @@ export async function updateProject(id: string, project: Partial<PortfolioProjec
 
 // ---------- Supabase Storage: 作品集封面图上传 ----------
 export async function uploadPortfolioCover(file: File): Promise<{ url: string } | null> {
-  if (!supabase) throw new Error("Supabase not configured");
+  if (!supabase) throw new Error("Supabase 未配置，无法上传图片");
   // 校验文件类型
   const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
   if (!allowedTypes.includes(file.type)) {
-    throw new Error("仅支持 JPG / PNG / WebP 格式");
+    throw new Error(`不支持的图片格式：${file.type || "未知"}，仅支持 JPG / PNG / WebP`);
   }
   // 校验文件大小（< 2MB）
   if (file.size > 2 * 1024 * 1024) {
-    throw new Error("图片大小不能超过 2MB");
+    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+    throw new Error(`图片大小 ${sizeMB}MB 超过 2MB 限制，请压缩后上传`);
   }
   const ext = file.name.split(".").pop() || "jpg";
   const fileName = `portfolio-covers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error } = await supabase.storage.from("portfolio-covers").upload(fileName, file, {
+  const { data, error } = await supabase.storage.from("portfolio-covers").upload(fileName, file, {
     cacheControl: "3600",
     upsert: false,
   });
-  if (error) throw error;
+  if (error) {
+    // 提取 Supabase Storage 的具体错误信息，便于前端展示和排查
+    const errMsg = error.message || error.error || JSON.stringify(error);
+    if (errMsg.includes("Bucket not found") || errMsg.includes("404")) {
+      throw new Error("Storage bucket 'portfolio-covers' 不存在，请在 Supabase Dashboard 创建该 Public Bucket");
+    }
+    if (errMsg.includes("policy") || errMsg.includes("403") || errMsg.includes("Unauthorized")) {
+      throw new Error("Storage RLS 策略拒绝上传，请在 Supabase 配置允许匿名 INSERT 的 Policy");
+    }
+    throw new Error(`图片上传失败：${errMsg}`);
+  }
   const { data: urlData } = supabase.storage.from("portfolio-covers").getPublicUrl(fileName);
   return { url: urlData.publicUrl };
 }
