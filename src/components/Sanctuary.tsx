@@ -885,7 +885,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
 
                 {/* 内容层 */}
                 <div className="relative z-10 flex h-full flex-col p-6">
-                  {/* Header */}
+                  {/* Header：品牌 + 日期（极简） */}
                   <div
                     className="flex items-center justify-between border-b pb-3"
                     style={{ borderColor: fortuneTheme.border }}
@@ -899,20 +899,14 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                       >
                         <Flame className="h-3.5 w-3.5 text-white" />
                       </div>
-                      <span className="text-xs font-bold text-zinc-200">陈皮同学 · 赛博灵感中枢</span>
+                      <span className="text-xs font-bold text-zinc-200">陈皮同学</span>
                     </div>
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between text-[10px] tracking-wider text-zinc-500">
-                    <span>{new Date().toLocaleDateString("zh-CN").replace(/\//g, ".")}</span>
-                    <span
-                      className="rounded px-1.5 py-0.5 font-mono"
-                      style={{ background: fortuneTheme.tagBg, color: fortuneTheme.tagText }}
-                    >
-                      {fortuneTheme.name}
+                    <span className="text-[10px] tracking-wider text-zinc-500">
+                      {new Date().toLocaleDateString("zh-CN").replace(/\//g, ".")}
                     </span>
                   </div>
 
-                  {/* 分类标签 */}
+                  {/* 分类标签（保留但轻量） */}
                   <div className="mt-3">
                     <span
                       className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium"
@@ -927,53 +921,96 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                     </span>
                   </div>
 
-                  {/* 中部：签文金句 */}
-                  <div className="flex flex-1 flex-col items-center justify-center py-4">
-                    <span
-                      className="mb-2 font-serif text-4xl"
-                      style={{ color: fortuneTheme.quoteMark }}
-                    >
-                      "
-                    </span>
-                    <p className="text-center text-base font-bold leading-relaxed text-zinc-100">
-                      {currentQuote}
-                    </p>
-                    <span
-                      className="mt-2 rotate-180 font-serif text-4xl leading-none"
-                      style={{ color: fortuneTheme.quoteMark }}
-                    >
-                      "
-                    </span>
+                  {/* 中部：签文金句（字体放大 + 赛博纹理背景） */}
+                  <div className="relative my-4 flex flex-1 items-center justify-center overflow-hidden rounded-2xl">
+                    {/* 赛博纹理层：雷达波纹 + 代码矩阵流（极低透明度，不干扰阅读） */}
+                    <div className="absolute inset-0 overflow-hidden rounded-2xl">
+                      {/* 雷达波纹（同心圆环） */}
+                      <div className="absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2">
+                        <div
+                          className="absolute inset-0 rounded-full animate-ping"
+                          style={{
+                            border: `1px solid ${fortuneTheme.primary}12`,
+                            animationDuration: "4s",
+                          }}
+                        />
+                        <div
+                          className="absolute inset-4 rounded-full"
+                          style={{ border: `1px solid ${fortuneTheme.primary}08` }}
+                        />
+                        <div
+                          className="absolute inset-10 rounded-full"
+                          style={{ border: `1px solid ${fortuneTheme.primary}08` }}
+                        />
+                        <div
+                          className="absolute inset-16 rounded-full"
+                          style={{ border: `1px solid ${fortuneTheme.primary}06` }}
+                        />
+                        <div
+                          className="absolute inset-20 rounded-full"
+                          style={{ border: `1px solid ${fortuneTheme.primary}04` }}
+                        />
+                        {/* 中心微光 */}
+                        <div
+                          className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+                          style={{ background: `${fortuneTheme.primary}10` }}
+                        />
+                      </div>
+                      {/* 代码矩阵流（竖线字符装饰） */}
+                      <div
+                        className="absolute inset-0 opacity-[0.06]"
+                        style={{
+                          backgroundImage:
+                            "repeating-linear-gradient(0deg, transparent 0px, transparent 18px, " +
+                            fortuneTheme.primary +
+                            "22 18px, " +
+                            fortuneTheme.primary +
+                            "22 19px)",
+                          backgroundSize: "38px 19px",
+                        }}
+                      />
+                      {/* 光斑扩散 */}
+                      <div
+                        className="absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
+                        style={{ background: `${fortuneTheme.secondary}10` }}
+                      />
+                      <div
+                        className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full blur-3xl"
+                        style={{ background: `${fortuneTheme.primary}0E` }}
+                      />
+                    </div>
+
+                    {/* 金句内容层（绝对置顶，z-20） */}
+                    <div className="relative z-20 w-full px-4 py-2">
+                      <span
+                        className="mb-3 block font-serif text-6xl leading-none"
+                        style={{ color: fortuneTheme.quoteMark }}
+                      >
+                        "
+                      </span>
+                      <p
+                        className="text-center font-bold leading-[1.35] text-zinc-100"
+                        style={{ fontSize: "clamp(1.75rem, 4.8vw, 2.5rem)" }}
+                      >
+                        {currentQuote}
+                      </p>
+                      <span
+                        className="mt-3 block rotate-180 font-serif text-6xl leading-none"
+                        style={{ color: fortuneTheme.quoteMark }}
+                      >
+                        "
+                      </span>
+                    </div>
                   </div>
 
-                  {/* 底部：签名 + 二维码 + 签印编号 */}
+                  {/* 底部：二维码 + 签印/编号（极简） */}
                   <div
                     className="flex items-end justify-between border-t pt-3"
                     style={{ borderColor: fortuneTheme.border }}
                   >
-                    <div className="flex-1 pr-3">
-                      <p className="text-xs font-bold text-zinc-300">Chenpi</p>
-                      <p className="text-[10px] text-zinc-500">OPC & Brand Strategist</p>
-                      <p className="mt-1 text-[9px] leading-tight text-zinc-600">
-                        扫码探索陈皮赛博数字中枢
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-white p-1.5">
-                      <QRCodeSVG
-                        value="https://github.com/fayee0610-cloud/chenpi-nexus"
-                        size={52}
-                        level="M"
-                        fgColor="#09090b"
-                        bgColor="#ffffff"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 专属签印 + 编号 + 哈希码（右下角） */}
-                  <div className="mt-3 flex items-center justify-between">
-                    {/* 陈皮签印 */}
+                    {/* 左侧：陈皮签印 */}
                     <div
-                      className="flex h-9 w-9 items-center justify-center rounded-md border text-[9px] font-bold"
+                      className="flex h-10 w-10 items-center justify-center rounded-md border text-[10px] font-bold"
                       style={{
                         borderColor: fortuneTheme.signText,
                         color: fortuneTheme.signText,
@@ -982,9 +1019,21 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                     >
                       陈皮
                     </div>
-                    <div className="flex flex-col items-end gap-0.5 font-mono text-[9px] text-zinc-500">
-                      <span>{fortuneSerial}</span>
-                      <span style={{ color: fortuneTheme.tagText }}>{fortuneHash}</span>
+                    {/* 右侧：二维码 + 唯一编号 */}
+                    <div className="flex items-end gap-3">
+                      <div className="flex flex-col items-end gap-1 font-mono text-[9px] text-zinc-500">
+                        <span>{fortuneSerial}</span>
+                        <span style={{ color: fortuneTheme.tagText }}>{fortuneHash}</span>
+                      </div>
+                      <div className="rounded-lg bg-white p-1.5">
+                        <QRCodeSVG
+                          value="https://chenpi-nexus.vercel.app"
+                          size={56}
+                          level="M"
+                          fgColor="#09090b"
+                          bgColor="#ffffff"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
