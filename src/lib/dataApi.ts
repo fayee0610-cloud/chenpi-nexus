@@ -390,13 +390,58 @@ export async function createProject(project: Partial<PortfolioProject>) {
         metrics: project.metrics || [],
         challenge: project.challenge,
         strategy: project.solutions || [], // DB 列名为 strategy
-        demo_url: project.demoUrl,
         image_url: project.image,
       },
     ])
     .select();
   if (error) throw error;
   return data;
+}
+
+// ---------- 更新：编辑作品（无限次修改） ----------
+export async function updateProject(id: string, project: Partial<PortfolioProject>) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const updateData: Record<string, any> = {};
+  if (project.title !== undefined) updateData.title = project.title;
+  if (project.subTitle !== undefined) updateData.sub_title = project.subTitle;
+  if (project.category !== undefined) updateData.category = project.category;
+  if (project.role !== undefined) updateData.role = project.role;
+  if (project.date !== undefined) updateData.date = project.date;
+  if (project.image !== undefined) updateData.image_url = project.image;
+  if (project.challenge !== undefined) updateData.challenge = project.challenge;
+  if (project.metrics !== undefined) updateData.metrics = project.metrics;
+  if (project.solutions !== undefined) updateData.strategy = project.solutions;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .update(updateData)
+    .eq("id", String(id))
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+// ---------- Supabase Storage: 作品集封面图上传 ----------
+export async function uploadPortfolioCover(file: File): Promise<{ url: string } | null> {
+  if (!supabase) throw new Error("Supabase not configured");
+  // 校验文件类型
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error("仅支持 JPG / PNG / WebP 格式");
+  }
+  // 校验文件大小（< 2MB）
+  if (file.size > 2 * 1024 * 1024) {
+    throw new Error("图片大小不能超过 2MB");
+  }
+  const ext = file.name.split(".").pop() || "jpg";
+  const fileName = `portfolio-covers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("portfolio-covers").upload(fileName, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage.from("portfolio-covers").getPublicUrl(fileName);
+  return { url: urlData.publicUrl };
 }
 
 // ---------- 写入：创建灵感文章 ----------

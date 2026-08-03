@@ -31,6 +31,9 @@ import {
   FileText,
   Mail,
   Radar,
+  Edit3,
+  ImagePlus,
+  Link2,
 } from "lucide-react";
 import {
   createProject,
@@ -56,6 +59,8 @@ import {
   createInsightHub,
   deleteInsightHub,
   toggleInsightHubPublish,
+  updateProject,
+  uploadPortfolioCover,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
 import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory } from "@/data/siteData";
@@ -347,7 +352,6 @@ function PortfolioEditor() {
     role: "",
     date: "",
     image: "",
-    demoUrl: "",
     challenge: "",
     metrics: [{ value: "", label: "" }],
     solutions: [{ title: "", detail: "" }],
@@ -357,6 +361,12 @@ function PortfolioEditor() {
   const [projectList, setProjectList] = useState<AdminProject[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  // 编辑 Modal 状态
+  const [editingProject, setEditingProject] = useState<AdminProject | null>(null);
+  const [editForm, setEditForm] = useState<typeof form | null>(null);
+  const [editUploadingImage, setEditUploadingImage] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const loadProjects = async () => {
     setListLoading(true);
@@ -446,7 +456,6 @@ function PortfolioEditor() {
         role: form.role,
         date: form.date,
         image: form.image,
-        demoUrl: form.demoUrl || undefined,
         challenge: form.challenge,
         metrics: form.metrics.filter((m) => m.value),
         solutions: form.solutions.filter((s) => s.title),
@@ -455,7 +464,7 @@ function PortfolioEditor() {
       setStatus({ type: "success", msg: "作品案例发布成功！" });
       setForm({
         title: "", subTitle: "", category: "品牌与市场战术",
-        role: "", date: "", image: "", demoUrl: "", challenge: "",
+        role: "", date: "", image: "", challenge: "",
         metrics: [{ value: "", label: "" }],
         solutions: [{ title: "", detail: "" }],
       });
@@ -465,6 +474,104 @@ function PortfolioEditor() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // 封面图上传处理（新建表单）
+  const handleImageUpload = async (file: File, target: "form" | "editForm") => {
+    if (target === "form") setUploadingImage(true);
+    else setEditUploadingImage(true);
+    try {
+      const result = await uploadPortfolioCover(file);
+      if (result?.url) {
+        if (target === "form") {
+          setForm((prev) => ({ ...prev, image: result.url }));
+        } else {
+          setEditForm((prev) => (prev ? { ...prev, image: result.url } : prev));
+        }
+        setStatus({ type: "success", msg: "封面图上传成功" });
+      }
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "图片上传失败" });
+    } finally {
+      if (target === "form") setUploadingImage(false);
+      else setEditUploadingImage(false);
+    }
+  };
+
+  // 打开编辑 Modal
+  const handleEditProject = (project: AdminProject) => {
+    setEditingProject(project);
+    setEditForm({
+      title: project.title || "",
+      subTitle: project.subTitle || "",
+      category: project.category || "品牌与市场战术",
+      role: project.role || "",
+      date: project.date || "",
+      image: project.image || "",
+      challenge: project.challenge || "",
+      metrics: project.metrics?.length ? project.metrics : [{ value: "", label: "" }],
+      solutions: project.solutions?.length ? project.solutions : [{ title: "", detail: "" }],
+    });
+  };
+
+  // 提交编辑
+  const handleEditSubmit = async () => {
+    if (!editingProject || !editForm) return;
+    if (!editForm.title.trim()) {
+      setStatus({ type: "error", msg: "请填写项目标题" });
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      await updateProject(String(editingProject.id), {
+        title: editForm.title,
+        subTitle: editForm.subTitle,
+        category: editForm.category,
+        role: editForm.role,
+        date: editForm.date,
+        image: editForm.image,
+        challenge: editForm.challenge,
+        metrics: editForm.metrics.filter((m) => m.value),
+        solutions: editForm.solutions.filter((s) => s.title),
+      });
+      setStatus({ type: "success", msg: "作品案例已更新，前台缓存已刷新！" });
+      setEditingProject(null);
+      setEditForm(null);
+      loadProjects();
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "更新失败" });
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // 编辑 Modal 中的字段更新
+  const updateEditField = (field: string, value: any) => {
+    setEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+  const addEditMetric = () => {
+    setEditForm((prev) => prev ? { ...prev, metrics: [...prev.metrics, { value: "", label: "" }] } : prev);
+  };
+  const removeEditMetric = (i: number) => {
+    setEditForm((prev) => prev ? { ...prev, metrics: prev.metrics.filter((_, idx) => idx !== i) } : prev);
+  };
+  const updateEditMetric = (i: number, key: string, val: string) => {
+    setEditForm((prev) => prev ? {
+      ...prev,
+      metrics: prev.metrics.map((m, idx) => (idx === i ? { ...m, [key]: val } : m)),
+    } : prev);
+  };
+  const addEditSolution = () => {
+    setEditForm((prev) => prev ? { ...prev, solutions: [...prev.solutions, { title: "", detail: "" }] } : prev);
+  };
+  const removeEditSolution = (i: number) => {
+    setEditForm((prev) => prev ? { ...prev, solutions: prev.solutions.filter((_, idx) => idx !== i) } : prev);
+  };
+  const updateEditSolution = (i: number, key: string, val: string) => {
+    setEditForm((prev) => prev ? {
+      ...prev,
+      solutions: prev.solutions.map((s, idx) => (idx === i ? { ...s, [key]: val } : s)),
+    } : prev);
   };
 
   return (
@@ -495,9 +602,45 @@ function PortfolioEditor() {
           <FormField label="封面图 URL">
             <input value={form.image} onChange={(e) => updateField("image", e.target.value)} placeholder="https://..." className="input-admin" />
           </FormField>
-          <FormField label="Demo 链接">
-            <input value={form.demoUrl} onChange={(e) => updateField("demoUrl", e.target.value)} placeholder="https://..." className="input-admin" />
-          </FormField>
+        </div>
+
+        {/* 封面图上传组件 */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-300">封面图上传</label>
+            <span className="text-[10px] text-zinc-500">推荐比例: 16:9 (1200×675) | 格式: JPG/PNG/WebP | 大小: &lt; 2MB</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-950/60 px-4 py-6 transition-all hover:border-purple-500/50 hover:bg-purple-500/5 ${uploadingImage ? "pointer-events-none opacity-60" : ""}`}>
+              {uploadingImage ? (
+                <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+              ) : (
+                <ImagePlus className="h-6 w-6 text-zinc-500" />
+              )}
+              <span className="text-xs text-zinc-500">{uploadingImage ? "上传中..." : "点击或拖拽上传封面图"}</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImageUpload(file, "form");
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {form.image && (
+              <div className="relative h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg border border-zinc-700">
+                <img src={form.image} alt="封面预览" className="h-full w-full object-cover" />
+                <button
+                  onClick={() => updateField("image", "")}
+                  className="absolute right-1 top-1 rounded bg-zinc-950/80 p-0.5 text-zinc-400 hover:text-red-400"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 核心数据标尺 */}
@@ -679,8 +822,16 @@ function PortfolioEditor() {
                   </button>
                 </div>
                 <button
+                  onClick={() => handleEditProject(p)}
+                  title="编辑作品"
+                  className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-purple-500/50 hover:bg-purple-500/10 hover:text-purple-400"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </button>
+                <button
                   onClick={() => handleDeleteProject(p.id)}
                   disabled={deletingId === p.id}
+                  title="删除作品"
                   className="flex-shrink-0 rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                 >
                   {deletingId === p.id ? (
@@ -694,6 +845,184 @@ function PortfolioEditor() {
           </div>
         )}
       </div>
+
+      {/* ========== 编辑作品 Modal ========== */}
+      <AnimatePresence>
+        {editingProject && editForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => { setEditingProject(null); setEditForm(null); }}
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-zinc-950/90 backdrop-blur-xl"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative my-8 w-full max-w-2xl rounded-2xl border border-purple-500/30 bg-zinc-900 shadow-[0_0_60px_rgba(168,85,247,0.15)]"
+            >
+              {/* 顶部 Bar */}
+              <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-zinc-800 bg-zinc-900/95 px-6 py-4 backdrop-blur-md">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="h-4 w-4 text-purple-400" />
+                  <h3 className="text-sm font-semibold text-zinc-100">编辑作品案例</h3>
+                  <span className="text-xs text-zinc-500">· {editingProject.title}</span>
+                </div>
+                <button
+                  onClick={() => { setEditingProject(null); setEditForm(null); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-all hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  取消
+                </button>
+              </div>
+
+              {/* 可滚动内容区 */}
+              <div className="max-h-[calc(85vh-64px)] space-y-5 overflow-y-auto px-6 py-6">
+                {/* 基础信息 */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="项目标题 *">
+                    <input value={editForm.title} onChange={(e) => updateEditField("title", e.target.value)} className="input-admin" />
+                  </FormField>
+                  <FormField label="副标题">
+                    <input value={editForm.subTitle} onChange={(e) => updateEditField("subTitle", e.target.value)} className="input-admin" />
+                  </FormField>
+                  <FormField label="分类 *">
+                    <input value={editForm.category} onChange={(e) => updateEditField("category", e.target.value)} className="input-admin" />
+                  </FormField>
+                  <FormField label="角色">
+                    <input value={editForm.role} onChange={(e) => updateEditField("role", e.target.value)} className="input-admin" />
+                  </FormField>
+                  <FormField label="执行时间">
+                    <input value={editForm.date} onChange={(e) => updateEditField("date", e.target.value)} className="input-admin" />
+                  </FormField>
+                  <FormField label="封面图 URL">
+                    <input value={editForm.image} onChange={(e) => updateEditField("image", e.target.value)} className="input-admin" />
+                  </FormField>
+                </div>
+
+                {/* 封面图上传 + 高清预览 */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-sm font-medium text-zinc-300">封面图上传 / 预览</label>
+                    <span className="text-[10px] text-zinc-500">推荐比例: 16:9 (1200×675) | 格式: JPG/PNG/WebP | 大小: &lt; 2MB</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <label className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-950/60 px-4 py-6 transition-all hover:border-purple-500/50 hover:bg-purple-500/5 ${editUploadingImage ? "pointer-events-none opacity-60" : ""}`}>
+                      {editUploadingImage ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                      ) : (
+                        <ImagePlus className="h-6 w-6 text-zinc-500" />
+                      )}
+                      <span className="text-xs text-zinc-500">{editUploadingImage ? "上传中..." : "点击或拖拽上传新封面图"}</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageUpload(file, "editForm");
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {editForm.image && (
+                      <div className="relative aspect-video w-40 flex-shrink-0 overflow-hidden rounded-lg border border-zinc-700">
+                        <img src={editForm.image} alt="封面高清预览" className="h-full w-full object-cover" />
+                        <button
+                          onClick={() => updateEditField("image", "")}
+                          className="absolute right-1 top-1 rounded bg-zinc-950/80 p-0.5 text-zinc-400 hover:text-red-400"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 核心数据标尺 */}
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <label className="text-sm font-medium text-zinc-300">核心数据标尺（Metrics）</label>
+                    <button onClick={addEditMetric} className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200">
+                      <Plus className="h-3 w-3" /> 添加
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {editForm.metrics.map((m, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input value={m.value} onChange={(e) => updateEditMetric(i, "value", e.target.value)} placeholder="数据值" className="input-admin flex-1" />
+                        <input value={m.label} onChange={(e) => updateEditMetric(i, "label", e.target.value)} placeholder="说明" className="input-admin flex-1" />
+                        {editForm.metrics.length > 1 && (
+                          <button onClick={() => removeEditMetric(i)} className="rounded-lg border border-zinc-800 px-3 text-zinc-500 hover:border-red-500/50 hover:text-red-400">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 挑战背景 */}
+                <FormField label="项目挑战与背景">
+                  <textarea value={editForm.challenge} onChange={(e) => updateEditField("challenge", e.target.value)} rows={3} className="input-admin resize-none" />
+                </FormField>
+
+                {/* 破局战术 */}
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <label className="text-sm font-medium text-zinc-300">破局战术与解法（多步骤）</label>
+                    <button onClick={addEditSolution} className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200">
+                      <Plus className="h-3 w-3" /> 添加步骤
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {editForm.solutions.map((s, i) => (
+                      <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-medium text-zinc-500">步骤 {i + 1}</span>
+                          {editForm.solutions.length > 1 && (
+                            <button onClick={() => removeEditSolution(i)} className="text-zinc-500 hover:text-red-400">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <input value={s.title} onChange={(e) => updateEditSolution(i, "title", e.target.value)} placeholder="战术标题" className="input-admin mb-2" />
+                        <textarea value={s.detail} onChange={(e) => updateEditSolution(i, "detail", e.target.value)} rows={2} placeholder="详细描述..." className="input-admin resize-none" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 底部操作区 */}
+              <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-b-2xl border-t border-zinc-800 bg-zinc-900/95 px-6 py-4 backdrop-blur-md">
+                <button
+                  onClick={() => { setEditingProject(null); setEditForm(null); }}
+                  className="rounded-xl border border-zinc-800 px-5 py-2.5 text-sm text-zinc-400 transition-all hover:border-zinc-700 hover:text-zinc-200"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleEditSubmit}
+                  disabled={editSubmitting}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                >
+                  {editSubmitting ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> 保存中...</>
+                  ) : (
+                    <><Save className="h-4 w-4" /> 保存修改</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

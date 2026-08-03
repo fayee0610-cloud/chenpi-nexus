@@ -11,7 +11,6 @@ import {
   User,
   Target,
   Lightbulb,
-  ExternalLink,
   MessageCircle,
   Zap,
   ArrowUpRight,
@@ -123,8 +122,8 @@ export default function Portfolio() {
                 onClick={() => setSelectedProject(project)}
                 className="group relative cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
               >
-                {/* 图片 */}
-                <div className="relative h-48 overflow-hidden">
+                {/* 图片 - 16:9 自适应防变形 */}
+                <div className="relative aspect-video overflow-hidden">
                   {project.image?.trim() ? (
                     <img
                       src={project.image}
@@ -358,22 +357,11 @@ export default function Portfolio() {
                   </button>
                   <Link
                     href={`/portfolio/${selectedProject.id}`}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm text-zinc-300 transition-all hover:border-purple-500/50 hover:text-purple-300"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm text-zinc-300 transition-all hover:border-purple-500/50 hover:text-purple-300"
                   >
                     <ArrowUpRight className="h-4 w-4" />
                     查看独立详情页
                   </Link>
-                  {selectedProject.demoUrl && (
-                    <button
-                      onClick={() =>
-                        window.open(selectedProject.demoUrl, "_blank")
-                      }
-                      className="flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm text-zinc-300 transition-all hover:border-zinc-700 hover:text-zinc-100"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      访问项目线上 Demo
-                    </button>
-                  )}
                 </div>
               </div>
             </motion.div>

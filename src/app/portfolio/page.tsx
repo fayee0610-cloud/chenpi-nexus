@@ -110,8 +110,8 @@ export default function PortfolioListPage() {
                   href={`/portfolio/${project.id}`}
                   className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
                 >
-                  {/* 图片 */}
-                  <div className="relative h-48 overflow-hidden">
+                  {/* 图片 - 16:9 自适应防变形 */}
+                  <div className="relative aspect-video overflow-hidden">
                     {project.image?.trim() ? (
                       <img
                         src={project.image}

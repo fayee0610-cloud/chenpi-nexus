@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, TrendingUp, ExternalLink, Copy, Check, Target, Lightbulb } from "lucide-react";
+import { ArrowLeft, TrendingUp, Copy, Check, Target, Lightbulb } from "lucide-react";
 import { fetchProjectById } from "@/lib/dataApi";
 import Header from "@/components/Header";
 import { notFound } from "next/navigation";
@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import PortfolioShareClient from "./PortfolioShareClient";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0; // 禁用强缓存，确保 Admin 编辑后零延迟同步
 
 // 动态 SEO Metadata：分享时展示具体作品标题与摘要
 export async function generateMetadata({
@@ -81,16 +82,18 @@ export default async function PortfolioDetailPage({
           )}
         </header>
 
-        {/* 大图 */}
+        {/* 大图 - 16:9 自适应防变形 */}
         <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-800">
           {project.image?.trim() ? (
-            <img
-              src={project.image}
-              alt={project.title}
-              className="w-full object-cover"
-            />
+            <div className="aspect-video w-full">
+              <img
+                src={project.image}
+                alt={project.title}
+                className="h-full w-full object-cover"
+              />
+            </div>
           ) : (
-            <div className="flex h-64 items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
+            <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
               <Target className="h-12 w-12 text-zinc-700" />
             </div>
           )}
@@ -155,21 +158,6 @@ export default async function PortfolioDetailPage({
                 </div>
               ))}
             </div>
-          </section>
-        )}
-
-        {/* 演示链接 */}
-        {project.demoUrl && (
-          <section className="mt-10">
-            <a
-              href={project.demoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110"
-            >
-              <ExternalLink className="h-4 w-4" />
-              查看演示
-            </a>
           </section>
         )}
 
