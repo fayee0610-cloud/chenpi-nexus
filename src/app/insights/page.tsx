@@ -54,7 +54,7 @@ export default function InsightsListPage() {
         const data = await fetchInsights();
         if (mounted) setInsights(data);
       } catch (err) {
-        console.error(err);
+        console.warn("[insights] 数据加载失败，已降级处理:", err);
       } finally {
         if (mounted) setLoading(false);
       }

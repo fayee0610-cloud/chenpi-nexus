@@ -32,7 +32,7 @@ export default function PortfolioListPage() {
         const data = await fetchProjects();
         if (mounted) setProjects(data);
       } catch (err) {
-        console.error(err);
+        console.warn("[portfolio] 数据加载失败，已降级处理:", err);
       } finally {
         if (mounted) setLoading(false);
       }

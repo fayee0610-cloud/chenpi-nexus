@@ -144,9 +144,43 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
+// URL 格式校验：必须是合法的 https URL，且包含 supabase.co 域名
+// 防止误配置（如带 /rest/v1/ 路径、缺少协议头、空字符串）导致客户端 fetch 失败
+function isValidSupabaseUrl(url: string): boolean {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  // 必须以 https:// 开头
+  if (!/^https:\/\/.+\.supabase\.(co|in)/i.test(trimmed)) return false;
+  // 必须能被 URL 构造器解析
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+// 初始化 Supabase 客户端
+// - URL 格式不合法或 key 缺失时返回 null（调用方降级到 siteData）
+// - 启动时打印一次诊断日志，方便排查配置问题
+let supabaseClient: ReturnType<typeof createClient> | null = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  if (isValidSupabaseUrl(supabaseUrl)) {
+    try {
+      supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    } catch (err) {
+      console.warn("[supabase] 客户端初始化失败，已降级到静态数据:", err);
+      supabaseClient = null;
+    }
+  } else {
+    console.warn(
+      `[supabase] NEXT_PUBLIC_SUPABASE_URL 格式不合法（应为 https://xxxxx.supabase.co），已降级到静态数据。当前值: "${supabaseUrl}"`
+    );
+  }
+}
+
+export const supabase = supabaseClient;
 
 export const isSupabaseConfigured = !!supabase;

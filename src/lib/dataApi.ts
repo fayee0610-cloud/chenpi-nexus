@@ -20,6 +20,32 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// ---------- 网络错误识别与友好兜底 ----------
+// 捕获 fetch 层的网络异常（插件拦截/断网/Supabase 不可达），
+// 打印友好 warn 日志，避免 Next.js dev 错误覆盖层抛出 unhandled runtime error。
+function isNetworkError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("Failed to fetch") ||
+    msg.includes("NetworkError") ||
+    msg.includes("Network request failed") ||
+    msg.includes("ERR_NETWORK") ||
+    msg.includes("fetch failed") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("ENOTFOUND") ||
+    msg.includes("ETIMEDOUT")
+  );
+}
+
+function logNetworkFallback(scope: string, err: unknown): void {
+  if (isNetworkError(err)) {
+    console.warn(`[dataApi] 网络请求被拦截或连接失败，已启用兜底机制 [${scope}]:`, err instanceof Error ? err.message : err);
+  } else {
+    console.warn(`[dataApi] ${scope} 读取异常，降级到静态数据:`, err instanceof Error ? err.message : err);
+  }
+}
+
 // 将纯文本 content 解析为 ContentBlock[]（简易 Markdown）
 function parseContent(text: string): ContentBlock[] {
   if (!text) return [];
@@ -98,7 +124,8 @@ export async function fetchProjects(): Promise<PortfolioProject[]> {
         demoUrl: row.demo_url || undefined,
       } as PortfolioProject;
     });
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchProjects", err);
     return siteData.portfolio.projects;
   }
 }
@@ -140,7 +167,8 @@ export async function fetchInsights(): Promise<InsightItem[]> {
         content: parseContent(row.content || ""),
       } as InsightItem;
     });
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchInsights", err);
     return siteData.insights;
   }
 }
@@ -170,7 +198,8 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
       reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
       comments: [],
     })) as SanctuaryPost[];
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchSanctuaryPosts", err);
     return siteData.sanctuary.initialPosts;
   }
 }
@@ -264,7 +293,8 @@ export async function fetchProjectById(id: string): Promise<PortfolioProject | n
       solutions: data.strategy || [],
       demoUrl: data.demo_url || undefined,
     } as PortfolioProject;
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchProjectById", err);
     return siteData.portfolio.projects.find((p) => String(p.id) === id) || null;
   }
 }
@@ -299,7 +329,8 @@ export async function fetchInsightById(id: string): Promise<InsightItem | null> 
       likes: 0,
       content: parseContent(data.content || ""),
     } as InsightItem;
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchInsightById", err);
     return siteData.insights.find((i) => String(i.id) === id) || null;
   }
 }
@@ -329,7 +360,8 @@ export async function fetchSiteConfig(): Promise<SiteConfig> {
       return { ...DEFAULT_CONFIG, ...(data.value as object) };
     }
     return DEFAULT_CONFIG;
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchSiteConfig", err);
     return DEFAULT_CONFIG;
   }
 }
@@ -448,7 +480,8 @@ export async function fetchResources(): Promise<ResourceItem[]> {
       downloadCount: row.download_count || 0,
       date: row.created_at ? new Date(row.created_at).toLocaleDateString("zh-CN").replace(/\//g, ".") : "",
     })) as ResourceItem[];
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchResources", err);
     return siteData.resources;
   }
 }
@@ -486,11 +519,16 @@ export async function incrementResourceDownload(id: string) {
   if (!supabase) return;
   try {
     await supabase.rpc("increment_download_count", { resource_id: String(id) });
-  } catch {
+  } catch (err) {
     // RPC 可能不存在，用读+写替代
-    const { data } = await supabase.from("resources").select("download_count").eq("id", String(id)).single();
-    if (data) {
-      await supabase.from("resources").update({ download_count: (data.download_count || 0) + 1 }).eq("id", String(id));
+    logNetworkFallback("incrementResourceDownload(rpc)", err);
+    try {
+      const { data } = await supabase.from("resources").select("download_count").eq("id", String(id)).single();
+      if (data) {
+        await supabase.from("resources").update({ download_count: (data.download_count || 0) + 1 }).eq("id", String(id));
+      }
+    } catch (err2) {
+      logNetworkFallback("incrementResourceDownload(fallback)", err2);
     }
   }
 }
@@ -533,8 +571,9 @@ export async function createLead(email: string, resourceId?: string, resourceTit
         resource_title: resourceTitle || null,
       },
     ]);
-  } catch {
-    // 静默失败，不阻断下载流程
+  } catch (err) {
+    // 静默失败，不阻断下载流程，仅打印日志
+    logNetworkFallback("createLead", err);
   }
 }
 
@@ -553,7 +592,8 @@ export async function fetchLeads(): Promise<Lead[]> {
       resourceTitle: row.resource_title || "",
       createdAt: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
     })) as Lead[];
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchLeads", err);
     return [];
   }
 }
@@ -586,7 +626,8 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
       apiSource: row.api_source || "manual",
       tags: row.tags ? (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags) : [],
     })) as InsightHubItem[];
-  } catch {
+  } catch (err) {
+    logNetworkFallback("fetchInsightsHub", err);
     return siteData.insightsHub;
   }
 }

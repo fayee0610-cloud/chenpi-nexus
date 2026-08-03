@@ -365,7 +365,8 @@ function PortfolioEditor() {
       // fetchProjects 未映射 is_published 字段，此处补充默认值 true
       setProjectList(data.map((p) => ({ ...p, isPublished: true })));
     } catch (err) {
-      console.error(err);
+      console.warn("[admin] loadProjects 失败:", err);
+      setStatus({ type: "error", msg: "数据加载失败，请检查网络或关闭广告拦截插件" });
     } finally {
       setListLoading(false);
     }
@@ -722,7 +723,8 @@ function InsightsEditor() {
       // fetchInsights 未映射 is_published 字段，此处补充默认值 true
       setInsightList(data.map((i) => ({ ...i, isPublished: true })));
     } catch (err) {
-      console.error(err);
+      console.warn("[admin] loadInsights 失败:", err);
+      setStatus({ type: "error", msg: "数据加载失败，请检查网络或关闭广告拦截插件" });
     } finally {
       setListLoading(false);
     }
@@ -1009,7 +1011,8 @@ function ResourceEditor() {
       const data = await fetchResources();
       setResourceList(data);
     } catch (err) {
-      console.error(err);
+      console.warn("[admin] loadResources 失败:", err);
+      setStatus({ type: "error", msg: "数据加载失败，请检查网络或关闭广告拦截插件" });
     } finally {
       setListLoading(false);
     }
@@ -1429,7 +1432,7 @@ function SanctuaryManager() {
       const data = await fetchSanctuaryPosts();
       setPosts(data);
     } catch (err) {
-      console.error(err);
+      console.warn("[admin] loadPosts 失败:", err);
     } finally {
       setLoading(false);
     }
@@ -1534,7 +1537,7 @@ function LeadsManager() {
       const data = await fetchLeads();
       setLeads(data);
     } catch (err) {
-      console.error(err);
+      console.warn("[admin] loadLeads 失败:", err);
     } finally {
       setLoading(false);
     }
@@ -1690,7 +1693,8 @@ function InsightHubEditor() {
       const data = await fetchInsightsHub();
       setHubList(data);
     } catch (err) {
-      console.error(err);
+      console.warn("[admin] loadHub 失败:", err);
+      setStatus({ type: "error", msg: "数据加载失败，请检查网络或关闭广告拦截插件" });
     } finally {
       setListLoading(false);
     }
