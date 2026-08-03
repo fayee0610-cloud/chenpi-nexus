@@ -341,7 +341,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   const [buffId, setBuffId] = useState(0);
   const [showFortune, setShowFortune] = useState(false);
   const [fortuneCategory, setFortuneCategory] = useState<"inspiration" | "growth" | "healing">("inspiration");
-  const [currentQuote, setCurrentQuote] = useState("");
+  const [currentQuote, setCurrentQuote] = useState<{ lines: string[]; highlightIndex?: number } | null>(null);
   const [fortuneTheme, setFortuneTheme] = useState<FortuneTheme>(FORTUNE_THEMES[0]);
   const [fortuneSerial, setFortuneSerial] = useState<string>("");
   const [fortuneHash, setFortuneHash] = useState<string>("");
@@ -372,7 +372,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   }, []);
 
   // 上香逻辑
-  // 从指定分类随机抽取一条金句
+  // 从指定分类随机抽取一条金句（返回 {lines, highlightIndex} 对象）
   const pickRandomQuote = useCallback((category: "inspiration" | "growth" | "healing") => {
     const pool = siteData.sanctuary.fortuneLibrary[category].quotes;
     return pool[Math.floor(Math.random() * pool.length)];
@@ -387,22 +387,6 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     setTiltStyle({});
     setShowFortune(true);
   }, [fortuneCategory, pickRandomQuote]);
-
-  // 将金句拆分为三行短诗（现代诗节奏）
-  const splitPoem = (quote: string): string[] => {
-    const parts = quote.split(/[，,。；;——、]/).map((s) => s.trim()).filter(Boolean);
-    if (parts.length >= 3) {
-      return [parts[0], parts[1], parts.slice(2).join("，")];
-    }
-    if (parts.length === 2) {
-      const mid = Math.ceil(parts[1].length / 2);
-      return [parts[0], parts[1].slice(0, mid), parts[1].slice(mid)];
-    }
-    const len = quote.length;
-    const a = Math.ceil(len / 3);
-    const b = Math.ceil((len * 2) / 3);
-    return [quote.slice(0, a), quote.slice(a, b), quote.slice(b)];
-  };
 
   // 3D Tilt 跟随鼠标
   const handleTiltMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -867,7 +851,7 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                     }}
                   />
                   <div
-                    className="absolute right-4 top-20 h-28 w-28 rotate-45 border opacity-[0.18]"
+                    className="absolute right-4 top-20 h-28 w-28 rotate-45 border opacity-[0.15]"
                     style={{ borderColor: fortuneTheme.border }}
                   />
                   <div
@@ -914,13 +898,14 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                     </div>
                   </div>
 
-                  {/* 分类标签（极淡，仅占位） */}
+                  {/* 分类标签（与金句主题色绑定） */}
                   <div className="mt-5">
                     <span
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium tracking-wide"
+                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium tracking-wide"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        color: fortuneTheme.tagText,
+                        borderColor: `${siteData.sanctuary.fortuneLibrary[fortuneCategory].highlightColor}40`,
+                        background: `${siteData.sanctuary.fortuneLibrary[fortuneCategory].highlightColor}10`,
+                        color: siteData.sanctuary.fortuneLibrary[fortuneCategory].highlightColor,
                       }}
                     >
                       {fortuneCategories[fortuneCategory].icon}
@@ -946,25 +931,22 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                       "
                     </span>
 
-                    {/* 三行诗内容 */}
+                    {/* 三行诗内容（逐行渲染，highlightIndex 行荧光高亮） */}
                     <div className="relative z-10 w-full px-5">
-                      {splitPoem(currentQuote).map((line, i) => {
-                        const isLast = i === 2;
+                      {currentQuote.lines.map((line, i) => {
+                        const isHighlight = i === currentQuote.highlightIndex;
+                        const highlightColor = siteData.sanctuary.fortuneLibrary[fortuneCategory].highlightColor;
                         return (
                           <p
                             key={i}
                             className="text-center"
                             style={{
-                              fontSize: "20px",
-                              lineHeight: 2.0,
+                              fontSize: "19px",
+                              lineHeight: 2.2,
                               letterSpacing: "0.05em",
-                              fontWeight: isLast ? 500 : 400,
-                              color: isLast ? "transparent" : "rgba(255,255,255,0.85)",
-                              ...(isLast && {
-                                backgroundImage: `linear-gradient(90deg, ${fortuneTheme.primary}, ${fortuneTheme.secondary})`,
-                                WebkitBackgroundClip: "text",
-                                backgroundClip: "text",
-                              }),
+                              fontWeight: isHighlight ? 500 : 400,
+                              color: isHighlight ? highlightColor : "rgba(255,255,255,0.85)",
+                              textShadow: isHighlight ? `0 0 12px ${highlightColor}40` : "none",
                             }}
                           >
                             {line}
