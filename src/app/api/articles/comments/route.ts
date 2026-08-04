@@ -217,23 +217,43 @@ export async function POST(req: Request) {
     // 生成删除凭证：前端 localStorage 保存，用户可凭此删除自己的评论
     const deleteToken = genDeleteToken();
 
-    // ★ 不传 id 字段，让 Supabase 用 gen_random_uuid() 自动生成 UUID
-    const { data, error } = await supabase.from("article_comments").insert(
-      [
-        {
-          article_id: articleId,
-          nickname: safeNickname,
-          email: safeEmail || null,
-          content: safeContent,
-          ip_hash: ipHash,
-          user_agent: ua,
-          has_links: hasLinks,
-          status,
-          parent_id: parentId ? String(parentId) : null,
-          delete_token: deleteToken,
-        },
-      ]
-    ).select();
+    // 构建插入数据（不传 id，让 Supabase 用 gen_random_uuid() 自动生成 UUID）
+    const baseInsert: Record<string, any> = {
+      article_id: articleId,
+      nickname: safeNickname,
+      email: safeEmail || null,
+      content: safeContent,
+      ip_hash: ipHash,
+      user_agent: ua,
+      has_links: hasLinks,
+      status,
+      parent_id: parentId ? String(parentId) : null,
+    };
+
+    // 优先尝试带 delete_token 写入；若表缺少该列则降级重试（兼容旧表结构）
+    let data: any = null;
+    let error: any = null;
+    let tokenSaved = true;
+
+    const firstTry = await supabase
+      .from("article_comments")
+      .insert([{ ...baseInsert, delete_token: deleteToken }])
+      .select();
+
+    if (firstTry.error && /delete_token/i.test(String(firstTry.error.message || ""))) {
+      // delete_token 列不存在 → 降级：不带该列重新写入
+      console.warn("[comments POST] delete_token 列缺失，降级重试:", firstTry.error.message);
+      tokenSaved = false;
+      const retry = await supabase
+        .from("article_comments")
+        .insert([baseInsert])
+        .select();
+      data = retry.data;
+      error = retry.error;
+    } else {
+      data = firstTry.data;
+      error = firstTry.error;
+    }
 
     if (error) throw error;
 
@@ -242,7 +262,8 @@ export async function POST(req: Request) {
       success: true,
       status,
       message: status === "approved" ? "评论发布成功" : "评论已提交，审核后展示",
-      deleteToken, // 仅在 POST 响应中返回，GET 不返回（安全）
+      deleteToken: tokenSaved ? deleteToken : null, // 列缺失时返回 null，前端不启用删除按钮
+      tokenSaved,
       comment: row
         ? {
             id: row.id,
@@ -309,10 +330,10 @@ export async function DELETE(req: Request) {
       );
     }
 
-    // 先查 token 是否匹配
+    // 先查 token 是否匹配（用 select("*") 兼容旧表无 delete_token 列的情况）
     const { data: row, error: queryErr } = await supabase
       .from("article_comments")
-      .select("id, delete_token")
+      .select("*")
       .eq("id", id)
       .single();
 
@@ -323,6 +344,7 @@ export async function DELETE(req: Request) {
       );
     }
 
+    // delete_token 列不存在时 row.delete_token 为 undefined → 凭证不匹配，安全拒绝
     if (row.delete_token !== deleteToken) {
       return NextResponse.json(
         { success: false, error: "删除凭证不匹配，无权删除" },
