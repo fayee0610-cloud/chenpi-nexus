@@ -83,10 +83,35 @@ body {
   100% { opacity: 0; transform: translateY(-60px) scale(1.8); }
 }
 
+/* 赛博激光扫描线：从顶部到底部无缝循环（2s/次） */
+@keyframes laser-scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+/* 霓虹流光边框：渐变光带沿边框流动 */
+@keyframes border-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
 
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* 激光扫描线动画类（叠加在图片上的光束效果） */
+.animate-laser-scanline {
+  animation: laser-scanline 2s linear infinite;
+}
+
+/* 霓虹流光边框动画类 */
+.animate-border-flow {
+  background-size: 200% 200%;
+  animation: border-flow 3s linear infinite;
 }
