@@ -35,10 +35,10 @@ export default function Hero() {
 
             {/* 大标题：严格两行结构 + 紫蓝渐变高亮「人」「AI」「市场」 */}
             <h1 className="mb-6 text-3xl font-extrabold leading-tight tracking-tight text-zinc-50 sm:text-4xl lg:text-5xl xl:text-6xl">
-              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">人</span>为本，
+              以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">人</span>为本，
               <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">AI</span> 为杠杆
               <br />
-              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">市场</span>会有答案。
+              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">市场</span>会有答案
             </h1>
 
             <p className="mb-8 text-base text-zinc-400 sm:text-lg lg:text-xl">
@@ -69,31 +69,36 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="w-full max-w-md mx-auto lg:max-w-lg lg:flex-1"
           >
-            <div className="group relative aspect-square overflow-hidden rounded-2xl border border-purple-500/50 bg-zinc-900 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-500 hover:shadow-[0_0_28px_rgba(168,85,247,0.45)]">
-              {/* 图片：100% 原色清晰展示，无任何滤镜 */}
-              <img
-                src={profile.avatarUrl}
-                alt="Avatar"
-                className="h-full w-full object-cover"
-              />
+            <div className="group relative">
+              {/* 人像卡片：照片 100% 原色清晰，无任何蒙层/滤镜/overlay */}
+              <div className="relative aspect-square overflow-hidden rounded-2xl border border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-500 hover:shadow-[0_0_28px_rgba(168,85,247,0.45)]">
+                <img
+                  src={profile.avatarUrl}
+                  alt="Avatar"
+                  className="h-full w-full object-cover"
+                />
 
-              {/* 右上角科技角标：状态灯呼吸脉冲 */}
-              <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-green-500/30 bg-zinc-950/80 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur-sm">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-                </span>
-                <Radio className="h-3 w-3" />
-                📡 SYSTEM: ONLINE
+                {/* 右上角科技角标：状态灯呼吸脉冲（独立浮层，非蒙层） */}
+                <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-green-500/30 bg-zinc-950/80 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur-sm">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                  </span>
+                  <Radio className="h-3 w-3" />
+                  📡 SYSTEM: ONLINE
+                </div>
+
+                {/* 霓虹流光边框：渐变光带沿边框流动（仅边框，不覆盖图片） */}
+                <div className="animate-border-flow pointer-events-none absolute -inset-px rounded-2xl bg-[linear-gradient(90deg,transparent,rgba(168,85,247,0.6),transparent,rgba(59,130,246,0.6),transparent)] opacity-60 [mask:linear-gradient(#000_0_0)_content-box,linear-gradient(#000_0_0)] [mask-composite:exclude] p-px" />
               </div>
 
-              {/* 左下角属性标签（局部深色渐变保证可读，非紫色蒙层） */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-zinc-950 via-zinc-950/75 to-transparent p-5 pt-16">
+              {/* 照片下方属性标签区（移出照片外部，不再遮挡人像） */}
+              <div className="mt-4 px-1">
                 <div className="mb-3 flex flex-wrap gap-2">
                   {profile.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-md border border-zinc-700/60 bg-zinc-950/70 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm"
+                      className="rounded-md border border-zinc-700/60 bg-zinc-900/70 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
                     >
                       {tag}
                     </span>
@@ -103,12 +108,6 @@ export default function Hero() {
                   &ldquo;{profile.quote}&rdquo;
                 </p>
               </div>
-
-              {/* 霓虹流光边框：渐变光带沿边框流动 */}
-              <div className="animate-border-flow pointer-events-none absolute -inset-px rounded-2xl bg-[linear-gradient(90deg,transparent,rgba(168,85,247,0.6),transparent,rgba(59,130,246,0.6),transparent)] opacity-60 [mask:linear-gradient(#000_0_0)_content-box,linear-gradient(#000_0_0)] [mask-composite:exclude] p-px" />
-
-              {/* 装饰边框光 */}
-              <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-purple-500/20" />
             </div>
           </motion.div>
         </div>
