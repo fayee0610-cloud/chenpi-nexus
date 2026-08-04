@@ -20,8 +20,17 @@ const AI_CONFIG = {
 };
 
 // ---------- 管理员鉴权 ----------
+// 双通道：优先读 cookie（同源 fetch 自动携带），回退读 Authorization Bearer header（前端显式带）
 function isAdmin(req: NextRequest): boolean {
-  const token = req.cookies.get("admin_token")?.value;
+  // 通道 1：cookie（登录时由 Set-Cookie 写入）
+  let token = req.cookies.get("admin_token")?.value;
+  // 通道 2：Authorization Bearer header（前端从 localStorage 显式携带）
+  if (!token) {
+    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.slice(7).trim();
+    }
+  }
   if (!token) return false;
   try {
     const payload = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));

@@ -234,6 +234,7 @@ function mapInsightRow(row: any): InsightItem {
     author: row.author || "",
     views: "0",
     likes: 0,
+    commentCount: typeof row.comment_count === "number" ? row.comment_count : 0,
     content: parseContent(row.content || ""),
   } as InsightItem;
 }
@@ -706,6 +707,7 @@ export interface Lead {
   notes?: string;
   resourceId?: string;
   resourceTitle?: string;
+  sourceArticleTitle?: string; // 线索溯源：该用户是在哪篇文章下留下的联系方式
   createdAt: string;
 }
 
@@ -714,6 +716,7 @@ export interface CreateLeadOptions {
   name?: string;          // 用户昵称
   source?: string;        // 线索来源（如「文章评论区」）
   notes?: string;         // 自动追加的评论摘要
+  sourceArticleTitle?: string; // 线索溯源：评论所属文章标题
   client?: SupabaseClient; // 可选：传入 service_role 客户端绕过 RLS
 }
 
@@ -730,23 +733,51 @@ export async function createLead(
   }
   try {
     // Upsert：以 email 为唯一键去重，存在则更新 name/notes/updated_at，不存在则插入
+    // 优先尝试带 source_article_title 列写入；若表缺少该列则降级重试（兼容旧表结构）
+    const baseRow: Record<string, any> = {
+      id: genId(),
+      email,
+      name: options?.name || null,
+      source: options?.source || null,
+      notes: options?.notes || null,
+      resource_id: resourceId || null,
+      resource_title: resourceTitle || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (options?.sourceArticleTitle) {
+      baseRow.source_article_title = options.sourceArticleTitle;
+    }
+
     const { error } = await client
       .from("leads")
-      .upsert(
-        [
-          {
-            id: genId(),
-            email,
-            name: options?.name || null,
-            source: options?.source || null,
-            notes: options?.notes || null,
-            resource_id: resourceId || null,
-            resource_title: resourceTitle || null,
-            updated_at: new Date().toISOString(),
-          },
-        ],
-        { onConflict: "email", ignoreDuplicates: false }
-      );
+      .upsert([baseRow], { onConflict: "email", ignoreDuplicates: false });
+
+    // 列缺失降级：移除 source_article_title 后重试
+    if (error && /source_article_title/i.test(error.message || "")) {
+      console.warn("[dataApi] createLead 缺少 source_article_title 列，降级重试");
+      const { error: retryErr } = await client
+        .from("leads")
+        .upsert(
+          [
+            {
+              id: genId(),
+              email,
+              name: options?.name || null,
+              source: options?.source || null,
+              notes: options?.notes || null,
+              resource_id: resourceId || null,
+              resource_title: resourceTitle || null,
+              updated_at: new Date().toISOString(),
+            },
+          ],
+          { onConflict: "email", ignoreDuplicates: false }
+        );
+      if (retryErr) {
+        console.warn("[dataApi] createLead upsert 降级失败:", retryErr.message);
+        return { success: false, error: retryErr.message };
+      }
+      return { success: true };
+    }
     if (error) {
       // RLS 阻止写入或缺少 email 唯一约束时，Supabase 返回 error
       console.warn("[dataApi] createLead upsert 失败:", error.message);
@@ -775,6 +806,7 @@ export async function fetchLeads(): Promise<Lead[]> {
       notes: row.notes || "",
       resourceId: row.resource_id || "",
       resourceTitle: row.resource_title || "",
+      sourceArticleTitle: row.source_article_title || "",
       createdAt: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
     })) as Lead[];
   } catch (err) {

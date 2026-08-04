@@ -277,6 +277,38 @@ export async function POST(req: Request) {
 
     if (error) throw error;
 
+    // 评论计数器递增：同步更新 insights 表的 comment_count（+1），确保卡片显示真实评论数
+    // 失败静默忽略（列不存在或 RPC 不存在时不影响评论提交）
+    try {
+      // 优先尝试 RPC 自增函数（原子操作）
+      const { error: rpcErr } = await supabase.rpc("increment_comment_count", { article_id_param: articleId });
+      if (rpcErr) {
+        // RPC 不存在 → 降级为直接 UPDATE（读取当前值 +1）
+        const { data: cur } = await supabase
+          .from("insights")
+          .select("comment_count")
+          .eq("id", articleId)
+          .single();
+        const nextCount = (cur?.comment_count ?? 0) + 1;
+        await supabase.from("insights").update({ comment_count: nextCount }).eq("id", articleId);
+      }
+    } catch (cntErr) {
+      console.warn("[comments POST] comment_count 递增失败（不影响评论）:", cntErr instanceof Error ? cntErr.message : cntErr);
+    }
+
+    // 查询文章标题（用于 Leads 线索溯源 source_article_title）
+    let articleTitle: string | null = null;
+    try {
+      const { data: insightRow } = await supabase
+        .from("insights")
+        .select("title")
+        .eq("id", articleId)
+        .single();
+      articleTitle = insightRow?.title || null;
+    } catch {
+      // 查询失败静默忽略
+    }
+
     // 商业线索静默打靶：若用户填写了合规邮箱，Upsert 到 leads 表（失败不影响评论主流程）
     if (safeEmail) {
       try {
@@ -284,6 +316,7 @@ export async function POST(req: Request) {
           name: safeNickname,
           source: "文章讨论区",
           notes: `评论：${rawContent.slice(0, 50)}`,
+          sourceArticleTitle: articleTitle || undefined,
           client: supabase,
         });
       } catch (leadErr) {

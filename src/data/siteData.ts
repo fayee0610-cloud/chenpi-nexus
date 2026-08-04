@@ -53,6 +53,7 @@ export interface InsightItem {
   author: string;
   views: string;
   likes: number;
+  commentCount?: number; // 真实评论数（从 insights.comment_count 读取）
   content: ContentBlock[];
 }
 

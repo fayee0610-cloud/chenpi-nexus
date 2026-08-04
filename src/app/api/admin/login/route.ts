@@ -34,7 +34,15 @@ export async function POST(req: Request) {
     }
 
     const token = generateToken();
-    return NextResponse.json({ success: true, token });
+    // 同时设置 cookie，使所有 /api/admin/* 路由均可通过 req.cookies 读取鉴权
+    const res = NextResponse.json({ success: true, token });
+    res.cookies.set("admin_token", token, {
+      httpOnly: false, // 允许客户端 JS 读取（与 localStorage 双写一致）
+      sameSite: "lax",
+      maxAge: 60 * 60 * 8, // 8 小时，与 token exp 一致
+      path: "/",
+    });
+    return res;
   } catch {
     return NextResponse.json(
       { error: "请求解析失败" },

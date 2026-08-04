@@ -42,7 +42,7 @@ export async function GET() {
       const res = await supabase
         .from("article_comments")
         .select(
-          "id,article_id,nickname,content,status,has_links,created_at,insights!article_comments_article_id_fkey(title)"
+          "id,article_id,nickname,email,content,status,has_links,created_at,insights!article_comments_article_id_fkey(title)"
         )
         .order("created_at", { ascending: false });
       data = res.data;
@@ -59,7 +59,7 @@ export async function GET() {
       );
       const fallback = await supabase
         .from("article_comments")
-        .select("id,article_id,nickname,content,status,has_links,created_at")
+        .select("id,article_id,nickname,email,content,status,has_links,created_at")
         .order("created_at", { ascending: false });
 
       if (fallback.error || !fallback.data) {
@@ -112,6 +112,7 @@ export async function GET() {
         article_id: r.article_id,
         article_title: joinedTitle || titleMap[String(r.article_id)] || null,
         nickname: r.nickname || "",
+        email: r.email || null,
         content: r.content || "",
         status: r.status || "pending_review",
         has_links: !!r.has_links,

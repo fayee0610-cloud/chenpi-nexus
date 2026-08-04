@@ -499,12 +499,18 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   <p className="text-xs leading-relaxed text-zinc-500 line-clamp-2">
                     {item.excerpt}
                   </p>
-                  {/* 点赞数（与弹窗同源：getLikeCount + likedMap 镜像，关闭弹窗后卡片同步最新） */}
-                  <div className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-500">
-                    <ThumbsUp className={`h-3 w-3 ${likedMap[String(item.id)] ? "fill-purple-400 text-purple-400" : ""}`} />
-                    <span className={likedMap[String(item.id)] ? "font-semibold text-purple-300" : ""}>
-                      {getLikeCount(item)}
-                    </span>
+                  {/* 点赞数 + 评论数（与弹窗同源：getLikeCount + likedMap 镜像，关闭弹窗后卡片同步最新） */}
+                  <div className="mt-3 flex items-center gap-3 text-[11px] text-zinc-500">
+                    <div className="flex items-center gap-1.5">
+                      <ThumbsUp className={`h-3 w-3 ${likedMap[String(item.id)] ? "fill-purple-400 text-purple-400" : ""}`} />
+                      <span className={likedMap[String(item.id)] ? "font-semibold text-purple-300" : ""}>
+                        {getLikeCount(item)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MessageSquare className="h-3 w-3" />
+                      <span>{item.commentCount || 0} 评论</span>
+                    </div>
                   </div>
                 </div>
               </div>

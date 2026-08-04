@@ -68,7 +68,7 @@ import type { SiteConfig, Lead } from "@/lib/dataApi";
 import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory, HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL as HARDCORE_TAGS_POOL_CONST, FLAT_HARDCORE_TAGS as FLAT_HARDCORE_TAGS_CONST } from "@/data/siteData";
 
-type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "leads" | "hub" | "config";
+type AdminTab = "portfolio" | "insights" | "comments" | "sanctuary" | "resources" | "leads" | "hub" | "config";
 
 // 列表项扩展 isPublished 字段（DB 返回，但 fetchProjects/fetchInsights 未映射，admin 页面自行管理）
 type AdminProject = PortfolioProject & { isPublished: boolean };
@@ -163,6 +163,7 @@ export default function AdminPage() {
           {[
             { key: "portfolio" as const, label: "作品案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
             { key: "insights" as const, label: "灵感文章", icon: <Sparkles className="h-3.5 w-3.5" /> },
+            { key: "comments" as const, label: "文章评论", icon: <MessageCircle className="h-3.5 w-3.5" /> },
             { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
             { key: "resources" as const, label: "资源包", icon: <Package className="h-3.5 w-3.5" /> },
             { key: "leads" as const, label: "线索", icon: <Mail className="h-3.5 w-3.5" /> },
@@ -208,6 +209,16 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <InsightsEditor />
+            </motion.div>
+          )}
+          {activeTab === "comments" && (
+            <motion.div
+              key="comments"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
               <CommentManagement />
             </motion.div>
           )}
@@ -1224,9 +1235,14 @@ function InsightsEditor() {
     setAiFormatting(true);
     setStatus(null);
     try {
+      // 显式携带 admin_token（双通道：cookie 自动携带 + Authorization header 兜底）
+      const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
       const res = await fetch("/api/admin/ai-format", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
+        },
         body: JSON.stringify({ content: form.contentText, title: form.title }),
       });
       const json = await res.json();
@@ -1659,6 +1675,7 @@ interface AdminComment {
   article_id: string;
   article_title?: string | null;
   nickname: string;
+  email?: string | null;
   content: string;
   status: CommentStatus;
   has_links: boolean;
@@ -1678,13 +1695,14 @@ function CommentManagement() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const loadComments = async () => {
+  const loadComments = async (showToast = false) => {
     setLoading(true);
     try {
       const res = await fetch("/api/admin/comments", { method: "GET" });
       const data = await res.json();
       if (res.ok && data.success) {
         setComments(Array.isArray(data.comments) ? data.comments : []);
+        if (showToast) setStatusMsg({ type: "success", msg: "已更新至最新数据" });
       } else {
         setComments([]);
         setStatusMsg({ type: "error", msg: data.error || "评论加载失败" });
@@ -1768,7 +1786,7 @@ function CommentManagement() {
           </div>
         </div>
         <button
-          onClick={loadComments}
+          onClick={() => loadComments(true)}
           disabled={loading}
           className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
         >
@@ -1804,6 +1822,7 @@ function CommentManagement() {
             {/* 表头（桌面端） */}
             <div className="hidden gap-4 px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-zinc-500 md:flex">
               <div className="w-24">昵称</div>
+              <div className="w-36">邮箱</div>
               <div className="flex-1">内容</div>
               <div className="w-40">所属文章</div>
               <div className="w-20">状态</div>
@@ -1818,6 +1837,13 @@ function CommentManagement() {
                   <div className="w-full md:w-24">
                     <span className="text-[10px] text-zinc-600 md:hidden">昵称</span>
                     <span className="truncate text-sm font-medium text-zinc-100">{c.nickname || "匿名"}</span>
+                  </div>
+                  {/* 邮箱 */}
+                  <div className="w-full md:w-36">
+                    <span className="text-[10px] text-zinc-600 md:hidden">邮箱</span>
+                    <span className="truncate text-xs text-zinc-400" title={c.email || ""}>
+                      {c.email || "—"}
+                    </span>
                   </div>
                   {/* 内容 */}
                   <div className="flex-1">
@@ -2353,14 +2379,17 @@ function SanctuaryManager() {
   const [posts, setPosts] = useState<SanctuaryPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const loadPosts = async () => {
+  const loadPosts = async (showToast = false) => {
     setLoading(true);
     try {
       const data = await fetchSanctuaryPosts();
       setPosts(data);
-    } catch (err) {
+      if (showToast) setStatusMsg({ type: "success", msg: "已更新至最新数据" });
+    } catch (err: any) {
       console.warn("[admin] loadPosts 失败:", err);
+      if (showToast) setStatusMsg({ type: "error", msg: err?.message || "加载失败" });
     } finally {
       setLoading(false);
     }
@@ -2376,8 +2405,9 @@ function SanctuaryManager() {
     try {
       await deleteSanctuaryPost(id);
       setPosts((prev) => prev.filter((p) => p.id !== id));
+      setStatusMsg({ type: "success", msg: "留言已删除" });
     } catch (err: any) {
-      alert("删除失败：" + (err.message || ""));
+      setStatusMsg({ type: "error", msg: "删除失败：" + (err.message || "") });
     } finally {
       setDeletingId(null);
     }
@@ -2391,13 +2421,25 @@ function SanctuaryManager() {
           <p className="mt-1 text-sm text-zinc-500">管理访客在「庇护所」发布的脑洞与吐槽卡片</p>
         </div>
         <button
-          onClick={loadPosts}
+          onClick={() => loadPosts(true)}
           className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
         >
           <Eye className="h-3.5 w-3.5" />
           刷新
         </button>
       </div>
+
+      {/* Toast 提示 */}
+      {statusMsg && (
+        <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+          statusMsg.type === "success"
+            ? "border border-green-500/30 bg-green-500/10 text-green-400"
+            : "border border-red-500/30 bg-red-500/10 text-red-400"
+        }`}>
+          {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          {statusMsg.msg}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
         {loading ? (
@@ -2458,14 +2500,17 @@ function LeadsManager() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const loadLeads = async () => {
+  const loadLeads = async (showToast = false) => {
     setLoading(true);
     try {
       const data = await fetchLeads();
       setLeads(data);
-    } catch (err) {
+      if (showToast) setStatusMsg({ type: "success", msg: "已更新至最新数据" });
+    } catch (err: any) {
       console.warn("[admin] loadLeads 失败:", err);
+      setStatusMsg({ type: "error", msg: err?.message || "线索加载失败" });
     } finally {
       setLoading(false);
     }
@@ -2481,8 +2526,9 @@ function LeadsManager() {
     try {
       await deleteLead(id);
       setLeads((prev) => prev.filter((l) => l.id !== id));
-    } catch {
-      alert("删除失败");
+      setStatusMsg({ type: "success", msg: "线索已删除" });
+    } catch (err: any) {
+      setStatusMsg({ type: "error", msg: err?.message || "删除失败" });
     } finally {
       setDeletingId(null);
     }
@@ -2491,8 +2537,11 @@ function LeadsManager() {
   const handleExportCSV = () => {
     if (leads.length === 0) return;
     const csv = [
-      "邮箱,资源,提交时间",
-      ...leads.map((l) => `${l.email},${l.resourceTitle || ""},${l.createdAt}`),
+      "邮箱,昵称,来源,下载资源,文章来源,提交时间",
+      ...leads.map((l) => {
+        const esc = (v: string) => `"${(v || "").replace(/"/g, '""')}"`;
+        return [esc(l.email), esc(l.name || ""), esc(l.source || ""), esc(l.resourceTitle || ""), esc(l.sourceArticleTitle || ""), esc(l.createdAt)].join(",");
+      }),
     ].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -2508,7 +2557,7 @@ function LeadsManager() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-zinc-50">线索管理</h2>
-          <p className="mt-1 text-sm text-zinc-500">管理访客下载资源时提交的邮箱线索</p>
+          <p className="mt-1 text-sm text-zinc-500">管理访客下载资源 / 评论区沉淀的邮箱线索</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -2520,7 +2569,7 @@ function LeadsManager() {
             导出 CSV
           </button>
           <button
-            onClick={loadLeads}
+            onClick={() => loadLeads(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
           >
             <Eye className="h-3.5 w-3.5" />
@@ -2528,6 +2577,18 @@ function LeadsManager() {
           </button>
         </div>
       </div>
+
+      {/* Toast 提示 */}
+      {statusMsg && (
+        <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+          statusMsg.type === "success"
+            ? "border border-green-500/30 bg-green-500/10 text-green-400"
+            : "border border-red-500/30 bg-red-500/10 text-red-400"
+        }`}>
+          {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          {statusMsg.msg}
+        </div>
+      )}
 
       {/* 顶部统计 */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
@@ -2552,14 +2613,15 @@ function LeadsManager() {
           <div className="py-20 text-center">
             <Mail className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
             <p className="text-sm text-zinc-500">暂无线索数据</p>
-            <p className="mt-1 text-xs text-zinc-600">访客下载资源时提交的邮箱将显示在这里</p>
+            <p className="mt-1 text-xs text-zinc-600">访客下载资源或评论时提交的邮箱将显示在这里</p>
           </div>
         ) : (
           <div className="divide-y divide-zinc-800">
             {/* 表头 */}
             <div className="hidden gap-4 px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-zinc-500 md:flex">
               <div className="flex-1">邮箱</div>
-              <div className="flex-1">下载资源</div>
+              <div className="w-32">昵称</div>
+              <div className="flex-1">下载资源 / 文章来源</div>
               <div className="w-40">提交时间</div>
               <div className="w-10" />
             </div>
@@ -2568,10 +2630,33 @@ function LeadsManager() {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="text-[10px] text-zinc-600 md:hidden">邮箱</span>
                   <span className="truncate text-sm text-zinc-100">{lead.email}</span>
+                  {lead.source && (
+                    <span className="mt-0.5 inline-flex w-fit items-center rounded bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                      {lead.source}
+                    </span>
+                  )}
                 </div>
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-[10px] text-zinc-600 md:hidden">下载资源</span>
-                  <span className="truncate text-sm text-zinc-300">{lead.resourceTitle || "—"}</span>
+                <div className="flex w-32 flex-col">
+                  <span className="text-[10px] text-zinc-600 md:hidden">昵称</span>
+                  <span className="truncate text-sm text-zinc-300">{lead.name || "—"}</span>
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="text-[10px] text-zinc-600 md:hidden">下载资源 / 文章来源</span>
+                  {lead.resourceTitle ? (
+                    <span className="truncate text-sm text-zinc-300">
+                      <span className="text-zinc-600">资源：</span>
+                      {lead.resourceTitle}
+                    </span>
+                  ) : null}
+                  {lead.sourceArticleTitle ? (
+                    <span className="truncate text-sm text-purple-300/80">
+                      <span className="text-zinc-600">文章：</span>
+                      {lead.sourceArticleTitle}
+                    </span>
+                  ) : null}
+                  {!lead.resourceTitle && !lead.sourceArticleTitle ? (
+                    <span className="text-sm text-zinc-600">—</span>
+                  ) : null}
                 </div>
                 <div className="flex w-40 flex-col">
                   <span className="text-[10px] text-zinc-600 md:hidden">提交时间</span>
