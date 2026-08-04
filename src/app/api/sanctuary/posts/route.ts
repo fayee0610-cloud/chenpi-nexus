@@ -2,6 +2,7 @@
 // 庇护所帖子 API
 //
 // GET    /api/sanctuary/posts                → 获取全部帖子（Admin 用途）
+// POST   /api/sanctuary/posts                → 前端访客提交脑洞留言（服务端代理写入）
 // DELETE /api/sanctuary/posts?id=xxx         → 用户自主删除（需 deleteToken 校验）或 Admin 删除
 //
 // - 走服务端：使用 SUPABASE_SERVICE_ROLE_KEY 绕过 RLS
@@ -12,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -62,6 +64,84 @@ export async function GET() {
     console.warn("[sanctuary/posts GET] failed:", err?.message || err);
     return NextResponse.json(
       { success: false, error: err?.message || "读取失败" },
+      { status: 500 }
+    );
+  }
+}
+
+// ============================================================
+// POST：前端访客提交脑洞留言（服务端代理，绕过浏览器直连的 CORS/RLS/fetch 劫持）
+// 与后台 /api/admin/sanctuary 读取同表同字段，确保数据链路互通
+// ============================================================
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { content, tag, author, avatar } = body || {};
+
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return NextResponse.json(
+        { success: false, error: "内容不能为空" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getServiceClient();
+    if (!supabase) {
+      return NextResponse.json(
+        { success: false, error: "服务未配置" },
+        { status: 500 }
+      );
+    }
+
+    // 生成随机 ID + 删除凭证（与前端 createSanctuaryPost 逻辑一致）
+    const newId = randomUUID();
+    const deleteToken = randomUUID().replace(/-/g, "").slice(0, 16);
+
+    const { data, error } = await supabase
+      .from("sanctuary_posts")
+      .insert([
+        {
+          id: newId,
+          content: content.trim(),
+          tag: tag || null,
+          author: author || "赛博访客",
+          avatar: avatar || null,
+          likes: 0,
+          is_published: true,
+          delete_token: deleteToken,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) {
+      return NextResponse.json(
+        { success: false, error: "写入失败" },
+        { status: 500 }
+      );
+    }
+
+    const row = data as any;
+    return NextResponse.json({
+      success: true,
+      post: {
+        id: String(row.id),
+        content: row.content || "",
+        tag: row.tag || "",
+        author: row.author || "赛博访客",
+        avatar: row.avatar || null,
+        likes: row.likes || 0,
+        isPublished: row.is_published ?? true,
+        createdAt: row.created_at,
+        time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "刚刚",
+      },
+      deleteToken,
+    });
+  } catch (err: any) {
+    console.error("[sanctuary/posts POST] failed:", err?.message || err);
+    return NextResponse.json(
+      { success: false, error: err?.message || "发布失败" },
       { status: 500 }
     );
   }

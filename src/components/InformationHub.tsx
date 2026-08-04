@@ -168,10 +168,6 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     <section id="hub" className="relative mx-auto max-w-7xl px-6 py-20">
       {/* 标题 */}
       <div className="mb-10 text-center">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-xs font-medium text-zinc-400">
-          <Radar className="h-3.5 w-3.5" />
-          Information Hub
-        </div>
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
           赛博情报站
         </h2>

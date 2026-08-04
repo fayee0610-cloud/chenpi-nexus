@@ -280,47 +280,40 @@ export async function deleteSanctuaryPost(id: string | number) {
   if (error) throw error;
 }
 
-// ---------- 写入：创建庇护所帖子 ----------
+// ---------- 写入：创建庇护所帖子（走服务端代理，避免浏览器直连 CORS/RLS/fetch 劫持） ----------
 export async function createSanctuaryPost(post: {
   content: string;
   tag?: string;
   author?: string;
   avatar?: string;
 }): Promise<(SanctuaryPost & { deleteToken?: string }) | null> {
-  if (!supabase) throw new Error("Supabase not configured");
-  const deleteToken = genDeleteToken();
-  const { data, error } = await supabase
-    .from("sanctuary_posts")
-    .insert([
-      {
-        id: genId(),
-        content: post.content,
-        tag: post.tag || null,
-        author: post.author || "赛博访客",
-        avatar: post.avatar || null,
-        likes: 0,
-        delete_token: deleteToken,
-      },
-    ] as any)
-    .select()
-    .single();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  const row = data as any;
+  const res = await fetch("/api/sanctuary/posts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content: post.content,
+      tag: post.tag,
+      author: post.author,
+      avatar: post.avatar,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success || !data.post) {
+    throw new Error(data.error || "发布失败");
+  }
+  const row = data.post;
   return {
     id: String(row.id),
     content: row.content || "",
     tag: row.tag || "",
     tagColor: "text-zinc-400 bg-zinc-800",
     author: row.author || "赛博访客",
-    time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "刚刚",
+    time: row.time || "刚刚",
     likes: row.likes || 0,
     reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
     comments: [],
     isNew: true,
-    deleteToken,
+    deleteToken: data.deleteToken,
   } as SanctuaryPost & { deleteToken?: string };
 }
 
