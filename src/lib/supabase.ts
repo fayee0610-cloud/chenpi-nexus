@@ -416,10 +416,37 @@ function isValidSupabaseUrl(url: string): boolean {
 // 避免 ReturnType<typeof createClient> 在新版 supabase-js 中将表行类型推断为 never
 let supabaseClient: SupabaseClient<any, "public", any> | null = null;
 
+// 自定义 fetch：容错 Chrome 插件重写全局 fetch 导致的 TypeError: Failed to fetch
+// 策略：缓存原生 fetch 引用，若被插件污染则回退；网络层异常抛出结构化 Error 供调用方降级
+function createSafeFetch(): typeof fetch {
+  const nativeFetch = globalThis.fetch?.bind(globalThis);
+  if (typeof nativeFetch !== "function") {
+    console.warn("[supabase] 全局 fetch 不可用，Supabase 请求将直接降级返回空数组");
+    return async () => {
+      throw new TypeError("fetch is not available in this environment");
+    };
+  }
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      return await nativeFetch(input as any, init as any);
+    } catch (err: any) {
+      // Chrome 插件重写 fetch 后可能抛出非标准 TypeError，统一包装为可识别的网络错误
+      const msg = err?.message || String(err);
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("Network request failed")) {
+        console.warn("[supabase] fetch 被拦截或网络崩塌（可能由浏览器插件引起），调用方将降级返回空数组");
+      }
+      throw err;
+    }
+  };
+}
+
 if (supabaseUrl && supabaseAnonKey) {
   if (isValidSupabaseUrl(supabaseUrl)) {
     try {
-      supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+      supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { fetch: createSafeFetch() as any },
+      });
     } catch (err) {
       console.warn("[supabase] 客户端初始化失败，数据将返回空数组:", err);
       supabaseClient = null;
