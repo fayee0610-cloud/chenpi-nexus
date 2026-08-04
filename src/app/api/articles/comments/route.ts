@@ -94,7 +94,7 @@ export async function GET(req: Request) {
       .from("article_comments")
       .select("*")
       .eq("article_id", articleId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
 
     // 前台只读 approved；Admin 读取全部
     if (!fetchAll) {
@@ -111,13 +111,9 @@ export async function GET(req: Request) {
         id: r.id,
         articleId: r.article_id,
         nickname: r.nickname,
-        email: r.email || null,
         content: r.content,
         status: r.status,
-        hasLinks: !!r.has_links,
-        parentId: r.parent_id || null,
         createdAt: r.created_at,
-        updatedAt: r.updated_at,
       })),
     });
   } catch (err: any) {
@@ -136,14 +132,13 @@ export async function POST(req: Request) {
   try {
     const payload = await req.json();
     const articleId = String(payload.articleId || payload.article_id || "").trim();
-    const nickname = String(payload.nickname || "").trim();
+    // 昵称默认「匿名战术家」
+    const nickname = String(payload.nickname || "").trim() || "匿名战术家";
     const rawContent = String(payload.content || "").trim();
-    const emailRaw = payload.email ? String(payload.email).trim() : "";
-    const parentId = payload.parentId || payload.parent_id || null;
 
-    if (!articleId || !nickname || !rawContent) {
+    if (!articleId || !rawContent) {
       return NextResponse.json(
-        { success: false, error: "articleId / nickname / content 必填" },
+        { success: false, error: "articleId / content 必填" },
         { status: 400 }
       );
     }
@@ -159,13 +154,10 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const email =
-      emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : "";
 
     // 安全 1：XSS 转义
     const safeNickname = escapeHtml(nickname).slice(0, 40);
     const safeContent = escapeHtml(rawContent).slice(0, 2000);
-    const safeEmail = email ? escapeHtml(email).slice(0, 200) : "";
 
     // 安全 2：链接检测 → 含外链自动进入待审核
     const hasLinks = LINK_RE.test(rawContent) || LINK_RE.test(nickname);
@@ -217,17 +209,15 @@ export async function POST(req: Request) {
     // 生成删除凭证：前端 localStorage 保存，用户可凭此删除自己的评论
     const deleteToken = genDeleteToken();
 
-    // 构建插入数据（不传 id，让 Supabase 用 gen_random_uuid() 自动生成 UUID）
+    // 构建插入数据（单层评论流：仅 article_id / nickname / content，不传 parent_id）
     const baseInsert: Record<string, any> = {
       article_id: articleId,
       nickname: safeNickname,
-      email: safeEmail || null,
       content: safeContent,
       ip_hash: ipHash,
       user_agent: ua,
       has_links: hasLinks,
       status,
-      parent_id: parentId ? String(parentId) : null,
     };
 
     // 优先尝试带 delete_token 写入；若表缺少该列则降级重试（兼容旧表结构）
@@ -262,7 +252,7 @@ export async function POST(req: Request) {
       success: true,
       status,
       message: status === "approved" ? "评论发布成功" : "评论已提交，审核后展示",
-      deleteToken: tokenSaved ? deleteToken : null, // 列缺失时返回 null，前端不启用删除按钮
+      deleteToken: tokenSaved ? deleteToken : null,
       tokenSaved,
       comment: row
         ? {
@@ -271,8 +261,6 @@ export async function POST(req: Request) {
             nickname: row.nickname,
             content: row.content,
             status: row.status,
-            hasLinks: !!row.has_links,
-            parentId: row.parent_id || null,
             createdAt: row.created_at,
           }
         : null,

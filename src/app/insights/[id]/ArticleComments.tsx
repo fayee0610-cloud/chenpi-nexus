@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   MessageCircle,
   Send,
   Loader2,
   UserCircle2,
-  Mail,
   ChevronDown,
   ChevronUp,
   Trash2,
@@ -20,10 +19,7 @@ export interface ArticleComment {
   nickname: string;
   content: string;
   status: "approved" | "pending_review" | "rejected" | "hidden";
-  hasLinks: boolean;
-  parentId: string | null;
   createdAt: string;
-  updatedAt?: string;
 }
 
 interface Props {
@@ -49,9 +45,7 @@ function saveDeleteToken(commentId: string, token: string) {
     const existing = getDeleteTokens();
     existing[commentId] = token;
     localStorage.setItem(DELETE_TOKENS_KEY, JSON.stringify(existing));
-  } catch {
-    // localStorage 可能被禁用
-  }
+  } catch {}
 }
 
 function removeDeleteToken(commentId: string) {
@@ -60,9 +54,7 @@ function removeDeleteToken(commentId: string) {
     const existing = getDeleteTokens();
     delete existing[commentId];
     localStorage.setItem(DELETE_TOKENS_KEY, JSON.stringify(existing));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 // 显示层 escape 安全网
@@ -103,10 +95,7 @@ export default function ArticleComments({ articleId }: Props) {
   const [comments, setComments] = useState<ArticleComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [nickname, setNickname] = useState("");
-  const [email, setEmail] = useState("");
   const [content, setContent] = useState("");
-  const [replyToId, setReplyToId] = useState<string | null>(null);
-  const [replyToNick, setReplyToNick] = useState<string | null>(null);
   const [postState, setPostState] = useState<PostState>({ type: "idle" });
   const [sectionOpen, setSectionOpen] = useState(true);
   const [deleteTokens, setDeleteTokens] = useState<Record<string, string>>({});
@@ -171,39 +160,6 @@ export default function ArticleComments({ articleId }: Props) {
     load();
   }, [articleId]);
 
-  // 层级分组
-  const displayList = useMemo(() => {
-    const byParent = new Map<string | null, ArticleComment[]>();
-    comments.forEach((c) => {
-      const key = c.parentId ?? null;
-      const arr = byParent.get(key) ?? [];
-      arr.push(c);
-      byParent.set(key, arr);
-    });
-    const rootList = (byParent.get(null) ?? []).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-    const out: { comment: ArticleComment; depth: number }[] = [];
-    const walk = (list: ArticleComment[], depth: number) => {
-      list.forEach((c) => {
-        out.push({ comment: c, depth });
-        const children = (byParent.get(c.id) ?? []).sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-        walk(children, depth + 1);
-      });
-    };
-    walk(rootList, 0);
-    return out;
-  }, [comments]);
-
-  const approvedCount = useMemo(() => comments.length, [comments]);
-
-  const cancelReply = () => {
-    setReplyToId(null);
-    setReplyToNick(null);
-  };
-
   const canSubmit =
     nickname.trim().length > 0 &&
     content.trim().length > 0 &&
@@ -215,16 +171,38 @@ export default function ArticleComments({ articleId }: Props) {
     if (postState.type === "loading") return;
     if (cooldownLeft > 0) return; // 频控中
     setPostState({ type: "loading" });
+
+    // 乐观插入：立即把新评论插入列表顶部（临时 id，DB 返回后替换）
+    const tempId = `temp_${Date.now()}`;
+    const optimisticComment: ArticleComment = {
+      id: tempId,
+      articleId,
+      nickname: nickname.trim().slice(0, 40) || "匿名战术家",
+      content: content.trim().slice(0, 2000),
+      status: "approved",
+      createdAt: new Date().toISOString(),
+    };
+    setComments((prev) => [optimisticComment, ...prev]);
+
+    // 立即清空输入框，体验毫无卡顿
+    const submittedNickname = nickname.trim().slice(0, 40) || "匿名战术家";
+    const submittedContent = content.trim().slice(0, 2000);
+    setContent("");
+
+    // 开启 15 秒倒计时 + 存入 localStorage 防刷新绕过
+    setCooldownLeft(15);
+    try {
+      localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
+    } catch {}
+
     try {
       const res = await fetch("/api/articles/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           articleId,
-          nickname: nickname.trim().slice(0, 40),
-          email: email.trim().slice(0, 200),
-          content: content.trim().slice(0, 2000),
-          parentId: replyToId,
+          nickname: submittedNickname,
+          content: submittedContent,
         }),
       });
       const json = await res.json();
@@ -239,20 +217,30 @@ export default function ArticleComments({ articleId }: Props) {
           saveDeleteToken(json.comment.id, json.deleteToken);
           setDeleteTokens(getDeleteTokens());
         }
-        // 清空表单：textarea + 回复目标 + 字数统计
-        setContent("");
-        setReplyToId(null);
-        setReplyToNick(null);
-        // 开启 15 秒倒计时 + 存入 localStorage 防刷新绕过
-        setCooldownLeft(15);
-        try {
-          localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
-        } catch {}
-        if (json.status === "approved") {
-          await load();
+        // 用 DB 返回的真实评论替换临时乐观评论
+        if (json.comment?.id) {
+          const realComment: ArticleComment = {
+            id: json.comment.id,
+            articleId,
+            nickname: submittedNickname,
+            content: submittedContent,
+            status: json.status || "approved",
+            createdAt: json.comment.createdAt || new Date().toISOString(),
+          };
+          setComments((prev) =>
+            prev.map((c) => (c.id === tempId ? realComment : c))
+          );
+        } else {
+          // 无返回评论对象时移除临时项，重新拉取
+          setComments((prev) => prev.filter((c) => c.id !== tempId));
+          if (json.status === "approved") {
+            await load();
+          }
         }
         setTimeout(() => setPostState({ type: "idle" }), 3000);
       } else {
+        // 提交失败：移除乐观评论
+        setComments((prev) => prev.filter((c) => c.id !== tempId));
         setPostState({
           type: "error",
           message: json?.error || "提交失败",
@@ -260,6 +248,8 @@ export default function ArticleComments({ articleId }: Props) {
         });
       }
     } catch (err: any) {
+      // 网络错误：移除乐观评论
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
       setPostState({
         type: "error",
         message: err?.message || "提交失败，请稍后再试",
@@ -283,7 +273,7 @@ export default function ArticleComments({ articleId }: Props) {
         removeDeleteToken(commentId);
         setDeleteTokens(getDeleteTokens());
         setConfirmDeleteId(null);
-        await load();
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
       } else {
         alert(json?.error || "删除失败");
       }
@@ -303,7 +293,7 @@ export default function ArticleComments({ articleId }: Props) {
             读者战术讨论区
           </h2>
           <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400">
-            {approvedCount} 条
+            {comments.length} 条
           </span>
         </div>
         <button
@@ -327,61 +317,27 @@ export default function ArticleComments({ articleId }: Props) {
 
       {sectionOpen && (
         <div className="space-y-6">
-          {/* 评论发布表单 */}
+          {/* 评论发布表单（极简：仅昵称 + 内容） */}
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-            {replyToId && (
-              <div className="mb-3 flex items-center justify-between rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs text-purple-200">
-                <span>
-                  回复 <span className="font-medium">@{replyToNick || "评论"}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={cancelReply}
-                  className="text-purple-300 hover:text-purple-100"
-                >
-                  取消
-                </button>
-              </div>
-            )}
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-zinc-400">
-                  <UserCircle2 className="h-3.5 w-3.5" />
-                  昵称 <span className="text-red-400">*</span>
-                </span>
-                <input
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="你在评论区的代号（≤40字）"
-                  maxLength={40}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500/50"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-zinc-400">
-                  <Mail className="h-3.5 w-3.5" />
-                  邮箱（选填）
-                </span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="方便后续回复联系（可选，不会公开）"
-                  maxLength={200}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500/50"
-                />
-              </label>
-            </div>
+            <label className="block">
+              <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-zinc-400">
+                <UserCircle2 className="h-3.5 w-3.5" />
+                昵称 <span className="text-red-400">*</span>
+              </span>
+              <input
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="你在评论区的代号（≤40字，留空则显示「匿名战术家」）"
+                maxLength={40}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500/50"
+              />
+            </label>
             <div className="mt-3">
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={4}
-                placeholder={
-                  replyToId
-                    ? "写下你的战术回应…"
-                    : "留下你对这篇战术稿的思考、质疑或补充案例…"
-                }
+                placeholder="留下你对这篇战术稿的思考、质疑或补充案例…"
                 maxLength={2000}
                 className="w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm leading-relaxed text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500/50"
               />
@@ -391,7 +347,7 @@ export default function ArticleComments({ articleId }: Props) {
               </div>
             </div>
 
-            {/* 状态提示（移除生硬红色报错框，改用柔和 zinc/amber 色调） */}
+            {/* 状态提示（柔和 zinc/amber 色调，无生硬红色报错框） */}
             <div className="mt-3 min-h-[28px]">
               {postState.type === "success" ? (
                 <div
@@ -427,38 +383,36 @@ export default function ArticleComments({ articleId }: Props) {
                 ) : cooldownLeft > 0 ? (
                   <>
                     <Send className="h-4 w-4" />
-                    {replyToId ? `发送回复 (${cooldownLeft}s)` : `发布评论 (${cooldownLeft}s)`}
+                    {`发送回复 (${cooldownLeft}s)`}
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
-                    {replyToId ? "发送回复" : "发布评论"}
+                    发送回复
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* 评论列表 */}
+          {/* 单层评论流（按 created_at DESC 降序平铺） */}
           <div>
             {loading ? (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
               </div>
-            ) : displayList.length === 0 ? (
+            ) : comments.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/20 py-10 text-center text-sm text-zinc-500">
                 暂时还没有战术讨论，你可以来做第一个敲下战书的人。
               </div>
             ) : (
               <ul className="space-y-3">
-                {displayList.map(({ comment, depth }) => {
+                {comments.map((comment) => {
                   const canDelete = !!deleteTokens[comment.id];
                   return (
                     <li
                       key={comment.id}
-                      className={`rounded-2xl border border-zinc-800 bg-zinc-900/20 p-4 transition-colors hover:border-zinc-700 ${
-                        depth === 0 ? "" : "ml-4 sm:ml-8 md:ml-12"
-                      }`}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-4 transition-colors hover:border-zinc-700"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
@@ -471,34 +425,19 @@ export default function ArticleComments({ articleId }: Props) {
                             </div>
                             <div className="text-[11px] text-zinc-500">
                               {formatTime(comment.createdAt)}
-                              {comment.parentId && (
-                                <span className="ml-2 text-purple-400/80">回复</span>
-                              )}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {canDelete && (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(comment.id)}
-                              title="删除我的评论"
-                              className="flex-shrink-0 rounded-lg border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition-colors hover:border-red-500/40 hover:text-red-400"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
+                        {canDelete && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setReplyToId(comment.id);
-                              setReplyToNick(comment.nickname);
-                            }}
-                            className="flex-shrink-0 rounded-lg border border-zinc-800 px-2 py-1 text-[11px] text-zinc-400 transition-colors hover:border-purple-500/40 hover:text-purple-300"
+                            onClick={() => setConfirmDeleteId(comment.id)}
+                            title="删除我的评论"
+                            className="flex-shrink-0 rounded-lg border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition-colors hover:border-red-500/40 hover:text-red-400"
                           >
-                            回复
+                            <Trash2 className="h-3 w-3" />
                           </button>
-                        </div>
+                        )}
                       </div>
                       <div className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-zinc-300">
                         {safeText(comment.content)}
