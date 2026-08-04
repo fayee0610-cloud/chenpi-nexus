@@ -8,7 +8,7 @@
  * ============================================================
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock,
@@ -37,6 +37,7 @@ import {
   ImagePlus,
   Link2,
   Star,
+  Wand2,
 } from "lucide-react";
 import {
   createInsight,
@@ -1059,14 +1060,47 @@ function PortfolioEditor() {
 }
 
 // ========== Tab 2: 灵感文章编辑器 ==========
+// 东八区当前日期 YYYY.MM.DD（如 2026.08.04）
+function getUTC8DateStr(): string {
+  const now = new Date();
+  const utc8Ms = now.getTime() + now.getTimezoneOffset() * 60_000 + 8 * 3600_000;
+  const d = new Date(utc8Ms);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}.${m}.${day}`;
+}
+
+// 精准阅读时长算法：剥离 Markdown 图片/链接/代码块/标点后，按中文 400 字/min 计算
+function calcReadTime(contentText: string): string {
+  if (!contentText || !contentText.trim()) return "";
+  let text = contentText;
+  // 剥离代码块 ```...```
+  text = text.replace(/```[\s\S]*?```/g, "");
+  // 剥离图片 ![alt](url)
+  text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, "");
+  // 剥离链接 [text](url)（保留 text）
+  text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+  // 剥离 Markdown 标记符号
+  text = text.replace(/[#>*_`~\-]/g, "");
+  // 剥离中英文标点
+  text = text.replace(/[\u3000-\u303F\uFF00-\uFFEF，。！？；：、""''（）【】《》—…·.,!?;:'"()\[\]{}]/g, "");
+  // 剥离空白
+  text = text.replace(/\s+/g, "");
+  const cleanLen = text.length;
+  if (cleanLen === 0) return "";
+  const minutes = Math.max(1, Math.ceil(cleanLen / 400));
+  return `${minutes} min`;
+}
+
 function InsightsEditor() {
   const [form, setForm] = useState({
     title: "",
     category: "✦ 深度长文",
     readTime: "",
     audioUrl: "",
-    date: "",
-    author: "",
+    date: getUTC8DateStr(), // 默认东八区当前日期
+    author: "陈皮",         // 默认锁定作者
     summary: "",
     contentText: "",
     tags: [] as string[],
@@ -1076,6 +1110,9 @@ function InsightsEditor() {
   const [insightList, setInsightList] = useState<AdminInsight[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
+
+  // AI 一键润色状态
+  const [aiFormatting, setAiFormatting] = useState(false);
 
   // 标签编辑（单篇文章）
   const [editingInsightId, setEditingInsightId] = useState<string | number | null>(null);
@@ -1168,8 +1205,52 @@ function InsightsEditor() {
   };
 
   const updateField = (field: string, value: any) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      // 正文变动时实时重算阅读时长（精准算法）
+      if (field === "contentText") {
+        next.readTime = calcReadTime(value);
+      }
+      return next;
+    });
   };
+
+  // 【✨ AI 一键润色排版 & GEO 注入】复用 DeepSeek API
+  const handleAiFormat = useCallback(async () => {
+    if (!form.contentText.trim()) {
+      setStatus({ type: "error", msg: "请先填写正文内容，再点击 AI 润色" });
+      return;
+    }
+    setAiFormatting(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/admin/ai-format", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: form.contentText, title: form.title }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "AI 润色失败");
+      }
+      // 用 AI 返回结果填充表单
+      setForm((prev) => ({
+        ...prev,
+        contentText: json.content || prev.contentText,
+        summary: json.summary || prev.summary,
+        // 合并 AI 提炼的实体标签（去重，仅追加未选中的）
+        tags: Array.isArray(json.tags) && json.tags.length > 0
+          ? Array.from(new Set([...prev.tags, ...json.tags.filter((t: string) => !prev.tags.includes(t))]))
+          : prev.tags,
+        readTime: calcReadTime(json.content || form.contentText),
+      }));
+      setStatus({ type: "success", msg: "✨ AI 润色 & GEO 注入完成，已自动填入正文 / 摘要 / FAQ / 标签" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err?.message || "AI 润色失败，请稍后再试" });
+    } finally {
+      setAiFormatting(false);
+    }
+  }, [form.contentText, form.title, form.tags]);
 
   const handleSubmit = async () => {
     if (!form.title.trim()) {
@@ -1220,7 +1301,7 @@ function InsightsEditor() {
       setForm({
         title: "", category: "✦ 深度长文",
         readTime: "", audioUrl: "",
-        date: "", author: "", summary: "", contentText: "",
+        date: getUTC8DateStr(), author: "陈皮", summary: "", contentText: "",
         tags: [],
       });
       loadInsights();
@@ -1247,8 +1328,15 @@ function InsightsEditor() {
           <FormField label="分类 *">
             <input value={form.category} onChange={(e) => updateField("category", e.target.value)} placeholder="如：✦ 深度长文 / 短观点 / 🎙️ 音频思考" className="input-insight" />
           </FormField>
-          <FormField label="作者">
-            <input value={form.author} onChange={(e) => updateField("author", e.target.value)} placeholder="如：陈述中马 / 策略探索者" className="input-insight" />
+          <FormField label="作者（默认锁定）">
+            <input
+              value={form.author}
+              onChange={(e) => updateField("author", e.target.value)}
+              placeholder="陈皮"
+              className="input-insight"
+              readOnly
+              style={{ cursor: "not-allowed", opacity: 0.7 }}
+            />
           </FormField>
           <FormField label="阅读时长">
             <input value={form.readTime} onChange={(e) => updateField("readTime", e.target.value)} placeholder="如：5 min" className="input-insight" />
@@ -1315,6 +1403,30 @@ function InsightsEditor() {
 
         {/* 正文 Markdown */}
         <FormField label="正文内容（简易 Markdown）">
+          {/* AI 一键润色排版 & GEO 注入按钮 */}
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleAiFormat}
+              disabled={aiFormatting}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {aiFormatting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  AI 润色注入中...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" />
+                  ✨ AI 一键润色排版 & GEO 注入
+                </>
+              )}
+            </button>
+            <span className="text-[11px] text-zinc-500">
+              自动清洗格式 + 中英 TL;DR + GEO FAQ + 实体标签
+            </span>
+          </div>
           <textarea
             value={form.contentText}
             onChange={(e) => updateField("contentText", e.target.value)}

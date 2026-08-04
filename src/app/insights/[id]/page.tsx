@@ -130,6 +130,37 @@ function normalizeDate(iso?: string): string | undefined {
   return undefined;
 }
 
+// 从正文 Markdown 底部提取 GEO 战术 FAQ 问答（### 💡 深度战术问答 (Q&A FAQ) 区块）
+function extractFAQ(contentBlocks: ContentBlock[]): { question: string; answer: string }[] {
+  // 将所有 block 文本拼回原始 Markdown 文本，便于正则匹配
+  const rawText = contentBlocks
+    .map((b) => {
+      if (b.type === "heading") return `## ${b.text}`;
+      if (b.type === "paragraph") return b.text;
+      if (b.type === "blockquote") return `> ${b.text}`;
+      if (b.type === "list" && b.items) return b.items.map((i) => `- ${i}`).join("\n");
+      if (b.type === "code") return "```\n" + b.text + "\n```";
+      return "";
+    })
+    .join("\n\n");
+
+  // 定位 FAQ 区块起始（兼容中英文标题）
+  const faqStartIdx = rawText.search(/###\s*💡?\s*深度战术问答/i);
+  if (faqStartIdx === -1) return [];
+  const faqSection = rawText.slice(faqStartIdx);
+
+  // 匹配 **Q：xxx** + A：xxx 形式（用 [\s\S] 替代 s 标志，兼容低版本 target）
+  const faqs: { question: string; answer: string }[] = [];
+  const qPattern = /\*\*Q[：:]\s*([\s\S]+?)\*\*\s*\n+A[：:]\s*([\s\S]+?)(?=\n+\s*\*\*Q[：:]|$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = qPattern.exec(faqSection)) !== null && faqs.length < 5) {
+    const q = match[1].trim().replace(/\s+/g, " ");
+    const a = match[2].trim().replace(/\s+/g, " ");
+    if (q && a) faqs.push({ question: q.slice(0, 200), answer: a.slice(0, 600) });
+  }
+  return faqs;
+}
+
 export default async function InsightDetailPage({
   params,
 }: {
@@ -151,7 +182,7 @@ export default async function InsightDetailPage({
 
   const tags = Array.isArray(insight.tags) ? insight.tags : [];
 
-  // JSON-LD Article（符合 Schema.org，GEO 爬虫可识别）
+  // JSON-LD @graph（TechArticle + FAQPage，符合 Schema.org，中外 AI 爬虫可抓取）
   const headline = insight.title;
   const description = insight.excerpt || insight.title;
   const authorName = insight.author?.trim() ? insight.author.trim() : "陈皮";
@@ -161,9 +192,12 @@ export default async function InsightDetailPage({
     typeof window === "undefined"
       ? `https://chenpi.dev/insights/${encodeURIComponent(id)}`
       : `/insights/${encodeURIComponent(id)}`;
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
+
+  // 从正文提取 GEO 战术 FAQ（AI 润色时注入到文末）
+  const faqs = extractFAQ(insight.content);
+
+  const techArticle = {
+    "@type": "TechArticle",
     headline,
     description,
     author: [
@@ -184,8 +218,28 @@ export default async function InsightDetailPage({
     keywords: keywordsFlat.join(","),
     articleSection: insight.category || "灵感思考",
     mainEntityOfPage: { "@type": "WebPage", "@id": articleUrl },
+    proficiencyLevel: "Expert",
     ...(datePublished ? { datePublished } : {}),
     ...(datePublished ? { dateModified: datePublished } : {}),
+  };
+
+  // FAQPage：仅在提取到 FAQ 时注入，避免空结构化数据
+  const faqPage =
+    faqs.length > 0
+      ? {
+          "@type": "FAQPage",
+          mainEntity: faqs.map((f) => ({
+            "@type": "Question",
+            name: f.question,
+            acceptedAnswer: { "@type": "Answer", text: f.answer },
+          })),
+        }
+      : null;
+
+  // @graph 打包 TechArticle + FAQPage（兼容 Perplexity / Google AI / 秘塔 / Kimi）
+  const jsonLd: Record<string, any> = {
+    "@context": "https://schema.org",
+    "@graph": faqPage ? [techArticle, faqPage] : [techArticle],
   };
 
   // 标签分组展示（只展示命中池中的真实 tag）
