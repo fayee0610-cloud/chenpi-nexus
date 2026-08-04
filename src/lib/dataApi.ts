@@ -1046,12 +1046,14 @@ export async function fetchAsylumStats(): Promise<AsylumStats> {
  * 上香次数原子递增（客户端调用 → 转发到服务端 API Route）
  * 服务端使用 service_role key 执行 UPDATE asylum_stats SET incense_count = incense_count + 1 RETURNING incense_count
  * 保证并发安全；若服务端失败则返回 null，前端降级为纯内存临时计数。
+ * @param incenseId 可选，单柱持久化（sanctuary_incense 表）
  */
-export async function incrementIncense(): Promise<number | null> {
+export async function incrementIncense(incenseId?: string): Promise<number | null> {
   try {
     const res = await fetch("/api/asylum/incense", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(incenseId ? { incense_id: incenseId } : {}),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -1064,6 +1066,81 @@ export async function incrementIncense(): Promise<number | null> {
     return null;
   } catch (err) {
     logNetworkFallback("incrementIncense", err);
+    throw err;
+  }
+}
+
+/**
+ * 批量读取所有香柱的累计 count（供前端初始化覆盖初始基数）
+ * 表不存在时返回空对象，前端沿用 siteData 初始基数
+ */
+export async function fetchIncensePillars(): Promise<Record<string, number>> {
+  try {
+    const res = await fetch("/api/asylum/incense", { method: "GET" });
+    if (!res.ok) return {};
+    const json = await res.json();
+    if (!json || !Array.isArray(json.pillars)) return {};
+    const map: Record<string, number> = {};
+    for (const p of json.pillars) {
+      if (p && typeof p.incenseId === "string" && typeof p.count === "number") {
+        map[p.incenseId] = p.count;
+      }
+    }
+    return map;
+  } catch (err) {
+    logNetworkFallback("fetchIncensePillars", err);
+    return {};
+  }
+}
+
+/**
+ * 脑洞注入能量持久化（sanctuary_posts.likes 原子递增）
+ * 服务端使用 service_role key，失败返回 null，前端降级为纯内存计数
+ */
+export async function incrementIdeaEnergy(ideaId: string | number): Promise<number | null> {
+  try {
+    const res = await fetch("/api/sanctuary/energy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idea_id: String(ideaId) }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+    }
+    const json = await res.json();
+    if (json && typeof json.energy === "number") {
+      return json.energy;
+    }
+    return null;
+  } catch (err) {
+    logNetworkFallback("incrementIdeaEnergy", err);
+    throw err;
+  }
+}
+
+/**
+ * 文章【激发灵感】持久化（insights.likes 原子递增）
+ * 服务端使用 service_role key，失败返回 null，前端降级为纯内存计数
+ */
+export async function incrementInsightLikes(insightId: string): Promise<number | null> {
+  try {
+    const res = await fetch("/api/insights/like", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ insight_id: insightId }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+    }
+    const json = await res.json();
+    if (json && typeof json.likes === "number") {
+      return json.likes;
+    }
+    return null;
+  } catch (err) {
+    logNetworkFallback("incrementInsightLikes", err);
     throw err;
   }
 }

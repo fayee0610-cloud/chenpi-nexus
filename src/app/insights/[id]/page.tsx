@@ -13,6 +13,7 @@ import { fetchInsightById } from "@/lib/dataApi";
 import Header from "@/components/Header";
 import { notFound } from "next/navigation";
 import InsightShareClient from "./InsightShareClient";
+import InspireButton from "./InspireButton";
 import ArticleComments from "./ArticleComments";
 import type { ContentBlock } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
@@ -311,7 +312,10 @@ export default async function InsightDetailPage({
 
         {/* 底部分享区 */}
         <section className="mt-12 border-t border-zinc-800 pt-6">
-          <InsightShareClient title={insight.title} />
+          <div className="flex flex-wrap items-center gap-4">
+            <InspireButton insightId={String(id)} initialLikes={insight.likes} />
+            <InsightShareClient title={insight.title} />
+          </div>
         </section>
 
         {/* 读者战术讨论区 */}

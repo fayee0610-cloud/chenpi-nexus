@@ -69,7 +69,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           password,
         });
         if (signInError) throw signInError;
-        setSuccess("登录成功");
+        setSuccess("登录成功，通行证已激活");
+        // 自动关闭并刷新全局用户状态（onAuthStateChange 会触发 Header 更新）
         setTimeout(() => onClose(), 800);
       } else {
         const { error: signUpError } = await supabase.auth.signUp({
@@ -77,7 +78,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           password,
         });
         if (signUpError) throw signUpError;
-        setSuccess("注册成功！请检查邮箱完成验证（如已开启邮箱验证）");
+        // 若无需邮箱验证则直接登录态，自动关闭；否则提示验证
+        setSuccess("注册成功！通行证已激活");
+        setTimeout(() => onClose(), 1200);
       }
     } catch (err: any) {
       setError(err?.message || "操作失败，请重试");
@@ -257,7 +260,7 @@ export function useAuthUser() {
 export function UserMenu({ user, onSignOut }: { user: SupabaseUser; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const email = user.email || "";
-  const initial = email.charAt(0).toUpperCase();
+  const initial = email.charAt(0).toUpperCase() || "U";
 
   return (
     <div className="relative">
@@ -275,12 +278,31 @@ export function UserMenu({ user, onSignOut }: { user: SupabaseUser; onSignOut: (
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl"
+              className="absolute right-0 top-10 z-50 w-60 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl"
             >
+              {/* 账号信息 */}
               <div className="border-b border-zinc-800 px-4 py-3">
                 <p className="truncate text-xs font-medium text-zinc-200">{email}</p>
-                <p className="text-[10px] text-zinc-500">已登录</p>
+                <span className="mt-1 inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-950/30 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+                  <User className="h-2.5 w-2.5" />
+                  普通读者
+                </span>
               </div>
+              {/* 已解锁权益 */}
+              <div className="border-b border-zinc-800 px-4 py-3">
+                <p className="mb-1.5 text-[10px] font-medium text-zinc-500">已解锁权益</p>
+                <ul className="space-y-1 text-[11px] text-zinc-400">
+                  <li className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                    资源包下载
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                    专属身份标识
+                  </li>
+                </ul>
+              </div>
+              {/* 退出登录 */}
               <button
                 onClick={() => { onSignOut(); setOpen(false); }}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-200"

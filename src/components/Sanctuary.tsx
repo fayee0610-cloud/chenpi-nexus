@@ -31,6 +31,8 @@ import {
   createSanctuaryPost,
   fetchAsylumStats,
   incrementIncense,
+  fetchIncensePillars,
+  incrementIdeaEnergy,
 } from "@/lib/dataApi";
 import { getOrCreateCyberId, getCyberHash } from "@/lib/cyberId";
 import LoadMoreButton from "@/components/LoadMoreButton";
@@ -495,6 +497,20 @@ export default function Sanctuary({
       .finally(() => {
         if (mounted) setLoadingStats(false);
       });
+    // 批量读取各香柱累计 count，覆盖 siteData 初始基数
+    fetchIncensePillars()
+      .then((pillarMap) => {
+        if (mounted && pillarMap && Object.keys(pillarMap).length > 0) {
+          setIncenses((prev) =>
+            prev.map((inc) =>
+              typeof pillarMap[inc.id] === "number"
+                ? { ...inc, count: pillarMap[inc.id] }
+                : inc
+            )
+          );
+        }
+      })
+      .catch(() => {});
     return () => { mounted = false; };
   }, []);
 
@@ -574,8 +590,8 @@ export default function Sanctuary({
     // 先乐观更新 UI，后端完成后再同步真实值
     setTotalEnergy((prev) => prev + 1);
 
-    // 2) 持久化：原子递增 DB incense_count 字段
-    incrementIncense()
+    // 2) 持久化：原子递增 DB 总能量 + 单柱 count
+    incrementIncense(id)
       .then((dbCount) => {
         if (typeof dbCount === "number") {
           setTotalEnergy(dbCount);
@@ -600,12 +616,29 @@ export default function Sanctuary({
     );
   }, []);
 
-  // 注入能量 +1
+  // 注入能量 +1（乐观更新 + 异步持久化到 sanctuary_posts.likes）
   const handleEnergy = useCallback((fartId: number) => {
     setFarts((prev) =>
       prev.map((f) => (f.id === fartId ? { ...f, likes: f.likes + 1 } : f))
     );
     setTotalEnergy((prev) => prev + 1);
+    // 异步持久化：失败则回滚（静默处理，不阻断用户体验）
+    incrementIdeaEnergy(fartId)
+      .then((dbEnergy) => {
+        if (typeof dbEnergy === "number") {
+          setFarts((prev) =>
+            prev.map((f) => (f.id === fartId ? { ...f, likes: dbEnergy } : f))
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn("[Sanctuary] 注入能量持久化失败:", err?.message || err);
+        // 回滚乐观 +1
+        setFarts((prev) =>
+          prev.map((f) => (f.id === fartId ? { ...f, likes: Math.max(0, f.likes - 1) } : f))
+        );
+        setTotalEnergy((prev) => Math.max(0, prev - 1));
+      });
   }, []);
 
   // 评论

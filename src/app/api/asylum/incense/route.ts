@@ -1,8 +1,10 @@
 // ============================================================
 // 庇护所上香：原子递增 incense_count
 // - 走服务端：使用 SUPABASE_SERVICE_ROLE_KEY 绕过 RLS
-// - 并发安全：优先调用 PostgreSQL 原子函数 asylum_incense_increment()
-// - 降级方案：RPC 不存在时执行「UPSERT 初始化行 → UPDATE incense_count + 1 → SELECT」
+// - 支持两类存储：
+//   1) 全网总能量（asylum_stats.incense_count，row_id=main）—— 兼容旧逻辑
+//   2) 单柱持久化（sanctuary_incense 表，incense_id 区分香柱）—— 新增
+// - 并发安全：优先调用 PostgreSQL 原子函数；降级为读-改-写
 // - 防刷：每 IP 60s 最多 10 次
 // ============================================================
 
@@ -53,10 +55,7 @@ async function getServerClient() {
 }
 
 /**
- * 原子递增 incense_count
- *  1) 先调用 Postgres 自定义函数 asylum_incense_increment(row_id) → 最安全
- *  2) 函数不存在时：使用事务式「UPSERT + 自增 UPDATE + SELECT」
- *     （在 Supabase PostgREST 语义下，UPDATE + SELECT 非严格原子，但对个人站量级足够）
+ * 全网总能量原子递增（asylum_stats.incense_count）
  */
 async function atomicIncenseIncrement(): Promise<number> {
   const supabase = await getServerClient();
@@ -93,9 +92,7 @@ async function atomicIncenseIncrement(): Promise<number> {
     throw upsertErr;
   }
 
-  // Step 3: 执行自增。PostgREST 不支持 SET col = col + 1，
-  // 因此用 service client 再次尝试使用自定义 RPC（如果管理员后来补上函数），
-  // 否则读取当前值后 UPDATE（对个人站量级并发无压力）
+  // Step 3: 再次尝试 RPC（管理员可能后来补上函数）
   try {
     const { data: rpc2, error: rpcErr2 } = await (supabase as any).rpc(
       "asylum_incense_increment",
@@ -124,6 +121,56 @@ async function atomicIncenseIncrement(): Promise<number> {
   return next;
 }
 
+/**
+ * 单柱持久化递增（sanctuary_incense 表）
+ * 优先调用 RPC increment_incense(incense_id)，降级为 UPSERT + 读-改-写
+ */
+async function incensePillarIncrement(incenseId: string): Promise<number> {
+  const supabase = await getServerClient();
+
+  // Step 1: 优先 RPC
+  try {
+    const { data, error } = await (supabase as any).rpc("increment_incense", {
+      incense_id: incenseId,
+    });
+    if (!error && typeof data === "number") return data;
+  } catch {
+    // ignore → 降级
+  }
+
+  // Step 2: UPSERT 确保行存在
+  try {
+    await (supabase as any)
+      .from("sanctuary_incense")
+      .upsert([{ incense_id: incenseId, count: 0 }], {
+        onConflict: "incense_id",
+        ignoreDuplicates: true,
+      });
+  } catch (upsertErr: any) {
+    const msg: string = upsertErr?.message || String(upsertErr);
+    if (/does not exist/i.test(msg) || /relation/i.test(msg) || upsertErr?.code === "42P01") {
+      // 表缺失不阻断主流程，总能量仍可递增
+      return 0;
+    }
+    throw upsertErr;
+  }
+
+  // Step 3: 读-改-写
+  const { data: row, error: selErr } = await (supabase as any)
+    .from("sanctuary_incense")
+    .select("count")
+    .eq("incense_id", incenseId)
+    .single();
+  if (selErr || !row) return 0;
+  const next = Number(row.count || 0) + 1;
+  const { error: updErr } = await (supabase as any)
+    .from("sanctuary_incense")
+    .update({ count: next })
+    .eq("incense_id", incenseId);
+  if (updErr) return 0;
+  return next;
+}
+
 export async function POST(req: Request) {
   try {
     const ip = extractIp(req);
@@ -139,10 +186,34 @@ export async function POST(req: Request) {
       );
     }
 
+    // 解析可选 incense_id（单柱持久化）
+    let incenseId: string | null = null;
+    try {
+      const body = await req.json();
+      if (body && typeof body.incense_id === "string") {
+        incenseId = body.incense_id;
+      }
+    } catch {
+      // 无 body 也允许（兼容旧调用）
+    }
+
+    // 总能量递增（主流程）
     const count = await atomicIncenseIncrement();
+
+    // 单柱递增（失败不影响主流程）
+    let pillarCount: number | null = null;
+    if (incenseId) {
+      try {
+        pillarCount = await incensePillarIncrement(incenseId);
+      } catch (err: any) {
+        console.warn("[api/asylum/incense] 单柱递增失败（不阻断）:", err?.message || err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       incenseCount: count,
+      pillarCount,
     });
   } catch (err: any) {
     const msg = err?.message || String(err);
@@ -158,3 +229,27 @@ export async function POST(req: Request) {
     );
   }
 }
+
+/**
+ * GET：批量读取所有香柱的累计 count（供前端初始化）
+ */
+export async function GET() {
+  try {
+    const supabase = await getServerClient();
+    const { data, error } = await (supabase as any)
+      .from("sanctuary_incense")
+      .select("incense_id, count");
+    if (error) {
+      // 表不存在时返回空数组（前端用初始基数）
+      return NextResponse.json({ success: true, pillars: [] });
+    }
+    const pillars = (data || []).map((r: any) => ({
+      incenseId: r.incense_id,
+      count: Number(r.count || 0),
+    }));
+    return NextResponse.json({ success: true, pillars });
+  } catch (err: any) {
+    return NextResponse.json({ success: true, pillars: [], error: err?.message });
+  }
+}
+

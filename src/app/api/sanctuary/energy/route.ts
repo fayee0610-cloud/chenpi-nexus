@@ -1,0 +1,107 @@
+// ============================================================
+// 脑洞注入能量：原子递增 sanctuary_posts.likes
+// - 走服务端：使用 SUPABASE_SERVICE_ROLE_KEY 绕过 RLS
+// - 优先调用 RPC increment_idea_energy(idea_id)，降级为读-改-写
+// - 防刷：每 IP 60s 最多 20 次
+// ============================================================
+
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 15;
+
+// -------- IP 限流（内存）--------
+const IP_RATE_WINDOW_MS = 60_000;
+const IP_RATE_MAX_PER_WINDOW = 20;
+const ipBucket = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): { ok: boolean; retryMs?: number } {
+  const now = Date.now();
+  const bucket = ipBucket.get(ip);
+  if (!bucket || now > bucket.resetAt) {
+    ipBucket.set(ip, { count: 1, resetAt: now + IP_RATE_WINDOW_MS });
+    return { ok: true };
+  }
+  if (bucket.count >= IP_RATE_MAX_PER_WINDOW) {
+    return { ok: false, retryMs: Math.max(1, bucket.resetAt - now) };
+  }
+  bucket.count += 1;
+  return { ok: true };
+}
+
+function extractIp(req: Request): string {
+  const cf = req.headers.get("x-forwarded-for");
+  if (cf) return cf.split(",")[0].trim();
+  const real = req.headers.get("x-real-ip");
+  if (real) return real;
+  return "anon";
+}
+
+async function getServerClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    throw new Error(
+      "缺少 Supabase 环境变量：请在 .env.local 中配置 NEXT_PUBLIC_SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient(url, serviceKey);
+}
+
+export async function POST(req: Request) {
+  try {
+    const ip = extractIp(req);
+    const rl = checkRateLimit(ip);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { success: false, error: "注入太快啦，稍后再试（每分最多 20 次）", retryMs: rl.retryMs },
+        { status: 429 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const ideaId = body?.idea_id;
+    if (!ideaId || typeof ideaId !== "string") {
+      return NextResponse.json({ success: false, error: "缺少 idea_id 参数" }, { status: 400 });
+    }
+
+    const supabase = await getServerClient();
+
+    // Step 1: 优先 RPC
+    try {
+      const { data, error } = await (supabase as any).rpc("increment_idea_energy", {
+        idea_id: ideaId,
+      });
+      if (!error && typeof data === "number") {
+        return NextResponse.json({ success: true, energy: data });
+      }
+    } catch {
+      // ignore → 降级
+    }
+
+    // Step 2: 读-改-写降级
+    const { data: row, error: selErr } = await (supabase as any)
+      .from("sanctuary_posts")
+      .select("likes")
+      .eq("id", ideaId)
+      .single();
+    if (selErr || !row) {
+      // 帖子不存在或表缺失 → 返回 null，前端降级
+      return NextResponse.json({ success: false, energy: null, error: "帖子不存在或表未创建" });
+    }
+    const next = Number(row.likes || 0) + 1;
+    const { error: updErr } = await (supabase as any)
+      .from("sanctuary_posts")
+      .update({ likes: next })
+      .eq("id", ideaId);
+    if (updErr) {
+      return NextResponse.json({ success: false, energy: null, error: updErr.message });
+    }
+    return NextResponse.json({ success: true, energy: next });
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    console.error("[api/sanctuary/energy] 注入能量失败:", msg);
+    return NextResponse.json({ success: false, error: msg, energy: null }, { status: 500 });
+  }
+}

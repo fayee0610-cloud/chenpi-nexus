@@ -240,6 +240,70 @@
  * END;
  * $$;
  *
+ * -- 11. 单柱香持久化表（sanctuary_incense：每个香柱独立累计 count）
+ * CREATE TABLE IF NOT EXISTS public.sanctuary_incense (
+ *   incense_id TEXT PRIMARY KEY,          -- 香柱 id（如 '1','2','scheme_pass'）
+ *   count BIGINT NOT NULL DEFAULT 0,
+ *   updated_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * ALTER TABLE public.sanctuary_incense ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "sanctuary_incense readable by everyone" ON public.sanctuary_incense
+ *   FOR SELECT USING (true);
+ * -- 单柱原子递增函数（优先使用，真正原子并发安全）
+ * CREATE OR REPLACE FUNCTION public.increment_incense(incense_id TEXT)
+ * RETURNS BIGINT
+ * LANGUAGE plpgsql
+ * SECURITY DEFINER
+ * SET search_path = public
+ * AS $$
+ * DECLARE new_count BIGINT;
+ * BEGIN
+ *   INSERT INTO public.sanctuary_incense (incense_id, count)
+ *   VALUES (incense_id, 1)
+ *   ON CONFLICT (incense_id) DO NOTHING;
+ *   UPDATE public.sanctuary_incense
+ *   SET count = count + 1, updated_at = NOW()
+ *   WHERE incense_id = increment_incense.incense_id
+ *   RETURNING count INTO new_count;
+ *   RETURN new_count;
+ * END;
+ * $$;
+ *
+ * -- 12. 脑洞能量原子递增函数（sanctuary_posts.likes）
+ * CREATE OR REPLACE FUNCTION public.increment_idea_energy(idea_id TEXT)
+ * RETURNS INT
+ * LANGUAGE plpgsql
+ * SECURITY DEFINER
+ * SET search_path = public
+ * AS $$
+ * DECLARE new_energy INT;
+ * BEGIN
+ *   UPDATE public.sanctuary_posts
+ *   SET likes = COALESCE(likes, 0) + 1
+ *   WHERE id = idea_id
+ *   RETURNING likes INTO new_energy;
+ *   RETURN new_energy;
+ * END;
+ * $$;
+ *
+ * -- 13. 文章激发灵感原子递增函数（insights.likes）
+ * -- 若 insights 表无 likes 列，先执行：ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;
+ * CREATE OR REPLACE FUNCTION public.increment_insight_likes(insight_id TEXT)
+ * RETURNS INT
+ * LANGUAGE plpgsql
+ * SECURITY DEFINER
+ * SET search_path = public
+ * AS $$
+ * DECLARE new_likes INT;
+ * BEGIN
+ *   UPDATE public.insights
+ *   SET likes = COALESCE(likes, 0) + 1
+ *   WHERE id = insight_id
+ *   RETURNING likes INTO new_likes;
+ *   RETURN new_likes;
+ * END;
+ * $$;
+ *
  * -- 4. 站点配置表（Feature Flags 模块显隐控制）
  * CREATE TABLE IF NOT EXISTS public.site_config (
  *   key TEXT PRIMARY KEY,

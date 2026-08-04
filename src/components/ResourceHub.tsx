@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Download, Lock, X, Package } from "lucide-react";
 import { fetchResources, incrementResourceDownload, createLead } from "@/lib/dataApi";
 import { type ResourceItem } from "@/data/siteData";
+import AuthModal, { useAuthUser } from "@/components/AuthModal";
 import LoadMoreButton from "@/components/LoadMoreButton";
 
 export default function ResourceHub({ showLimit }: { showLimit?: number }) {
@@ -14,6 +15,9 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [hasSubmittedEmail, setHasSubmittedEmail] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [pendingResource, setPendingResource] = useState<ResourceItem | null>(null);
+  const { user } = useAuthUser();
 
   useEffect(() => {
     let mounted = true;
@@ -46,14 +50,33 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
   }, []);
 
   const handleDownload = useCallback(async (resource: ResourceItem) => {
-    // 需要登录且未留存邮箱 → 弹窗
-    if (resource.requireLogin && !hasSubmittedEmail) {
-      setLockResource(resource);
+    // 需要登录（is_gated）且未登录 → 弹出登录 Modal，记录待下载资源
+    if (resource.requireLogin && !user) {
+      setPendingResource(resource);
+      setAuthOpen(true);
       return;
     }
-    // 已留存或无需登录 → 直接下载
+    // 非强制登录资源：保留邮箱留存兜底（兼容旧逻辑）
+    if (resource.requireLogin && !hasSubmittedEmail && user) {
+      // 已登录但未留存邮箱：直接下载并留存邮箱
+      try {
+        await createLead(user.email || "", resource.id, resource.title);
+        localStorage.setItem("has_submitted_email", "true");
+        setHasSubmittedEmail(true);
+      } catch {}
+    }
+    // 已登录或无需登录 → 直接下载
     await triggerDownload(resource);
-  }, [hasSubmittedEmail, triggerDownload]);
+  }, [hasSubmittedEmail, triggerDownload, user]);
+
+  // 登录成功后自动触发待下载资源
+  useEffect(() => {
+    if (user && pendingResource) {
+      const res = pendingResource;
+      setPendingResource(null);
+      triggerDownload(res);
+    }
+  }, [user, pendingResource, triggerDownload]);
 
   const handleSubmitEmail = useCallback(async () => {
     if (!email.trim() || !email.includes("@")) return;
@@ -174,15 +197,15 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
                   <button
                     onClick={() => handleDownload(resource)}
                     className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                      resource.requireLogin && !hasSubmittedEmail
+                      resource.requireLogin && !user
                         ? "border border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-950/30"
                         : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:brightness-110"
                     }`}
                   >
-                    {resource.requireLogin && !hasSubmittedEmail ? (
+                    {resource.requireLogin && !user ? (
                       <>
                         <Lock className="h-3 w-3" />
-                        解锁 PDF
+                        登录解锁
                       </>
                     ) : (
                       <>
@@ -267,6 +290,9 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 登录弹窗（is_gated 资源未登录时触发） */}
+      <AuthModal isOpen={authOpen} onClose={() => { setAuthOpen(false); setPendingResource(null); }} />
     </section>
   );
 }
