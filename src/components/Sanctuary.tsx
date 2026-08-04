@@ -261,11 +261,11 @@ function CommunityCard({
   isDeleting,
 }: {
   fart: SanctuaryPost;
-  onReaction: (id: number, key: keyof SanctuaryPost["reactions"]) => void;
-  onEnergy: (id: number) => void;
-  onComment: (id: number, text: string) => void;
+  onReaction: (id: string, key: keyof SanctuaryPost["reactions"]) => void;
+  onEnergy: (id: string) => void;
+  onComment: (id: string, text: string) => void;
   canDelete: boolean;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
   isDeleting: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
@@ -717,7 +717,7 @@ export default function Sanctuary({
   }, [showIncenseToast]);
 
   // 表态 +1
-  const handleReaction = useCallback((fartId: number, key: keyof SanctuaryPost["reactions"]) => {
+  const handleReaction = useCallback((fartId: string, key: keyof SanctuaryPost["reactions"]) => {
     setFarts((prev) =>
       prev.map((f) =>
         f.id === fartId
@@ -728,7 +728,7 @@ export default function Sanctuary({
   }, []);
 
   // 注入能量 +1（乐观更新 + 异步持久化到 sanctuary_posts.likes）
-  const handleEnergy = useCallback((fartId: number) => {
+  const handleEnergy = useCallback((fartId: string) => {
     setFarts((prev) =>
       prev.map((f) => (f.id === fartId ? { ...f, likes: f.likes + 1 } : f))
     );
@@ -753,7 +753,7 @@ export default function Sanctuary({
   }, []);
 
   // 评论
-  const handleComment = useCallback((fartId: number, text: string) => {
+  const handleComment = useCallback((fartId: string, text: string) => {
     const cyberAuthor = getOrCreateCyberId();
     setFarts((prev) =>
       prev.map((f) =>
@@ -771,12 +771,12 @@ export default function Sanctuary({
   }, []);
 
   // 用户自主删除自己的帖子（凭 localStorage 中保存的 delete_token）
-  const handleDeletePost = useCallback(async (fartId: number) => {
-    const token = deleteTokens[String(fartId)];
+  const handleDeletePost = useCallback(async (fartId: string) => {
+    const token = deleteTokens[fartId];
     if (!token) return;
-    setDeletingIds((prev) => new Set(prev).add(String(fartId)));
+    setDeletingIds((prev) => new Set(prev).add(fartId));
     try {
-      const res = await fetch(`/api/sanctuary/posts?id=${encodeURIComponent(String(fartId))}`, {
+      const res = await fetch(`/api/sanctuary/posts?id=${encodeURIComponent(fartId)}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deleteToken: token }),
@@ -790,7 +790,7 @@ export default function Sanctuary({
       removeDeleteToken(fartId);
       setDeleteTokens((prev) => {
         const next = { ...prev };
-        delete next[String(fartId)];
+        delete next[fartId];
         return next;
       });
     } catch (err) {
@@ -799,7 +799,7 @@ export default function Sanctuary({
     } finally {
       setDeletingIds((prev) => {
         const next = new Set(prev);
-        next.delete(String(fartId));
+        next.delete(fartId);
         return next;
       });
     }
@@ -821,7 +821,7 @@ export default function Sanctuary({
       const finalPost: SanctuaryPost = newPost
         ? { ...newPost, tagColor }
         : {
-            id: fartIdRef.current++,
+            id: String(fartIdRef.current++),
             content: postContent.trim(),
             tag: postTag,
             tagColor,
@@ -837,13 +837,13 @@ export default function Sanctuary({
       // 保存删除凭证到 localStorage + state（仅 Supabase 写入成功时）
       if (newPost?.deleteToken) {
         saveDeleteToken(finalPost.id, newPost.deleteToken);
-        setDeleteTokens((prev) => ({ ...prev, [String(finalPost.id)]: newPost.deleteToken! }));
+        setDeleteTokens((prev) => ({ ...prev, [finalPost.id]: newPost.deleteToken! }));
       }
     } catch (err) {
       // Supabase 写入失败 — 打印详细错误便于排查，仍在前端临时显示
       console.warn("[Sanctuary] 发帖写入 Supabase 失败:", err instanceof Error ? err.message : err);
       const fallback: SanctuaryPost = {
-        id: fartIdRef.current++,
+        id: String(fartIdRef.current++),
         content: postContent.trim(),
         tag: postTag,
         tagColor,
@@ -1144,7 +1144,7 @@ export default function Sanctuary({
                     onComment={handleComment}
                     canDelete={!!deleteTokens[String(fart.id)]}
                     onDelete={handleDeletePost}
-                    isDeleting={deletingIds.has(String(fart.id))}
+                    isDeleting={deletingIds.has(fart.id)}
                   />
                 ))}
               </AnimatePresence>

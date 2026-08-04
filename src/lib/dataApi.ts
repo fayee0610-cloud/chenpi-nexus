@@ -258,7 +258,7 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
     return data
       .filter((row: any) => row.is_published !== false)
       .map((row: any) => ({
-        id: row.id,
+        id: String(row.id),
         content: row.content || "",
         tag: row.tag || "",
         tagColor: "text-zinc-400 bg-zinc-800",
@@ -310,7 +310,7 @@ export async function createSanctuaryPost(post: {
 
   const row = data as any;
   return {
-    id: row.id,
+    id: String(row.id),
     content: row.content || "",
     tag: row.tag || "",
     tagColor: "text-zinc-400 bg-zinc-800",

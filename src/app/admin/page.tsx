@@ -1699,18 +1699,23 @@ function CommentManagement() {
     try {
       // 走服务端代理路由（含 Admin 鉴权 + service_role 绕过 RLS），避免客户端直连 Supabase 触发 CORS/fetch 劫持
       const res = await fetch("/api/admin/article-comments", { method: "GET" });
+      // 401 未授权：静默清空，不弹阻断性报错（未登录时组件不应展示错误 Toast）
+      if (res.status === 401) {
+        setComments([]);
+        return;
+      }
       const data = await res.json();
       if (res.ok && data.success) {
         setComments(Array.isArray(data.comments) ? data.comments : []);
         if (showToast) setStatusMsg({ type: "success", msg: "已更新至最新数据" });
       } else {
         setComments([]);
-        setStatusMsg({ type: "error", msg: data.error || "评论加载失败" });
+        if (showToast) setStatusMsg({ type: "error", msg: data.error || "评论加载失败" });
       }
     } catch (err: any) {
       console.warn("[admin] loadComments 失败:", err);
       setComments([]);
-      setStatusMsg({ type: "error", msg: err?.message || "网络错误" });
+      if (showToast) setStatusMsg({ type: "error", msg: err?.message || "网络错误" });
     } finally {
       setLoading(false);
     }
@@ -2385,12 +2390,17 @@ function SanctuaryManager() {
     try {
       // 走服务端代理路由（含 Admin 鉴权 + service_role 绕过 RLS），避免客户端直连 Supabase 触发 CORS/fetch 劫持
       const res = await fetch("/api/admin/sanctuary", { method: "GET" });
+      // 401 未授权：静默清空，不弹阻断性报错（未登录时组件不应展示错误 Toast）
+      if (res.status === 401) {
+        setPosts([]);
+        return;
+      }
       const data = await res.json();
       if (res.ok && data.success) {
         const rows: any[] = Array.isArray(data.posts) ? data.posts : [];
         setPosts(
           rows.map((r) => ({
-            id: r.id,
+            id: String(r.id),
             content: r.content || "",
             tag: r.tag || "",
             tagColor: "text-zinc-400 bg-zinc-800",
@@ -2419,19 +2429,18 @@ function SanctuaryManager() {
     loadPosts();
   }, []);
 
-  const handleDelete = async (id: string | number) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("确定要彻底删除这条庇护所留言吗？此操作不可撤销。")) return;
-    const idStr = String(id);
-    setDeletingId(idStr);
+    setDeletingId(id);
     try {
-      const res = await fetch(`/api/admin/sanctuary?id=${encodeURIComponent(idStr)}`, {
+      const res = await fetch(`/api/admin/sanctuary?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "删除失败");
       }
-      setPosts((prev) => prev.filter((p) => String(p.id) !== idStr));
+      setPosts((prev) => prev.filter((p) => p.id !== id));
       setStatusMsg({ type: "success", msg: "留言已删除" });
     } catch (err: any) {
       setStatusMsg({ type: "error", msg: "删除失败：" + (err.message || "") });
@@ -2504,10 +2513,10 @@ function SanctuaryManager() {
                 </div>
                 <button
                   onClick={() => handleDelete(post.id)}
-                  disabled={deletingId === String(post.id)}
+                  disabled={deletingId === post.id}
                   className="rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                 >
-                  {deletingId === String(post.id) ? (
+                  {deletingId === post.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Trash2 className="h-4 w-4" />

@@ -112,7 +112,7 @@ export interface SanctuaryComment {
 }
 
 export interface SanctuaryPost {
-  id: number;
+  id: string;
   content: string;
   tag: string;
   tagColor: string;
@@ -481,7 +481,7 @@ export const sanctuary = {
 
   initialPosts: [
     {
-      id: 1,
+      id: "1",
       content: "做一款只有墨水屏和 3 个物理按键的赛博灵感卡片，连着 Coze 接口，随时按一下就把声音转成结构化 Prompt 存回 Notion，大家觉得有戏吗？",
       tag: "💡 概念萌芽",
       tagColor: "text-blue-400 bg-blue-500/10",
@@ -496,7 +496,7 @@ export const sanctuary = {
       ],
     },
     {
-      id: 2,
+      id: "2",
       content: "甲方说要「既有大厂的稳重，又有赛博朋克的叛逆，还要带一点新马东南亚本土风情」，我直接把上香页面发给了他。",
       tag: "🔥 职场发疯",
       tagColor: "text-red-400 bg-red-500/10",
@@ -510,7 +510,7 @@ export const sanctuary = {
       ],
     },
     {
-      id: 3,
+      id: "3",
       content: "做 independent B2B 独立站的第 30 天，把全流程 Workflow 接上了 AI 自动化，感觉一个人真的能打出一个小团队的产出。",
       tag: "✦ 阶段探索",
       tagColor: "text-purple-400 bg-purple-500/10",
