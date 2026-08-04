@@ -46,25 +46,28 @@
  *
  * -- 8. 灵感文章评论表（读者战术讨论区，带防垃圾策略）
  * -- 注意：id 使用 UUID 类型，由 Supabase 自动生成（gen_random_uuid()），前端不传 id
+ * -- 平铺引用流：彻底移除 parent_id 楼中楼外键，改用 reply_to_nickname 纯文本引用
  * CREATE TABLE IF NOT EXISTS public.article_comments (
  *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  *   article_id TEXT NOT NULL,           -- 关联 insights.id
  *   nickname TEXT NOT NULL,             -- 评论昵称（必填）
- *   email TEXT,                         -- 邮箱（选填，用于后续联系/通知）
+ *   email TEXT,                         -- 邮箱（选填，用于线索收集 + 回复通知）
  *   content TEXT NOT NULL,              -- 正文（存储时已做 HTML 转义，防 XSS）
  *   ip_hash TEXT,                       -- 提交 IP 的 SHA-256 哈希（用于 60s 防刷，不存明文）
  *   user_agent TEXT,
  *   has_links BOOLEAN DEFAULT FALSE,    -- 是否包含外链
  *   status TEXT DEFAULT 'approved',     -- approved | pending_review | rejected（外链默认 pending_review）
- *   parent_id UUID,                     -- 回复某条评论（层级）
+ *   reply_to_nickname TEXT,             -- 纯文本引用：回复目标昵称（非外键，彻底抛弃楼中楼）
  *   delete_token TEXT,                  -- 用户自主删除凭证（随机字符串，前端 localStorage 保存）
  *   created_at TIMESTAMPTZ DEFAULT NOW(),
  *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
- * -- 若表已存在但 id 为 TEXT 类型，执行以下迁移：
+ * -- 迁移：移除旧 parent_id 外键列 + 补加新列（若表已存在）
+ * -- ALTER TABLE public.article_comments DROP COLUMN IF EXISTS parent_id;
+ * -- ALTER TABLE public.article_comments ADD COLUMN IF NOT EXISTS email TEXT;
+ * -- ALTER TABLE public.article_comments ADD COLUMN IF NOT EXISTS reply_to_nickname TEXT;
  * -- ALTER TABLE public.article_comments ADD COLUMN IF NOT EXISTS delete_token TEXT;
  * CREATE INDEX IF NOT EXISTS idx_article_comments_article ON public.article_comments (article_id, created_at DESC);
- * CREATE INDEX IF NOT EXISTS idx_article_comments_parent ON public.article_comments (parent_id);
  * -- RLS：仅公开读已批准内容，写入通过服务端 API（service_role 绕过 RLS），避免 anon 直接刷
  * ALTER TABLE public.article_comments ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "article_comments public read approved only" ON public.article_comments
@@ -96,19 +99,35 @@
  * CREATE POLICY "anyone can delete resources" ON public.resources
  *   FOR DELETE USING (true);
  *
- * -- 6. 线索/邮箱订阅表（资源下载获客）
+ * -- 6. 线索/邮箱订阅表（资源下载获客 + 评论区邮箱静默打靶）
+ * -- 商业线索留存：以 email 为唯一键 Upsert 去重，支持文章评论区邮箱同步
  * CREATE TABLE IF NOT EXISTS public.leads (
  *   id TEXT PRIMARY KEY,
- *   email TEXT NOT NULL,
+ *   email TEXT NOT NULL UNIQUE,         -- 唯一约束：Upsert onConflict 去重依赖
+ *   name TEXT,                          -- 用户昵称（评论区提交时同步）
+ *   source TEXT,                        -- 线索来源（如「文章评论区」「资源下载」）
+ *   notes TEXT,                         -- 自动追加的评论摘要
  *   resource_id TEXT,
  *   resource_title TEXT,
- *   created_at TIMESTAMPTZ DEFAULT NOW()
+ *   created_at TIMESTAMPTZ DEFAULT NOW(),
+ *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 迁移：补加新列 + 唯一约束（若表已存在）
+ * -- ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS name TEXT;
+ * -- ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS source TEXT;
+ * -- ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS notes TEXT;
+ * -- ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ * -- 注意：添加 UNIQUE 约束前需先清理重复 email（若存在）
+ * -- DELETE FROM public.leads a USING public.leads b WHERE a.id > b.id AND a.email = b.email;
+ * -- ALTER TABLE public.leads ADD CONSTRAINT leads_email_unique UNIQUE (email);
  * ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "leads are readable by everyone" ON public.leads
  *   FOR SELECT USING (true);
  * CREATE POLICY "anyone can submit lead" ON public.leads
  *   FOR INSERT WITH CHECK (true);
+ * -- 允许 Upsert：anon/service_role 均可更新（onConflict email 时触发 UPDATE）
+ * CREATE POLICY "anyone can upsert leads" ON public.leads
+ *   FOR UPDATE USING (true) WITH CHECK (true);
  * CREATE POLICY "anyone can delete leads" ON public.leads
  *   FOR DELETE USING (true);
  *

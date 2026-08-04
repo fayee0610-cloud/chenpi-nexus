@@ -4,6 +4,7 @@
 // ============================================================
 
 import { supabase } from "./supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type PortfolioProject,
   type InsightItem,
@@ -700,28 +701,55 @@ export async function uploadResourceFile(file: File): Promise<{ url: string; siz
 export interface Lead {
   id: string;
   email: string;
+  name?: string;
+  source?: string;
+  notes?: string;
   resourceId?: string;
   resourceTitle?: string;
   createdAt: string;
 }
 
-export async function createLead(email: string, resourceId?: string, resourceTitle?: string): Promise<{ success: boolean; error?: string }> {
-  if (!supabase) {
-    // 未配置 Supabase 时静默成功（不影响用户下载）
+// Upsert 附加选项（用于评论区邮箱静默打靶）
+export interface CreateLeadOptions {
+  name?: string;          // 用户昵称
+  source?: string;        // 线索来源（如「文章评论区」）
+  notes?: string;         // 自动追加的评论摘要
+  client?: SupabaseClient; // 可选：传入 service_role 客户端绕过 RLS
+}
+
+export async function createLead(
+  email: string,
+  resourceId?: string,
+  resourceTitle?: string,
+  options?: CreateLeadOptions
+): Promise<{ success: boolean; error?: string }> {
+  const client = options?.client || supabase;
+  if (!client) {
+    // 未配置 Supabase 时静默成功（不影响用户主流程）
     return { success: false, error: "Supabase 未配置" };
   }
   try {
-    const { error } = await supabase.from("leads").insert([
-      {
-        id: genId(),
-        email,
-        resource_id: resourceId || null,
-        resource_title: resourceTitle || null,
-      },
-    ]);
+    // Upsert：以 email 为唯一键去重，存在则更新 name/notes/updated_at，不存在则插入
+    const { error } = await client
+      .from("leads")
+      .upsert(
+        [
+          {
+            id: genId(),
+            email,
+            name: options?.name || null,
+            source: options?.source || null,
+            notes: options?.notes || null,
+            resource_id: resourceId || null,
+            resource_title: resourceTitle || null,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: "email", ignoreDuplicates: false }
+      );
     if (error) {
-      // RLS 阻止写入时，Supabase 返回 error
-      console.warn("[dataApi] createLead 写入失败:", error.message);
+      // RLS 阻止写入或缺少 email 唯一约束时，Supabase 返回 error
+      console.warn("[dataApi] createLead upsert 失败:", error.message);
       return { success: false, error: error.message };
     }
     return { success: true };
@@ -742,6 +770,9 @@ export async function fetchLeads(): Promise<Lead[]> {
     return data.map((row: any) => ({
       id: row.id,
       email: row.email || "",
+      name: row.name || "",
+      source: row.source || "",
+      notes: row.notes || "",
       resourceId: row.resource_id || "",
       resourceTitle: row.resource_title || "",
       createdAt: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",

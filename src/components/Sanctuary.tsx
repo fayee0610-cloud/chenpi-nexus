@@ -139,22 +139,56 @@ const FORTUNE_THEMES: FortuneTheme[] = [
   },
 ];
 
-// 生成 6 位 Base64 极客哈希码
-function genHash(): string {
+// 获取东八区（UTC+8）当前日期 YYYY-MM-DD（全球读者当日一致，零点自动切换）
+function getUTC8DateKey(): string {
+  const now = new Date();
+  // 转换为 UTC+8：先用 timezoneOffset 抵消本地时区，再加 +8 小时偏移
+  const utc8Ms = now.getTime() + now.getTimezoneOffset() * 60_000 + 8 * 3600_000;
+  const d = new Date(utc8Ms);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// 字符串 → 32 位正整数哈希（FNV-1a 变体，确定性：同输入同输出）
+function hashSeed(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// 基于种子的确定性 PRNG（线性同余生成器）
+// 同一种子永远产出同一序列 → 锁定"今日专属签文"，全球读者当日一致
+function createSeededRandom(seed: number): () => number {
+  let state = seed || 1;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+// 生成 6 位极客哈希码（rand 缺省时使用 Math.random，传入 seeded random 则确定性输出）
+function genHash(rand: () => number = Math.random): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let hash = "#";
   for (let i = 0; i < 6; i++) {
-    hash += chars[Math.floor(Math.random() * chars.length)];
+    hash += chars[Math.floor(rand() * chars.length)];
   }
   return hash;
 }
 
-// 生成动态签印编号 NO.YYYYMMDD-XXXX
-function genSerial(): string {
+// 生成动态签印编号 NO.YYYYMMDD-XXXX（东八区日期 + 随机序号）
+function genSerial(rand: () => number = Math.random): string {
   const d = new Date();
-  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `NO.${ymd}-${rand}`;
+  const utc8Ms = d.getTime() + d.getTimezoneOffset() * 60_000 + 8 * 3600_000;
+  const ud = new Date(utc8Ms);
+  const ymd = `${ud.getUTCFullYear()}${String(ud.getUTCMonth() + 1).padStart(2, "0")}${String(ud.getUTCDate()).padStart(2, "0")}`;
+  const r = Math.floor(1000 + rand() * 9000);
+  return `NO.${ymd}-${r}`;
 }
 
 // ---------- 删除凭证 localStorage 管理 ----------
@@ -521,18 +555,25 @@ export default function Sanctuary({
   }, []);
 
   // 上香逻辑
-  // 从指定分类随机抽取一条金句（返回 {lines, highlightIndex} 对象）
-  const pickRandomQuote = useCallback((category: "inspiration" | "growth" | "healing") => {
-    const pool = siteData.sanctuary.fortuneLibrary[category].quotes;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }, []);
+  // 从指定分类抽取一条金句（rand 缺省时随机，传入 seeded random 则确定性锁定今日签文）
+  const pickRandomQuote = useCallback(
+    (category: "inspiration" | "growth" | "healing", rand: () => number = Math.random) => {
+      const pool = siteData.sanctuary.fortuneLibrary[category].quotes;
+      return pool[Math.floor(rand() * pool.length)];
+    },
+    []
+  );
 
-  // 生成/刷新签文（随机主题 + 签印编号 + 哈希码）
+  // 生成/刷新签文 —— 今日专属签文（东八区日期 + 分类 作为种子，全球读者当日一致）
   const handleRevealFortune = useCallback(() => {
-    setCurrentQuote(pickRandomQuote(fortuneCategory));
-    setFortuneTheme(FORTUNE_THEMES[Math.floor(Math.random() * FORTUNE_THEMES.length)]);
-    setFortuneSerial(genSerial());
-    setFortuneHash(genHash());
+    // 种子 = UTC+8 日期 | 分类 → 同一天同一分类永远抽出同一条签文
+    const dateKey = getUTC8DateKey();
+    const seed = hashSeed(`${dateKey}|${fortuneCategory}`);
+    const rand = createSeededRandom(seed);
+    setCurrentQuote(pickRandomQuote(fortuneCategory, rand));
+    setFortuneTheme(FORTUNE_THEMES[Math.floor(rand() * FORTUNE_THEMES.length)]);
+    setFortuneSerial(genSerial(rand));
+    setFortuneHash(genHash(rand));
     setTiltStyle({});
     setShowFortune(true);
   }, [fortuneCategory, pickRandomQuote]);
@@ -557,7 +598,7 @@ export default function Sanctuary({
     });
   }, []);
 
-  // 换一条：同时随机切换主题 + 编号
+  // 【重新求签】手动抽卡：使用 Math.random() 真随机，突破今日锁定
   const handleChangeQuote = useCallback(() => {
     setCurrentQuote(pickRandomQuote(fortuneCategory));
     setFortuneTheme(FORTUNE_THEMES[Math.floor(Math.random() * FORTUNE_THEMES.length)]);
@@ -565,10 +606,13 @@ export default function Sanctuary({
     setFortuneHash(genHash());
   }, [fortuneCategory, pickRandomQuote]);
 
-  // 切换分类并重新抽取
+  // 切换分类 → 抽取该分类的今日锁定签文（同一天同一分类全球一致）
   const handleCategoryChange = useCallback((cat: "inspiration" | "growth" | "healing") => {
     setFortuneCategory(cat);
-    setCurrentQuote(pickRandomQuote(cat));
+    const dateKey = getUTC8DateKey();
+    const seed = hashSeed(`${dateKey}|${cat}`);
+    const rand = createSeededRandom(seed);
+    setCurrentQuote(pickRandomQuote(cat, rand));
   }, [pickRandomQuote]);
 
   // -------- 每日上香防刷：每个香柱每天最多上香 1 次 --------

@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createLead } from "@/lib/dataApi";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -112,6 +113,8 @@ export async function GET(req: Request) {
         articleId: r.article_id,
         nickname: r.nickname,
         content: r.content,
+        email: r.email || null,
+        replyToNickname: r.reply_to_nickname || null,
         status: r.status,
         createdAt: r.created_at,
       })),
@@ -127,6 +130,8 @@ export async function GET(req: Request) {
 
 // ============================================================
 // POST：提交评论（不传 id，让 Supabase 自动生成 UUID）
+// 支持 email + reply_to_nickname（纯文本引用，非外键关联）
+// 提交合规邮箱时同步 Upsert 到 leads 表（商业线索静默打靶）
 // ============================================================
 export async function POST(req: Request) {
   try {
@@ -135,6 +140,12 @@ export async function POST(req: Request) {
     // 昵称默认「匿名战术家」
     const nickname = String(payload.nickname || "").trim() || "匿名战术家";
     const rawContent = String(payload.content || "").trim();
+    // 邮箱（选填）：用于线索收集 + 回复通知
+    const emailRaw = String(payload.email || "").trim();
+    const emailValid = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw);
+    const safeEmail = emailValid ? emailRaw.slice(0, 200) : "";
+    // 回复目标昵称（纯文本引用，非 parent_id 外键）
+    const replyToNickname = String(payload.replyToNickname || payload.reply_to_nickname || "").trim().slice(0, 40) || "";
 
     if (!articleId || !rawContent) {
       return NextResponse.json(
@@ -158,6 +169,7 @@ export async function POST(req: Request) {
     // 安全 1：XSS 转义
     const safeNickname = escapeHtml(nickname).slice(0, 40);
     const safeContent = escapeHtml(rawContent).slice(0, 2000);
+    const safeReplyTo = replyToNickname ? escapeHtml(replyToNickname).slice(0, 40) : "";
 
     // 安全 2：链接检测 → 含外链自动进入待审核
     const hasLinks = LINK_RE.test(rawContent) || LINK_RE.test(nickname);
@@ -209,34 +221,52 @@ export async function POST(req: Request) {
     // 生成删除凭证：前端 localStorage 保存，用户可凭此删除自己的评论
     const deleteToken = genDeleteToken();
 
-    // 构建插入数据（单层评论流：仅 article_id / nickname / content，不传 parent_id）
+    // 构建插入数据（单层平铺评论流：不传 parent_id，仅用 reply_to_nickname 做纯文本引用）
     const baseInsert: Record<string, any> = {
       article_id: articleId,
       nickname: safeNickname,
+      email: safeEmail || null,
       content: safeContent,
       ip_hash: ipHash,
       user_agent: ua,
       has_links: hasLinks,
       status,
+      reply_to_nickname: safeReplyTo || null,
     };
 
-    // 优先尝试带 delete_token 写入；若表缺少该列则降级重试（兼容旧表结构）
+    // 优先尝试带 delete_token 写入；若表缺少某列则逐步降级重试（兼容旧表结构）
     let data: any = null;
     let error: any = null;
     let tokenSaved = true;
+    let emailSaved = !!safeEmail;
+    let replySaved = !!safeReplyTo;
 
     const firstTry = await supabase
       .from("article_comments")
       .insert([{ ...baseInsert, delete_token: deleteToken }])
       .select();
 
-    if (firstTry.error && /delete_token/i.test(String(firstTry.error.message || ""))) {
-      // delete_token 列不存在 → 降级：不带该列重新写入
-      console.warn("[comments POST] delete_token 列缺失，降级重试:", firstTry.error.message);
-      tokenSaved = false;
+    const firstErr = String(firstTry.error?.message || "");
+    if (firstTry.error && /delete_token|reply_to_nickname|email/i.test(firstErr)) {
+      // 某列不存在 → 降级：仅保留确定存在的列重新写入
+      console.warn("[comments POST] 列缺失，降级重试:", firstErr);
+      tokenSaved = /delete_token/i.test(firstErr) ? false : tokenSaved;
+      emailSaved = /email/i.test(firstErr) ? false : emailSaved;
+      replySaved = /reply_to_nickname/i.test(firstErr) ? false : replySaved;
+      const fallbackInsert: Record<string, any> = {
+        article_id: articleId,
+        nickname: safeNickname,
+        content: safeContent,
+        ip_hash: ipHash,
+        user_agent: ua,
+        has_links: hasLinks,
+        status,
+      };
+      if (emailSaved) fallbackInsert.email = safeEmail || null;
+      if (replySaved) fallbackInsert.reply_to_nickname = safeReplyTo || null;
       const retry = await supabase
         .from("article_comments")
-        .insert([baseInsert])
+        .insert([fallbackInsert])
         .select();
       data = retry.data;
       error = retry.error;
@@ -246,6 +276,21 @@ export async function POST(req: Request) {
     }
 
     if (error) throw error;
+
+    // 商业线索静默打靶：若用户填写了合规邮箱，Upsert 到 leads 表（失败不影响评论主流程）
+    if (safeEmail) {
+      try {
+        await createLead(safeEmail, undefined, undefined, {
+          name: safeNickname,
+          source: "文章评论区",
+          notes: `评论：${rawContent.slice(0, 50)}`,
+          client: supabase,
+        });
+      } catch (leadErr) {
+        // Leads 写入失败仅打印日志，不影响评论提交结果
+        console.warn("[comments POST] leads upsert 静默失败:", leadErr instanceof Error ? leadErr.message : leadErr);
+      }
+    }
 
     const row: any = (data as any)?.[0];
     return NextResponse.json({
@@ -259,6 +304,8 @@ export async function POST(req: Request) {
             id: row.id,
             articleId: row.article_id,
             nickname: row.nickname,
+            email: emailSaved ? (row.email || safeEmail || null) : null,
+            replyToNickname: replySaved ? (row.reply_to_nickname || safeReplyTo || null) : null,
             content: row.content,
             status: row.status,
             createdAt: row.created_at,
