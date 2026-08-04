@@ -18,7 +18,6 @@ import {
   Sparkles,
   RefreshCw,
   ArrowRight,
-  Image as ImageIcon,
   Trash2,
   Check,
 } from "lucide-react";
@@ -1112,18 +1111,6 @@ export default function Sanctuary({
             )}
           </>
           )}
-
-          {/* 独立海报生成按钮（与上香解耦，仅主动点击才弹出 9:16 海报 Modal） */}
-          <div className="mt-10 flex justify-center">
-            <button
-              onClick={handleRevealFortune}
-              className="group inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-950/30 to-blue-950/30 px-6 py-3 text-sm font-medium text-purple-300 transition-all hover:border-purple-500/60 hover:shadow-[0_0_24px_rgba(168,85,247,0.25)]"
-            >
-              <ImageIcon className="h-4 w-4 transition-transform group-hover:scale-110" />
-              生成分享海报
-              <Sparkles className="h-3.5 w-3.5 text-purple-400/70" />
-            </button>
-          </div>
         </div>
       </div>
 

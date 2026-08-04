@@ -54,11 +54,45 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
   const [selectedInsight, setSelectedInsight] = useState<InsightItem | null>(null);
   const [copied, setCopied] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [isLiked, setIsLiked] = useState(false);
   const [showLikeFloat, setShowLikeFloat] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [insightsData, setInsightsData] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // -------- 点赞状态持久化 + 列表/弹窗双向同步 --------
+  // likedMap: { [insightId]: true } 记录已点赞的文章（localStorage 持久化）
+  // likeCountOverrides: { [insightId]: number } 记录点赞后的最新数字（同步列表卡片）
+  const LIKED_KEY = "cp_liked_insights";
+  const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
+  const [likeCountOverrides, setLikeCountOverrides] = useState<Record<string, number>>({});
+
+  // 初始化加载 localStorage 中的已点赞记录
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(LIKED_KEY);
+      if (raw) setLikedMap(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  function saveLikedMap(map: Record<string, boolean>) {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(LIKED_KEY, JSON.stringify(map));
+    } catch {}
+  }
+
+  // 获取某篇文章的当前点赞数（优先使用 override，否则用原始数据）
+  function getLikeCount(insight: InsightItem): number {
+    return likeCountOverrides[insight.id] ?? insight.likes;
+  }
+
+  // 获取某篇文章的已点赞状态
+  function getIsLiked(insightId: string): boolean {
+    return !!likedMap[insightId];
+  }
 
   // 从 Supabase 加载真实数据，无 Mock 降级
   useEffect(() => {
@@ -162,23 +196,28 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
     }
   }, [insightsData, selectedInsight]);
 
-  // 打开 Modal 时重置状态 + 拉取真实 likes（避免刷新归零）
+  // 打开 Modal 时重置状态 + 拉取真实 likes（避免刷新归零）+ 同步已点赞状态
   useEffect(() => {
     if (selectedInsight) {
-      setLikeCount(selectedInsight.likes);
+      setLikeCount(getLikeCount(selectedInsight));
+      setIsLiked(getIsLiked(String(selectedInsight.id)));
       setCopied(false);
       setShowLikeFloat(false);
       setAudioPlaying(false);
       setAudioProgress(0);
-      // 异步拉取 Supabase 最新 likes，覆盖列表缓存值
-      fetchInsightLikes(String(selectedInsight.id))
-        .then((realLikes) => {
-          if (typeof realLikes === "number") {
-            setLikeCount(realLikes);
-          }
-        })
-        .catch(() => {});
+      // 异步拉取 Supabase 最新 likes，覆盖列表缓存值（仅当未点赞时拉取，避免覆盖乐观+1）
+      if (!getIsLiked(String(selectedInsight.id))) {
+        fetchInsightLikes(String(selectedInsight.id))
+          .then((realLikes) => {
+            if (typeof realLikes === "number") {
+              setLikeCount(realLikes);
+              setLikeCountOverrides((prev) => ({ ...prev, [selectedInsight.id]: realLikes }));
+            }
+          })
+          .catch(() => {});
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInsight]);
 
   // 音频进度模拟
@@ -202,22 +241,50 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
     setTimeout(() => setCopied(false), 2000);
   }, []);
 
-  // 点赞 +1 飘字 + 持久化到 Supabase
+  // 点赞 +1 飘字 + 持久化到 Supabase + 双向同步列表/弹窗
   const handleLike = useCallback(() => {
     if (!selectedInsight) return;
-    // 乐观 +1
-    setLikeCount((prev) => prev + 1);
+    const insightId = String(selectedInsight.id);
+    // 已点赞则禁止重复发请求
+    if (getIsLiked(insightId)) {
+      setShowLikeFloat(true);
+      setTimeout(() => setShowLikeFloat(false), 1200);
+      return;
+    }
+
+    // 标记已点赞 + 乐观 +1
+    const newLikedMap = { ...likedMap, [insightId]: true };
+    setLikedMap(newLikedMap);
+    saveLikedMap(newLikedMap);
+    setIsLiked(true);
+    const newCount = likeCount + 1;
+    setLikeCount(newCount);
+    // 同步到列表 override
+    setLikeCountOverrides((prev) => ({ ...prev, [insightId]: newCount }));
     setShowLikeFloat(true);
     setTimeout(() => setShowLikeFloat(false), 1500);
-    // 异步持久化，失败回滚
-    incrementInsightLikes(String(selectedInsight.id))
+
+    // 异步持久化，成功则用 DB 真实值同步；失败回滚
+    incrementInsightLikes(insightId)
       .then((dbLikes) => {
-        if (typeof dbLikes === "number") setLikeCount(dbLikes);
+        if (typeof dbLikes === "number") {
+          setLikeCount(dbLikes);
+          setLikeCountOverrides((prev) => ({ ...prev, [insightId]: dbLikes }));
+        }
       })
       .catch(() => {
-        setLikeCount((prev) => Math.max(0, prev - 1));
+        // 回滚乐观 +1
+        const rolledBack = Math.max(0, newCount - 1);
+        setLikeCount(rolledBack);
+        setLikeCountOverrides((prev) => ({ ...prev, [insightId]: rolledBack }));
+        const revertedMap = { ...newLikedMap };
+        delete revertedMap[insightId];
+        setLikedMap(revertedMap);
+        saveLikedMap(revertedMap);
+        setIsLiked(false);
       });
-  }, [selectedInsight]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInsight, likeCount, likedMap]);
 
   // 滚动至指定区域
   const handleScrollTo = useCallback((id: string) => {
@@ -678,10 +745,14 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   <div className="relative mb-6">
                     <button
                       onClick={handleLike}
-                      className="flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-5 py-3 text-sm font-medium text-purple-300 transition-all hover:scale-105 hover:bg-purple-500/20 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                      className={`flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-medium transition-all hover:scale-105 ${
+                        isLiked
+                          ? "border-purple-400 bg-purple-500/30 text-purple-100 shadow-[0_0_20px_rgba(168,85,247,0.4)]"
+                          : "border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                      }`}
                     >
-                      <ThumbsUp className="h-4 w-4" />
-                      激发灵感 ({likeCount})
+                      <ThumbsUp className={`h-4 w-4 ${isLiked ? "fill-purple-300" : ""}`} />
+                      {isLiked ? "已激发" : "激发灵感"} ({likeCount})
                     </button>
                     <AnimatePresence>
                       {showLikeFloat && (

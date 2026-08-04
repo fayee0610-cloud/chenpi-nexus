@@ -5,7 +5,6 @@ import {
   MessageCircle,
   Send,
   Loader2,
-  AlertCircle,
   UserCircle2,
   Mail,
   ChevronDown,
@@ -114,10 +113,41 @@ export default function ArticleComments({ articleId }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // 初始化加载 localStorage 中的凭证
+  // -------- 15 秒频控 + 倒计时 --------
+  const COOLDOWN_MS = 15_000;
+  const COOLDOWN_KEY = "cp_comment_last_submit";
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  // 初始化：从 localStorage 读取上次提交时间，恢复倒计时（防刷新绕过）
   useEffect(() => {
     setDeleteTokens(getDeleteTokens());
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(COOLDOWN_KEY);
+      if (raw) {
+        const lastTs = Number(raw);
+        const elapsed = Date.now() - lastTs;
+        if (elapsed < COOLDOWN_MS) {
+          setCooldownLeft(Math.ceil((COOLDOWN_MS - elapsed) / 1000));
+        }
+      }
+    } catch {}
   }, []);
+
+  // 倒计时定时器（组件 unmount 时自动清理，防内存泄漏）
+  useEffect(() => {
+    if (cooldownLeft <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownLeft]);
 
   const load = async () => {
     setLoading(true);
@@ -177,11 +207,13 @@ export default function ArticleComments({ articleId }: Props) {
   const canSubmit =
     nickname.trim().length > 0 &&
     content.trim().length > 0 &&
-    postState.type !== "loading";
+    postState.type !== "loading" &&
+    cooldownLeft === 0;
 
   const submit = async () => {
     if (nickname.trim().length === 0 || content.trim().length === 0) return;
     if (postState.type === "loading") return;
+    if (cooldownLeft > 0) return; // 频控中
     setPostState({ type: "loading" });
     try {
       const res = await fetch("/api/articles/comments", {
@@ -207,8 +239,15 @@ export default function ArticleComments({ articleId }: Props) {
           saveDeleteToken(json.comment.id, json.deleteToken);
           setDeleteTokens(getDeleteTokens());
         }
+        // 清空表单：textarea + 回复目标 + 字数统计
         setContent("");
-        cancelReply();
+        setReplyToId(null);
+        setReplyToNick(null);
+        // 开启 15 秒倒计时 + 存入 localStorage 防刷新绕过
+        setCooldownLeft(15);
+        try {
+          localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
+        } catch {}
         if (json.status === "approved") {
           await load();
         }
@@ -352,8 +391,8 @@ export default function ArticleComments({ articleId }: Props) {
               </div>
             </div>
 
-            {/* 状态提示 */}
-            <div className="mt-3 min-h-[32px]">
+            {/* 状态提示（移除生硬红色报错框，改用柔和 zinc/amber 色调） */}
+            <div className="mt-3 min-h-[28px]">
               {postState.type === "success" ? (
                 <div
                   className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
@@ -366,8 +405,8 @@ export default function ArticleComments({ articleId }: Props) {
                   <span>{postState.message}</span>
                 </div>
               ) : postState.type === "error" ? (
-                <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <div className="flex items-start gap-2 rounded-lg border border-zinc-700/50 bg-zinc-800/30 px-3 py-2 text-xs text-zinc-400">
+                  <span className="mt-0.5 flex-shrink-0">⚠</span>
                   <span>{postState.message}</span>
                 </div>
               ) : null}
@@ -384,6 +423,11 @@ export default function ArticleComments({ articleId }: Props) {
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     提交中...
+                  </>
+                ) : cooldownLeft > 0 ? (
+                  <>
+                    <Send className="h-4 w-4" />
+                    {replyToId ? `发送回复 (${cooldownLeft}s)` : `发布评论 (${cooldownLeft}s)`}
                   </>
                 ) : (
                   <>
