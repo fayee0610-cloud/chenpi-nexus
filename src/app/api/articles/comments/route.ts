@@ -282,7 +282,7 @@ export async function POST(req: Request) {
       try {
         await createLead(safeEmail, undefined, undefined, {
           name: safeNickname,
-          source: "文章评论区",
+          source: "文章讨论区",
           notes: `评论：${rawContent.slice(0, 50)}`,
           client: supabase,
         });

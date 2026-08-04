@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   MessageCircle,
   Send,
@@ -14,7 +14,9 @@ import {
   X,
   CornerUpLeft,
   BadgeCheck,
+  Shield,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export interface ArticleComment {
   id: string;
@@ -31,7 +33,7 @@ interface Props {
   articleId: string;
 }
 
-// 作者/官方昵称白名单（匹配时渲染紫金色【陈述·作者】勋章）
+// 作者/官方昵称白名单（匹配时渲染紫金色【陈皮·作者】勋章）
 const AUTHOR_NAMES = ["陈述", "陈皮", "陈皮同学", "admin"];
 
 function isAuthor(nickname?: string | null): boolean {
@@ -40,36 +42,27 @@ function isAuthor(nickname?: string | null): boolean {
   return AUTHOR_NAMES.some((a) => a.toLowerCase() === n);
 }
 
-// localStorage key：存储用户可删除的评论凭证 { commentId: deleteToken }
-const DELETE_TOKENS_KEY = "cp_comment_delete_tokens";
+// ---------- 管理员登录态校验 ----------
+const ADMIN_TOKEN_KEY = "admin_token";
 
-function getDeleteTokens(): Record<string, string> {
-  if (typeof window === "undefined") return {};
+function validateAdminToken(token: string | null): boolean {
+  if (!token) return false;
   try {
-    const raw = localStorage.getItem(DELETE_TOKENS_KEY);
-    return raw ? JSON.parse(raw) : {};
+    // 浏览器端 atob 解码 Base64（与服务端 Buffer 生成对称，纯 ASCII 负载可安全解码）
+    const payload = JSON.parse(atob(token));
+    return payload?.role === "admin" && typeof payload?.exp === "number" && payload.exp > Date.now();
   } catch {
-    return {};
+    return false;
   }
 }
 
-function saveDeleteToken(commentId: string, token: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const existing = getDeleteTokens();
-    existing[commentId] = token;
-    localStorage.setItem(DELETE_TOKENS_KEY, JSON.stringify(existing));
-  } catch {}
+// ---------- Leads 行 id 生成（TEXT 主键，前端 upsert 时填充） ----------
+function genLeadId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-function removeDeleteToken(commentId: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const existing = getDeleteTokens();
-    delete existing[commentId];
-    localStorage.setItem(DELETE_TOKENS_KEY, JSON.stringify(existing));
-  } catch {}
-}
+// ---------- 轻量 Toast（替代 window.alert，全站统一柔和提示） ----------
+type ToastItem = { id: number; type: "success" | "error" | "info"; message: string };
 
 // 显示层 escape 安全网
 function safeText(raw: string): string {
@@ -122,29 +115,45 @@ export default function ArticleComments({ articleId }: Props) {
   const [replyToNickname, setReplyToNickname] = useState<string | null>(null);
   const [postState, setPostState] = useState<PostState>({ type: "idle" });
   const [sectionOpen, setSectionOpen] = useState(true);
-  const [deleteTokens, setDeleteTokens] = useState<Record<string, string>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // -------- 管理员登录态 --------
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // -------- 轻量 Toast --------
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastIdRef = useRef(0);
+
+  const showToast = useCallback((type: ToastItem["type"], message: string) => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    // 3.5s 后自动消失
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  }, []);
 
   // -------- 15 秒频控 + 倒计时 --------
   const COOLDOWN_MS = 15_000;
   const COOLDOWN_KEY = "cp_comment_last_submit";
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
-  // 初始化：从 localStorage 读取上次提交时间，恢复倒计时（防刷新绕过）
+  // 初始化：读取管理员登录态 + 恢复频控倒计时（防刷新绕过）
   useEffect(() => {
-    setDeleteTokens(getDeleteTokens());
-    if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem(COOLDOWN_KEY);
-      if (raw) {
-        const lastTs = Number(raw);
-        const elapsed = Date.now() - lastTs;
-        if (elapsed < COOLDOWN_MS) {
-          setCooldownLeft(Math.ceil((COOLDOWN_MS - elapsed) / 1000));
+    if (typeof window !== "undefined") {
+      setIsAdmin(validateAdminToken(localStorage.getItem(ADMIN_TOKEN_KEY)));
+      try {
+        const raw = localStorage.getItem(COOLDOWN_KEY);
+        if (raw) {
+          const lastTs = Number(raw);
+          const elapsed = Date.now() - lastTs;
+          if (elapsed < COOLDOWN_MS) {
+            setCooldownLeft(Math.ceil((COOLDOWN_MS - elapsed) / 1000));
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }, []);
 
   // 倒计时定时器（组件 unmount 时自动清理，防内存泄漏）
@@ -184,9 +193,13 @@ export default function ArticleComments({ articleId }: Props) {
     load();
   }, [articleId]);
 
+  // 邮箱必填校验：合规邮箱才允许提交
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
   const canSubmit =
     nickname.trim().length > 0 &&
     content.trim().length > 0 &&
+    emailValid &&
     postState.type !== "loading" &&
     cooldownLeft === 0;
 
@@ -203,16 +216,14 @@ export default function ArticleComments({ articleId }: Props) {
   }, []);
 
   const submit = async () => {
-    if (nickname.trim().length === 0 || content.trim().length === 0) return;
+    if (nickname.trim().length === 0 || content.trim().length === 0 || !emailValid) return;
     if (postState.type === "loading") return;
     if (cooldownLeft > 0) return; // 频控中
     setPostState({ type: "loading" });
 
     const submittedNickname = nickname.trim().slice(0, 40) || "匿名战术家";
     const submittedContent = content.trim().slice(0, 2000);
-    const emailRaw = email.trim();
-    const emailValid = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw);
-    const submittedEmail = emailValid ? emailRaw.slice(0, 200) : "";
+    const submittedEmail = email.trim().slice(0, 200);
 
     // 乐观插入：立即把新评论插入列表顶部（临时 id，DB 返回后替换）
     const tempId = `temp_${Date.now()}`;
@@ -221,7 +232,7 @@ export default function ArticleComments({ articleId }: Props) {
       articleId,
       nickname: submittedNickname,
       content: submittedContent,
-      email: submittedEmail || null,
+      email: submittedEmail,
       replyToNickname: replyToNickname || null,
       status: "approved",
       createdAt: new Date().toISOString(),
@@ -238,6 +249,36 @@ export default function ArticleComments({ articleId }: Props) {
       localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
     } catch {}
 
+    // ===== 异步任务 2：静默同步至 Leads 表（与评论插入并行，独立 try/catch 防阻断） =====
+    // 哪怕因 RLS 权限拦截导致 Leads 写入失败，也绝不阻断评论发布
+    if (submittedEmail && supabase) {
+      // async IIFE：不 await，独立异常隔离，绝不阻塞评论主流程
+      (async () => {
+        try {
+          const { error } = await supabase
+            .from("leads")
+            .upsert(
+              [
+                {
+                  id: genLeadId(),
+                  email: submittedEmail,
+                  name: submittedNickname,
+                  source: "文章讨论区",
+                  notes: submittedContent,
+                },
+              ],
+              { onConflict: "email" }
+            );
+          if (error) {
+            console.warn("[Leads] 静默沉淀失败（不影响评论）:", error.message);
+          }
+        } catch (e: any) {
+          console.warn("[Leads] 静默沉淀异常（不影响评论）:", e?.message || e);
+        }
+      })();
+    }
+
+    // ===== 异步任务 1：向 article_comments 插入评论 =====
     try {
       const res = await fetch("/api/articles/comments", {
         method: "POST",
@@ -257,11 +298,6 @@ export default function ArticleComments({ articleId }: Props) {
           pending: json.status === "pending_review",
           message: json.message || "评论发布成功",
         });
-        // 保存删除凭证到 localStorage
-        if (json.deleteToken && json.comment?.id) {
-          saveDeleteToken(json.comment.id, json.deleteToken);
-          setDeleteTokens(getDeleteTokens());
-        }
         // 用 DB 返回的真实评论替换临时乐观评论
         if (json.comment?.id) {
           const realComment: ArticleComment = {
@@ -269,7 +305,7 @@ export default function ArticleComments({ articleId }: Props) {
             articleId,
             nickname: submittedNickname,
             content: submittedContent,
-            email: submittedEmail || null,
+            email: submittedEmail,
             replyToNickname: replyToNickname || null,
             status: json.status || "approved",
             createdAt: json.comment.createdAt || new Date().toISOString(),
@@ -303,35 +339,61 @@ export default function ArticleComments({ articleId }: Props) {
     }
   };
 
-  // 用户自主删除评论
-  const handleDelete = useCallback(async (commentId: string) => {
-    const token = deleteTokens[commentId];
-    if (!token) return;
-    setDeletingId(commentId);
-    try {
-      const res = await fetch(`/api/articles/comments?id=${encodeURIComponent(commentId)}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deleteToken: token }),
-      });
-      const json = await res.json();
-      if (json?.success) {
-        removeDeleteToken(commentId);
-        setDeleteTokens(getDeleteTokens());
-        setConfirmDeleteId(null);
-        setComments((prev) => prev.filter((c) => c.id !== commentId));
-      } else {
-        alert(json?.error || "删除失败");
+  // 管理员删除评论（仅管理员可执行，走 admin 模式直删）
+  const handleDelete = useCallback(
+    async (commentId: string) => {
+      if (!isAdmin) return;
+      setDeletingId(commentId);
+      try {
+        const res = await fetch(`/api/articles/comments?id=${encodeURIComponent(commentId)}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ admin: true }),
+        });
+        const json = await res.json();
+        if (json?.success) {
+          setConfirmDeleteId(null);
+          setComments((prev) => prev.filter((c) => c.id !== commentId));
+          showToast("success", "评论已删除");
+        } else {
+          showToast("error", json?.error || "删除失败");
+        }
+      } catch (err: any) {
+        showToast("error", err?.message || "删除失败");
+      } finally {
+        setDeletingId(null);
       }
-    } catch (err: any) {
-      alert(err?.message || "删除失败");
-    } finally {
-      setDeletingId(null);
-    }
-  }, [deleteTokens]);
+    },
+    [isAdmin, showToast]
+  );
 
   return (
     <section className="mt-14 border-t border-zinc-800 pt-8">
+      {/* ===== Toast 提示层（替代 window.alert，柔和浮层） ===== */}
+      <div className="pointer-events-none fixed inset-x-0 top-4 z-[9999] flex flex-col items-center gap-2 px-4">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm shadow-2xl backdrop-blur-md ${
+              t.type === "success"
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                : t.type === "error"
+                ? "border-red-500/30 bg-red-500/15 text-red-300"
+                : "border-zinc-700/50 bg-zinc-800/80 text-zinc-200"
+            }`}
+          >
+            {t.type === "success" ? (
+              <Check className="h-4 w-4 flex-shrink-0" />
+            ) : t.type === "error" ? (
+              <X className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <MessageCircle className="h-4 w-4 flex-shrink-0" />
+            )}
+            <span>{t.message}</span>
+          </div>
+        ))}
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5 text-purple-400" />
@@ -341,6 +403,13 @@ export default function ArticleComments({ articleId }: Props) {
           <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400">
             {comments.length} 条
           </span>
+          {/* 管理员标识（仅管理员可见） */}
+          {isAdmin && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+              <Shield className="h-3 w-3" />
+              管理员模式
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -400,15 +469,17 @@ export default function ArticleComments({ articleId }: Props) {
               <label className="block flex-1">
                 <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-zinc-400">
                   <Mail className="h-3.5 w-3.5" />
-                  邮箱（选填）
+                  邮箱 <span className="text-red-400">*</span>
                 </span>
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
-                  placeholder="邮箱（选填，用于接收作者点评与回复通知）"
+                  placeholder="邮箱（必填，用于接收陈皮点评与回复提醒）"
                   maxLength={200}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500/50"
+                  className={`w-full rounded-xl border bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-purple-500/50 ${
+                    email && !emailValid ? "border-amber-500/40" : "border-zinc-800"
+                  }`}
                 />
               </label>
             </div>
@@ -428,7 +499,7 @@ export default function ArticleComments({ articleId }: Props) {
               </div>
             </div>
 
-            {/* 状态提示（柔和 zinc/amber 色调，无生硬红色报错框） */}
+            {/* 状态提示（柔和 zinc/amber/emerald 色调，无生硬红色报错框） */}
             <div className="mt-3 min-h-[28px]">
               {postState.type === "success" ? (
                 <div
@@ -489,7 +560,6 @@ export default function ArticleComments({ articleId }: Props) {
             ) : (
               <ul className="space-y-3">
                 {comments.map((comment) => {
-                  const canDelete = !!deleteTokens[comment.id];
                   const author = isAuthor(comment.nickname);
                   return (
                     <li
@@ -515,11 +585,11 @@ export default function ArticleComments({ articleId }: Props) {
                               <span className="truncate text-sm font-medium text-zinc-100">
                                 {safeText(comment.nickname)}
                               </span>
-                              {/* 作者/官方专属身份勋章 */}
+                              {/* 作者/官方专属身份勋章（紫金色【陈皮·作者】） */}
                               {author && (
                                 <span className="inline-flex items-center gap-0.5 rounded-md border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
                                   <BadgeCheck className="h-2.5 w-2.5" />
-                                  陈述·作者
+                                  陈皮·作者
                                 </span>
                               )}
                             </div>
@@ -538,11 +608,12 @@ export default function ArticleComments({ articleId }: Props) {
                           >
                             <CornerUpLeft className="h-3 w-3" />
                           </button>
-                          {canDelete && (
+                          {/* 删除按钮：仅管理员登录后渲染（普通访客绝对不渲染） */}
+                          {isAdmin && (
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(comment.id)}
-                              title="删除我的评论"
+                              title="管理员删除"
                               className="flex-shrink-0 rounded-lg border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition-colors hover:border-red-500/40 hover:text-red-400"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -554,10 +625,10 @@ export default function ArticleComments({ articleId }: Props) {
                         {safeText(comment.content)}
                       </div>
 
-                      {/* 删除确认 */}
-                      {confirmDeleteId === comment.id && (
+                      {/* 删除确认（仅管理员触发） */}
+                      {confirmDeleteId === comment.id && isAdmin && (
                         <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs">
-                          <span className="text-red-300">确定删除这条评论？</span>
+                          <span className="text-red-300">确定删除这条评论？（管理员操作）</span>
                           <button
                             type="button"
                             onClick={() => handleDelete(comment.id)}
