@@ -63,7 +63,7 @@ import {
   uploadPortfolioCover,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
-import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory, HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
+import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL as HARDCORE_TAGS_POOL_CONST, FLAT_HARDCORE_TAGS as FLAT_HARDCORE_TAGS_CONST } from "@/data/siteData";
 
 type AdminTab = "portfolio" | "insights" | "comments" | "sanctuary" | "resources" | "leads" | "hub" | "config";

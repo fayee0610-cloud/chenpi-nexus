@@ -33,10 +33,11 @@ export default function Hero() {
               {profile.status}
             </div>
 
-            {/* 大标题：响应式字号缩放 + 紫蓝渐变高亮关键词 */}
+            {/* 大标题：严格两行结构 + 紫蓝渐变高亮「人」「AI」「市场」 */}
             <h1 className="mb-6 text-3xl font-extrabold leading-tight tracking-tight text-zinc-50 sm:text-4xl lg:text-5xl xl:text-6xl">
-              以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">人</span>为本，
-              <br className="hidden sm:block" />
+              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">人</span>为本，
+              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">AI</span> 为杠杆
+              <br />
               <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">市场</span>会有答案。
             </h1>
 
@@ -68,21 +69,13 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="w-full max-w-md mx-auto lg:max-w-lg lg:flex-1"
           >
-            <div className="group relative aspect-square overflow-hidden rounded-2xl border border-purple-500/40 bg-zinc-900 shadow-[0_0_30px_rgba(168,85,247,0.2)] transition-all duration-500 hover:shadow-[0_0_25px_rgba(168,85,247,0.4)]">
-              {/* 图片 + CSS 赛博调色 */}
+            <div className="group relative aspect-square overflow-hidden rounded-2xl border border-purple-500/50 bg-zinc-900 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-500 hover:shadow-[0_0_28px_rgba(168,85,247,0.45)]">
+              {/* 图片：100% 原色清晰展示，无任何滤镜 */}
               <img
                 src={profile.avatarUrl}
                 alt="Avatar"
-                className="h-full w-full object-cover brightness-95 contrast-110 saturate-90"
+                className="h-full w-full object-cover"
               />
-
-              {/* 激光扫描线：从上至下无缝循环穿过的紫蓝色光束（2s/次） */}
-              <div className="animate-laser-scanline pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-transparent via-purple-400/30 to-transparent" />
-              <div className="animate-laser-scanline pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/80 to-transparent shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
-
-              {/* 深紫深蓝渐变遮罩 */}
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/30 to-transparent mix-blend-multiply" />
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-950/20 via-transparent to-blue-950/20 mix-blend-overlay" />
 
               {/* 右上角科技角标：状态灯呼吸脉冲 */}
               <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-green-500/30 bg-zinc-950/80 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur-sm">
@@ -94,8 +87,8 @@ export default function Hero() {
                 📡 SYSTEM: ONLINE
               </div>
 
-              {/* 左下角属性标签 */}
-              <div className="absolute bottom-0 left-0 right-0 p-5">
+              {/* 左下角属性标签（局部深色渐变保证可读，非紫色蒙层） */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-zinc-950 via-zinc-950/75 to-transparent p-5 pt-16">
                 <div className="mb-3 flex flex-wrap gap-2">
                   {profile.tags.map((tag) => (
                     <span
