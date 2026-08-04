@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { InsightItem } from "@/data/siteData";
 import { fetchInsights, fetchInsightLikes, incrementInsightLikes } from "@/lib/dataApi";
+import { isInspired, markInspired, unmarkInspired, getInspiredIds } from "@/lib/inspireState";
 import ArticleComments from "@/app/insights/[id]/ArticleComments";
 import LoadMoreButton from "@/components/LoadMoreButton";
 
@@ -60,38 +61,34 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
   const [audioProgress, setAudioProgress] = useState(0);
   const [insightsData, setInsightsData] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // 点赞回声提示（已点赞 / 失败回滚）
+  const [likeEcho, setLikeEcho] = useState<string | null>(null);
 
   // -------- 点赞状态持久化 + 列表/弹窗双向同步 --------
-  // likedMap: { [insightId]: true } 记录已点赞的文章（localStorage 持久化）
+  // 共享 localStorage 源（inspired_articles）：与独立详情页 InspireButton 完全同源
+  // likedMap: 本地镜像 { [insightId]: true }，用于驱动渲染
   // likeCountOverrides: { [insightId]: number } 记录点赞后的最新数字（同步列表卡片）
-  const LIKED_KEY = "cp_liked_insights";
   const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
   const [likeCountOverrides, setLikeCountOverrides] = useState<Record<string, number>>({});
 
-  // 初始化加载 localStorage 中的已点赞记录
+  // 初始化：从共享 localStorage 同步已点赞记录
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem(LIKED_KEY);
-      if (raw) setLikedMap(JSON.parse(raw));
-    } catch {}
+    // 读取共享源（含历史 key 迁移），构建本地镜像
+    const ids = getInspiredIds();
+    const map: Record<string, boolean> = {};
+    ids.forEach((id) => (map[id] = true));
+    setLikedMap(map);
   }, []);
-
-  function saveLikedMap(map: Record<string, boolean>) {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(LIKED_KEY, JSON.stringify(map));
-    } catch {}
-  }
 
   // 获取某篇文章的当前点赞数（优先使用 override，否则用原始数据）
   function getLikeCount(insight: InsightItem): number {
     return likeCountOverrides[insight.id] ?? insight.likes;
   }
 
-  // 获取某篇文章的已点赞状态
+  // 获取某篇文章的已点赞状态（读取共享源，确保跨页面一致）
   function getIsLiked(insightId: string): boolean {
-    return !!likedMap[insightId];
+    return isInspired(insightId);
   }
 
   // 从 Supabase 加载真实数据，无 Mock 降级
@@ -203,6 +200,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
       setIsLiked(getIsLiked(String(selectedInsight.id)));
       setCopied(false);
       setShowLikeFloat(false);
+      setLikeEcho(null);
       setAudioPlaying(false);
       setAudioProgress(0);
       // 异步拉取 Supabase 最新 likes，覆盖列表缓存值（仅当未点赞时拉取，避免覆盖乐观+1）
@@ -245,21 +243,21 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
   const handleLike = useCallback(() => {
     if (!selectedInsight) return;
     const insightId = String(selectedInsight.id);
-    // 已点赞则禁止重复发请求
+    // 已点赞：维持高亮 + 友好提示，不重复递增（本地防刷）
     if (getIsLiked(insightId)) {
-      setShowLikeFloat(true);
-      setTimeout(() => setShowLikeFloat(false), 1200);
+      setIsLiked(true);
+      setLikeEcho("已收到你的灵感共鸣！");
+      setTimeout(() => setLikeEcho(null), 2000);
       return;
     }
 
-    // 标记已点赞 + 乐观 +1
-    const newLikedMap = { ...likedMap, [insightId]: true };
-    setLikedMap(newLikedMap);
-    saveLikedMap(newLikedMap);
+    // 标记已点赞（写入共享 localStorage）+ 乐观 +1
+    markInspired(insightId);
+    setLikedMap((prev) => ({ ...prev, [insightId]: true }));
     setIsLiked(true);
     const newCount = likeCount + 1;
     setLikeCount(newCount);
-    // 同步到列表 override
+    // 同步到列表 override（卡片与弹窗同源）
     setLikeCountOverrides((prev) => ({ ...prev, [insightId]: newCount }));
     setShowLikeFloat(true);
     setTimeout(() => setShowLikeFloat(false), 1500);
@@ -273,18 +271,22 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
         }
       })
       .catch(() => {
-        // 回滚乐观 +1
+        // 回滚乐观 +1 + 取消高亮标记（共享 localStorage）
+        unmarkInspired(insightId);
         const rolledBack = Math.max(0, newCount - 1);
         setLikeCount(rolledBack);
         setLikeCountOverrides((prev) => ({ ...prev, [insightId]: rolledBack }));
-        const revertedMap = { ...newLikedMap };
-        delete revertedMap[insightId];
-        setLikedMap(revertedMap);
-        saveLikedMap(revertedMap);
+        setLikedMap((prev) => {
+          const next = { ...prev };
+          delete next[insightId];
+          return next;
+        });
         setIsLiked(false);
+        setLikeEcho("网络开小差了，稍后再试");
+        setTimeout(() => setLikeEcho(null), 2000);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedInsight, likeCount, likedMap]);
+  }, [selectedInsight, likeCount]);
 
   // 滚动至指定区域
   const handleScrollTo = useCallback((id: string) => {
@@ -497,6 +499,13 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   <p className="text-xs leading-relaxed text-zinc-500 line-clamp-2">
                     {item.excerpt}
                   </p>
+                  {/* 点赞数（与弹窗同源：getLikeCount + likedMap 镜像，关闭弹窗后卡片同步最新） */}
+                  <div className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-500">
+                    <ThumbsUp className={`h-3 w-3 ${likedMap[String(item.id)] ? "fill-purple-400 text-purple-400" : ""}`} />
+                    <span className={likedMap[String(item.id)] ? "font-semibold text-purple-300" : ""}>
+                      {getLikeCount(item)}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -764,6 +773,20 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                           className="pointer-events-none absolute left-20 top-0 text-lg font-bold text-purple-400"
                         >
                           +1 ⚡
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    {/* 回声提示（已点赞 / 失败回滚） */}
+                    <AnimatePresence>
+                      {likeEcho && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 6 }}
+                          transition={{ duration: 0.2 }}
+                          className="pointer-events-none absolute left-0 top-full mt-2 whitespace-nowrap rounded-lg border border-purple-500/30 bg-zinc-900/95 px-3 py-1.5 text-xs text-purple-200 shadow-xl backdrop-blur-md"
+                        >
+                          {likeEcho}
                         </motion.div>
                       )}
                     </AnimatePresence>
