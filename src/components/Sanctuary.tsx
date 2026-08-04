@@ -469,6 +469,8 @@ export default function Sanctuary({
   const [loadingStats, setLoadingStats] = useState(true);
   const lastIncenseClickRef = useRef(0);
   const INCENSE_COOLDOWN_MS = 500; // 500ms 防刷
+  // 上香 Toast 提示
+  const [incenseToast, setIncenseToast] = useState<string | null>(null);
   const fortuneRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fartIdRef = useRef(4);
@@ -570,6 +572,58 @@ export default function Sanctuary({
     setCurrentQuote(pickRandomQuote(cat));
   }, [pickRandomQuote]);
 
+  // -------- 每日上香防刷：每个香柱每天最多上香 1 次 --------
+  const INCENSE_DAILY_KEY = "cp_incense_daily";
+  // 每个香柱每天最多上香次数
+  const INCENSE_DAILY_LIMIT = 1;
+
+  function getTodayKey(): string {
+    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  }
+
+  function getIncenseDailyMap(): Record<string, number> {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem(INCENSE_DAILY_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      // 自动清理过期日期记录
+      const today = getTodayKey();
+      const filtered: Record<string, any> = {};
+      for (const [date, map] of Object.entries(parsed || {})) {
+        if (date === today) filtered[date] = map;
+      }
+      return filtered[today] || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function getIncenseTodayCount(incenseId: string): number {
+    const map = getIncenseDailyMap();
+    return Number(map[incenseId] || 0);
+  }
+
+  function recordIncenseToday(incenseId: string) {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(INCENSE_DAILY_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const today = getTodayKey();
+      if (!parsed[today]) parsed[today] = {};
+      parsed[today][incenseId] = (parsed[today][incenseId] || 0) + 1;
+      window.localStorage.setItem(INCENSE_DAILY_KEY, JSON.stringify(parsed));
+    } catch {
+      // 静默忽略
+    }
+  }
+
+  // 上香 Toast 显示（3秒后自动消失）
+  const showIncenseToast = useCallback((msg: string) => {
+    setIncenseToast(msg);
+    setTimeout(() => setIncenseToast(null), 3000);
+  }, []);
+
   const handleIncenseClick = useCallback((id: string) => {
     // 1) 前端防刷：500ms 冷却期
     const now = Date.now();
@@ -578,8 +632,20 @@ export default function Sanctuary({
     }
     lastIncenseClickRef.current = now;
 
-    // 仅触发赛博上香视觉特效：发光烟雾、Buff 飘字、功德计数 +1
-    // 严禁触发任何海报/便签弹窗（已解耦）
+    // 2) 每日防刷：每个香柱每天最多上香 INCENSE_DAILY_LIMIT 次
+    const todayCount = getIncenseTodayCount(id);
+    if (todayCount >= INCENSE_DAILY_LIMIT) {
+      showIncenseToast("今日诚心已至，明日再来上香吧！");
+      // 仍触发一次微弱视觉反馈（不增加计数）
+      setActiveIncense(id);
+      setTimeout(() => setActiveIncense(null), 800);
+      return;
+    }
+
+    // 记录今日上香次数
+    recordIncenseToday(id);
+
+    // 触发赛博上香视觉特效：发光烟雾、Buff 飘字、功德计数 +1
     setActiveIncense(id);
     const randomBuff = buffs[Math.floor(Math.random() * buffs.length)];
     setBuffText(randomBuff);
@@ -589,8 +655,10 @@ export default function Sanctuary({
     );
     // 先乐观更新 UI，后端完成后再同步真实值
     setTotalEnergy((prev) => prev + 1);
+    // Toast 温馨提示
+    showIncenseToast("诚心已至，愿以此祝祷！");
 
-    // 2) 持久化：原子递增 DB 总能量 + 单柱 count
+    // 3) 持久化：原子递增 DB 总能量 + 单柱 count
     incrementIncense(id)
       .then((dbCount) => {
         if (typeof dbCount === "number") {
@@ -603,7 +671,7 @@ export default function Sanctuary({
 
     setTimeout(() => setActiveIncense(null), 1000);
     setTimeout(() => setBuffText(null), 2500);
-  }, []);
+  }, [showIncenseToast]);
 
   // 表态 +1
   const handleReaction = useCallback((fartId: number, key: keyof SanctuaryPost["reactions"]) => {
@@ -1353,6 +1421,21 @@ export default function Sanctuary({
                 </p>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 上香 Toast 提示 */}
+      <AnimatePresence>
+        {incenseToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 20, x: "-50%" }}
+            className="fixed bottom-8 left-1/2 z-[60] flex items-center gap-2 rounded-xl border border-purple-500/30 bg-zinc-900/95 px-4 py-2.5 text-sm text-purple-200 shadow-2xl backdrop-blur-sm"
+          >
+            <span className="text-base">🕯️</span>
+            {incenseToast}
           </motion.div>
         )}
       </AnimatePresence>

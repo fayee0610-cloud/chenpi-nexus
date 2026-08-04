@@ -1120,6 +1120,23 @@ export async function incrementIdeaEnergy(ideaId: string | number): Promise<numb
 }
 
 /**
+ * 读取单篇文章最新 likes（供弹窗打开时拉取真实数值，避免刷新归零）
+ * 失败返回 null，前端降级使用列表中的缓存值
+ */
+export async function fetchInsightLikes(insightId: string): Promise<number | null> {
+  try {
+    const res = await fetch(`/api/insights/like?insight_id=${encodeURIComponent(insightId)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json && typeof json.likes === "number") return json.likes;
+    return null;
+  } catch (err) {
+    logNetworkFallback("fetchInsightLikes", err);
+    return null;
+  }
+}
+
+/**
  * 文章【激发灵感】持久化（insights.likes 原子递增）
  * 服务端使用 service_role key，失败返回 null，前端降级为纯内存计数
  */

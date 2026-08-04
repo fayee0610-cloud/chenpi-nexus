@@ -10,6 +10,39 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
 
+/**
+ * GET：读取单篇文章的最新 likes（供弹窗打开时拉取真实数值）
+ */
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const insightId = searchParams.get("insight_id");
+    if (!insightId) {
+      return NextResponse.json({ success: false, error: "缺少 insight_id 参数" }, { status: 400 });
+    }
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) {
+      return NextResponse.json({ success: false, error: "Supabase 未配置", likes: null });
+    }
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(url, serviceKey);
+
+    const { data, error } = await (supabase as any)
+      .from("insights")
+      .select("likes")
+      .eq("id", insightId)
+      .single();
+    if (error || !data) {
+      return NextResponse.json({ success: false, likes: null, error: error?.message });
+    }
+    return NextResponse.json({ success: true, likes: Number(data.likes || 0) });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err?.message, likes: null }, { status: 500 });
+  }
+}
+
 const IP_RATE_WINDOW_MS = 60_000;
 const IP_RATE_MAX_PER_WINDOW = 20;
 const ipBucket = new Map<string, { count: number; resetAt: number }>();

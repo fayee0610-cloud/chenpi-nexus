@@ -23,7 +23,8 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import type { InsightItem } from "@/data/siteData";
-import { fetchInsights } from "@/lib/dataApi";
+import { fetchInsights, fetchInsightLikes, incrementInsightLikes } from "@/lib/dataApi";
+import ArticleComments from "@/app/insights/[id]/ArticleComments";
 import LoadMoreButton from "@/components/LoadMoreButton";
 
 type FilterKey = "all" | "featured" | "article" | "short" | "podcast";
@@ -117,7 +118,51 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
     };
   }, [selectedInsight]);
 
-  // 打开 Modal 时重置状态
+  // URL 路由同步：打开弹窗写入 ?id=xxx，关闭还原
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedInsight) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("id", String(selectedInsight.id));
+      window.history.pushState({}, "", url.toString());
+    } else {
+      // 关闭时移除 id 参数（仅当存在时）
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("id")) {
+        url.searchParams.delete("id");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }, [selectedInsight]);
+
+  // 监听 popstate（浏览器前进/后退）同步关闭弹窗
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPop = () => {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("id")) {
+        setSelectedInsight(null);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // 页面首次加载：检测 URL ?id=xxx 自动唤起对应弹窗（解决刷新掉回主页）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const idFromUrl = url.searchParams.get("id");
+    if (!idFromUrl) return;
+    // 等数据加载完成后匹配
+    if (insightsData.length === 0) return;
+    const match = insightsData.find((i) => String(i.id) === idFromUrl);
+    if (match && !selectedInsight) {
+      setSelectedInsight(match);
+    }
+  }, [insightsData, selectedInsight]);
+
+  // 打开 Modal 时重置状态 + 拉取真实 likes（避免刷新归零）
   useEffect(() => {
     if (selectedInsight) {
       setLikeCount(selectedInsight.likes);
@@ -125,6 +170,14 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
       setShowLikeFloat(false);
       setAudioPlaying(false);
       setAudioProgress(0);
+      // 异步拉取 Supabase 最新 likes，覆盖列表缓存值
+      fetchInsightLikes(String(selectedInsight.id))
+        .then((realLikes) => {
+          if (typeof realLikes === "number") {
+            setLikeCount(realLikes);
+          }
+        })
+        .catch(() => {});
     }
   }, [selectedInsight]);
 
@@ -149,12 +202,22 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
     setTimeout(() => setCopied(false), 2000);
   }, []);
 
-  // 点赞 +1 飘字
+  // 点赞 +1 飘字 + 持久化到 Supabase
   const handleLike = useCallback(() => {
+    if (!selectedInsight) return;
+    // 乐观 +1
     setLikeCount((prev) => prev + 1);
     setShowLikeFloat(true);
     setTimeout(() => setShowLikeFloat(false), 1500);
-  }, []);
+    // 异步持久化，失败回滚
+    incrementInsightLikes(String(selectedInsight.id))
+      .then((dbLikes) => {
+        if (typeof dbLikes === "number") setLikeCount(dbLikes);
+      })
+      .catch(() => {
+        setLikeCount((prev) => Math.max(0, prev - 1));
+      });
+  }, [selectedInsight]);
 
   // 滚动至指定区域
   const handleScrollTo = useCallback((id: string) => {
@@ -633,6 +696,11 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                         </motion.div>
                       )}
                     </AnimatePresence>
+                  </div>
+
+                  {/* 读者战术讨论区（评论区，直接嵌入弹窗内） */}
+                  <div className="mb-6 mt-2">
+                    <ArticleComments articleId={String(selectedInsight.id)} />
                   </div>
 
                   {/* 引导转化区 */}
