@@ -116,11 +116,22 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         if (duplicatesRemoved > 0) {
           setAiMessage(`⚠️ 24h 内已有重复情报（跳过 ${duplicatesRemoved} 条），稍后再试或换个时间`);
         } else if (!result.success) {
-          // 优先展示真实 Supabase 错误 + hint 修复指引
+          // 优先展示真实错误 + errorType 诊断
           const realErr = result.error || (result.errors && result.errors[0]) || result.message || "未知错误";
-          // hint 太长，截取关键部分展示
-          const hint = result.hint ? ` | 修复：${result.hint.slice(0, 80)}...` : "";
-          setAiMessage(`❌ ${realErr}${hint}`);
+          // 根据 errorType 给出更精准的修复建议
+          let fixHint = "";
+          if (result.errorType === "no_key") {
+            fixHint = " → 请在 .env.local 配置 AI_API_KEY";
+          } else if (result.errorType === "http_error") {
+            fixHint = " → 请检查 API Key 有效性 / 账户余额";
+          } else if (result.errorType === "parse_fail" || result.errorType === "no_json") {
+            fixHint = " → AI 输出格式异常，请重试或检查 Prompt";
+          } else if (result.errorType === "timeout") {
+            fixHint = " → AI 响应超时，请稍后重试";
+          } else if (result.hint) {
+            fixHint = ` | 修复：${result.hint.slice(0, 80)}...`;
+          }
+          setAiMessage(`❌ ${realErr}${fixHint}`);
         } else {
           setAiMessage(result.message || "暂无新情报，稍后再试");
         }
@@ -262,14 +273,56 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                     {item.title}
                   </h3>
 
-                  {/* 陈皮提炼标签 + 看点 */}
+                  {/* 陈皮提炼标签 + 看点（分区块渲染） */}
                   <div className="mb-3">
-                    <span className="mb-1.5 inline-block rounded bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400">
-                      【陈皮提炼】
-                    </span>
-                    <p className="text-xs leading-relaxed text-zinc-400">
-                      {item.summary}
-                    </p>
+                    {(() => {
+                      const raw = item.summary || "";
+                      // 兼容新旧格式：尝试按【...】分段
+                      const factMatch = raw.match(/【一手核心事实[^】]*】([\s\S]*?)(?=【陈皮战术洞察|$)/);
+                      const insightMatch = raw.match(/【陈皮战术洞察[^】]*】([\s\S]*?)$/);
+                      const hasSections = factMatch || insightMatch;
+
+                      if (!hasSections) {
+                        // 旧数据：整体展示，开启 whitespace-pre-line 兼容换行
+                        return (
+                          <>
+                            <span className="mb-1.5 inline-block rounded bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400">
+                              【陈皮提炼】
+                            </span>
+                            <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-400">
+                              {raw}
+                            </p>
+                          </>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-2">
+                          {/* 一手核心事实 */}
+                          {factMatch && (
+                            <div>
+                              <span className="mb-1 inline-block rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-bold text-blue-400">
+                                【一手核心事实】
+                              </span>
+                              <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-400">
+                                {factMatch[1].trim()}
+                              </p>
+                            </div>
+                          )}
+                          {/* 陈皮战术洞察 — 专属渐变底色 + 左侧加粗 Border */}
+                          {insightMatch && (
+                            <div className="rounded-lg border-l-[3px] border-purple-500/60 bg-gradient-to-br from-purple-500/10 via-zinc-900/40 to-blue-500/5 p-2.5">
+                              <span className="mb-1 inline-block rounded bg-gradient-to-r from-purple-500/20 to-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-300">
+                                【陈皮战术洞察】
+                              </span>
+                              <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-300">
+                                {insightMatch[1].trim()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* 标签 */}

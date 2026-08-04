@@ -28,11 +28,28 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Vercel 函数最大执行时长
 
 // ---------- AI 配置 ----------
+// Key 读取优先级：AI_API_KEY → OPENAI_API_KEY → DEEPSEEK_API_KEY
+// baseURL / model 同理：显式 env → 按 key 类型推断默认值
 const AI_CONFIG = {
   apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || "",
   baseURL: process.env.AI_BASE_URL || (process.env.DEEPSEEK_API_KEY ? "https://api.deepseek.com/v1" : "https://api.openai.com/v1"),
   model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
 };
+
+// 诊断日志：打印当前实际使用的 AI 配置（Key 只显示前8位，不泄露完整密钥）
+function logAiConfig() {
+  const keySource = process.env.AI_API_KEY
+    ? "AI_API_KEY"
+    : process.env.OPENAI_API_KEY
+    ? "OPENAI_API_KEY"
+    : process.env.DEEPSEEK_API_KEY
+    ? "DEEPSEEK_API_KEY"
+    : "(none)";
+  const maskedKey = AI_CONFIG.apiKey ? `${AI_CONFIG.apiKey.slice(0, 8)}...${AI_CONFIG.apiKey.slice(-4)}` : "(empty)";
+  console.log(
+    `[cron/fetch-intelligence] AI 配置 → source=${keySource} | key=${maskedKey} | baseURL=${AI_CONFIG.baseURL} | model=${AI_CONFIG.model}`
+  );
+}
 
 // ---------- 允许的三大分类 ----------
 const ALLOWED_CATEGORIES = [
@@ -83,7 +100,9 @@ const SYSTEM_PROMPT = `你是"陈皮"，一位深耕 AI / 具身智能 / GTM 战
 - 跨境电商选品、铺货、买量投流、刷粉
 - 与三大板块无关的泛资讯
 
-## 输出格式（严格 JSON 数组，4 条，严格国内 2 + 海外 2，不要输出任何其他文字）
+## 输出格式（严格 JSON 数组，4 条，严格国内 2 + 海外 2）
+**必须直接输出纯 JSON 数组，禁止使用 \`\`\`json 或任何 markdown 代码块标记包裹，禁止在 JSON 前后添加任何解释性文字。**
+
 [
   {
     "title": "情报标题（专业、精确、直击本质，20字以内）",
@@ -91,7 +110,7 @@ const SYSTEM_PROMPT = `你是"陈皮"，一位深耕 AI / 具身智能 / GTM 战
     "source_name": "信息来源（如：机构报告 / 大厂发布 / 专家访谈）",
     "source_url": "原文/报告链接（真实可访问 URL，例如机构的公开报告页面，如：https://www.mckinsey.com/ 或 https://openai.com/blog 或 https://news.mit.edu）",
     "publish_date": "YYYY-MM-DD",
-    "summary": "【一手核心事实/报告精髓】\\n说明该报告/访谈/策略的核心要点（2-3句）。\\n\\n【陈皮战术洞察】\\n从 ToB/ToC 营销、GTM、公关或 GEO 角度，分析该动态对垂直行业的启发与可延展研究切入点。"
+    "summary": "【一手核心事实】\\n用段落换行和 Bullet Points（• ）分点呈现该报告/访谈/策略的核心要点，突出关键数据与事实。每点一行，用 • 开头。\\n\\n【陈皮战术洞察】\\n🎯 战术拆解\\n从 ToB/ToC 营销、GTM、公关或 GEO 角度拆解该动态的战术逻辑。\\n\\n🚀 GTM/落地启示\\n给出可落地的行动建议或可延展的研究切入点。"
   }
 ]
 
@@ -119,58 +138,138 @@ type RawItem = {
   summary?: string;
 };
 
-async function generateIntelligence(): Promise<RawItem[]> {
-  if (!AI_CONFIG.apiKey) {
-    console.warn("[cron/fetch-intelligence] AI API Key 未配置，跳过生成");
-    return [];
+// 结构化返回：items + 真实错误原因（回传前端定位问题）
+type GenResult = {
+  items: RawItem[];
+  error: string | null;      // 人类可读的错误原因
+  errorType: string | null;  // 机器可读的错误类型（no_key / http_error / empty_content / no_json / parse_fail / timeout / network）
+};
+
+/**
+ * 剥离 AI 返回中可能存在的 ```json ... ``` markdown 代码块包裹
+ * 兼容：```json\n[...]\n``` / ```\n[...]\n``` / 纯 [...]
+ */
+function stripCodeFences(raw: string): string {
+  let s = raw.trim();
+  // 去除开头的 ```json 或 ``` 标记
+  const fenceStart = s.match(/^```(?:json)?\s*\n?/i);
+  if (fenceStart) {
+    s = s.slice(fenceStart[0].length);
   }
+  // 去除结尾的 ```
+  s = s.replace(/\n?```\s*$/i, "");
+  return s.trim();
+}
+
+async function generateIntelligence(): Promise<GenResult> {
+  // 1) Key 校验
+  if (!AI_CONFIG.apiKey) {
+    const msg = "AI API Key 未配置（请检查 .env.local 中的 AI_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY）";
+    console.error(`[cron/fetch-intelligence] ${msg}`);
+    return { items: [], error: msg, errorType: "no_key" };
+  }
+
+  logAiConfig();
 
   const { controller, cleanup } = createTimeoutController(50000);
 
   try {
+    // 2) 发起 AI 请求
+    const requestBody = {
+      model: AI_CONFIG.model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: "请精选 4 条最高含金量的硬核情报（严格国内 2 条 + 海外 2 条），直接输出纯 JSON 数组，不要使用 ```json 代码块标记。今日日期：" + new Date().toISOString().slice(0, 10) },
+      ],
+      temperature: 0.4,
+      max_tokens: 3000,
+    };
+
+    console.log(`[cron/fetch-intelligence] 发起 AI 请求 → ${AI_CONFIG.baseURL}/chat/completions | model=${AI_CONFIG.model}`);
+
     const res = await fetch(`${AI_CONFIG.baseURL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${AI_CONFIG.apiKey}`,
       },
-      body: JSON.stringify({
-        model: AI_CONFIG.model,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: "请精选 3-5 条最高含金量的硬核情报，严格按 JSON 数组格式输出。今日日期：" + new Date().toISOString().slice(0, 10) },
-        ],
-        temperature: 0.4,
-        max_tokens: 3000,
-      }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 
+    // 3) HTTP 状态码非 2xx：读取响应体获取真实错误
     if (!res.ok) {
-      console.warn(`[cron/fetch-intelligence] AI 调用失败: ${res.status} ${res.statusText}`);
-      return [];
+      let errBody = "";
+      try {
+        const errData = await res.json();
+        errBody = errData?.error?.message || errData?.error || errData?.message || JSON.stringify(errData);
+      } catch {
+        try {
+          errBody = await res.text();
+        } catch {
+          errBody = "(无法读取错误响应体)";
+        }
+      }
+      const msg = `AI 接口返回 HTTP ${res.status} ${res.statusText}：${errBody}`;
+      console.error(`[cron/fetch-intelligence] ${msg}`);
+      // 常见状态码诊断
+      if (res.status === 401) {
+        console.error("[cron/fetch-intelligence] → 401 诊断：API Key 无效或已过期，请检查 .env.local 中的 AI_API_KEY");
+      } else if (res.status === 429) {
+        console.error("[cron/fetch-intelligence] → 429 诊断：API 调用频率超限或余额不足，请检查 DeepSeek 账户余额");
+      } else if (res.status === 404) {
+        console.error(`[cron/fetch-intelligence] → 404 诊断：模型 ${AI_CONFIG.model} 不存在或 baseURL ${AI_CONFIG.baseURL} 路径错误`);
+      }
+      return { items: [], error: msg, errorType: "http_error" };
     }
 
+    // 4) 解析成功响应
     const data = await res.json();
     const content: string = data.choices?.[0]?.message?.content || "";
 
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.warn("[cron/fetch-intelligence] AI 返回内容无 JSON 数组");
-      return [];
+    if (!content || content.trim().length === 0) {
+      const msg = "AI 返回内容为空（choices[0].message.content 为空字符串）";
+      console.error(`[cron/fetch-intelligence] ${msg}`, JSON.stringify(data).slice(0, 500));
+      return { items: [], error: msg, errorType: "empty_content" };
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(parsed)) return [];
+    console.log(`[cron/fetch-intelligence] AI 返回内容长度=${content.length}，前 200 字预览：${content.slice(0, 200)}`);
 
-    return parsed as RawItem[];
+    // 5) 剥离 ```json 代码块包裹后提取 JSON 数组
+    const stripped = stripCodeFences(content);
+    const jsonMatch = stripped.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      const msg = `AI 返回内容中未找到 JSON 数组（剥离代码块后前 200 字：${stripped.slice(0, 200)}）`;
+      console.error(`[cron/fetch-intelligence] ${msg}`);
+      return { items: [], error: msg, errorType: "no_json" };
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr: any) {
+      const msg = `JSON.parse 失败：${parseErr?.message || parseErr}（原始 JSON 片段前 300 字：${jsonMatch[0].slice(0, 300)}）`;
+      console.error(`[cron/fetch-intelligence] ${msg}`);
+      return { items: [], error: msg, errorType: "parse_fail" };
+    }
+
+    if (!Array.isArray(parsed)) {
+      const msg = `AI 返回的 JSON 不是数组（typeof=${typeof parsed}）`;
+      console.error(`[cron/fetch-intelligence] ${msg}`);
+      return { items: [], error: msg, errorType: "parse_fail" };
+    }
+
+    console.log(`[cron/fetch-intelligence] AI 生成成功 → ${parsed.length} 条原始数据`);
+    return { items: parsed as RawItem[], error: null, errorType: null };
   } catch (err: any) {
     if (err?.name === "AbortError") {
-      console.warn("[cron/fetch-intelligence] AI 调用超时（50s）");
-    } else {
-      console.error("[cron/fetch-intelligence] AI 调用异常:", err?.message || err);
+      const msg = "AI 调用超时（50s），可能网络延迟或模型响应过慢";
+      console.error(`[cron/fetch-intelligence] ${msg}`);
+      return { items: [], error: msg, errorType: "timeout" };
     }
-    return [];
+    const msg = `AI 调用网络异常：${err?.message || err}`;
+    console.error(`[cron/fetch-intelligence] ${msg}`, err?.stack || err);
+    return { items: [], error: msg, errorType: "network" };
   } finally {
     cleanup();
   }
@@ -571,14 +670,20 @@ async function handleCron(req: NextRequest) {
 
   console.log("[cron/fetch-intelligence] 开始执行情报抓取流水线...");
 
-  // 1. AI 生成
-  const rawItems = await generateIntelligence();
-  console.log(`[cron/fetch-intelligence] AI 生成 → ${rawItems.length} 条原始数据`);
+  // 1. AI 生成（返回结构化结果，含真实错误原因）
+  const genResult = await generateIntelligence();
+  const rawItems = genResult.items;
+  console.log(`[cron/fetch-intelligence] AI 生成 → ${rawItems.length} 条原始数据${genResult.error ? `（错误: ${genResult.error}）` : ""}`);
 
   if (rawItems.length === 0) {
+    // 把真实错误原因回传前端，方便定位是 Key/余额/JSON 格式/超时/网络 哪个问题
+    const userError = genResult.error
+      ? `AI 未生成有效情报：${genResult.error}`
+      : "AI 未生成有效情报（未知原因）";
     return NextResponse.json({
       success: false,
-      error: "AI 未生成有效情报（请检查 AI_API_KEY 配置或 AI 模型是否正常返回）",
+      error: userError,
+      errorType: genResult.errorType,
       stats: { generated: 0, sanitized: 0, duplicatesRemoved: 0, afterDedup: 0, inserted: 0, method: "n/a" },
       errors: [],
       duration: Date.now() - startedAt,

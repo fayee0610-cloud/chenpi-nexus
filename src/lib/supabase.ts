@@ -45,8 +45,9 @@
  * -- ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  *
  * -- 8. 灵感文章评论表（读者战术讨论区，带防垃圾策略）
+ * -- 注意：id 使用 UUID 类型，由 Supabase 自动生成（gen_random_uuid()），前端不传 id
  * CREATE TABLE IF NOT EXISTS public.article_comments (
- *   id TEXT PRIMARY KEY,
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  *   article_id TEXT NOT NULL,           -- 关联 insights.id
  *   nickname TEXT NOT NULL,             -- 评论昵称（必填）
  *   email TEXT,                         -- 邮箱（选填，用于后续联系/通知）
@@ -55,17 +56,19 @@
  *   user_agent TEXT,
  *   has_links BOOLEAN DEFAULT FALSE,    -- 是否包含外链
  *   status TEXT DEFAULT 'approved',     -- approved | pending_review | rejected（外链默认 pending_review）
- *   parent_id TEXT,                     -- 回复某条评论（层级）
+ *   parent_id UUID,                     -- 回复某条评论（层级）
+ *   delete_token TEXT,                  -- 用户自主删除凭证（随机字符串，前端 localStorage 保存）
  *   created_at TIMESTAMPTZ DEFAULT NOW(),
  *   updated_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 若表已存在但 id 为 TEXT 类型，执行以下迁移：
+ * -- ALTER TABLE public.article_comments ADD COLUMN IF NOT EXISTS delete_token TEXT;
  * CREATE INDEX IF NOT EXISTS idx_article_comments_article ON public.article_comments (article_id, created_at DESC);
  * CREATE INDEX IF NOT EXISTS idx_article_comments_parent ON public.article_comments (parent_id);
  * -- RLS：仅公开读已批准内容，写入通过服务端 API（service_role 绕过 RLS），避免 anon 直接刷
  * ALTER TABLE public.article_comments ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "article_comments public read approved only" ON public.article_comments
  *   FOR SELECT USING (status = 'approved');
- * -- 若想让 Admin 后台也能直接读取 pending_review：保持通过 API 即可，不必给 anon 读全表
  *
  * -- 5. 资源包表（PDF 资源管理）
  * CREATE TABLE IF NOT EXISTS public.resources (
@@ -147,10 +150,13 @@
  *   content TEXT NOT NULL,
  *   likes INT DEFAULT 0,
  *   is_published BOOLEAN DEFAULT TRUE,
+ *   delete_token TEXT,                  -- 用户自主删除凭证（随机十六进制字符串，前端 localStorage 保存）
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
  * -- 若表已存在，补加 is_published 列：
  * -- ALTER TABLE public.sanctuary_posts ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
+ * -- 若表已存在，补加 delete_token 列：
+ * -- ALTER TABLE public.sanctuary_posts ADD COLUMN IF NOT EXISTS delete_token TEXT;
  *
  * -- RLS 配置（允许公开读 + Admin 后台 anon key 写入）
  * ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;

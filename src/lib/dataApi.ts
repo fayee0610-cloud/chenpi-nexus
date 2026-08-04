@@ -18,6 +18,17 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// 生成随机删除凭证（32 字符十六进制），前端 localStorage 保存，用于用户自主删除帖子
+function genDeleteToken(): string {
+  const arr = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(arr);
+  } else {
+    for (let i = 0; i < 16; i++) arr[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // ---------- 网络错误识别与友好兜底 ----------
 // 捕获 fetch 层的网络异常（插件拦截/断网/Supabase 不可达），
 // 打印友好 warn 日志，避免 Next.js dev 错误覆盖层抛出 unhandled runtime error。
@@ -273,8 +284,9 @@ export async function createSanctuaryPost(post: {
   tag?: string;
   author?: string;
   avatar?: string;
-}): Promise<SanctuaryPost | null> {
+}): Promise<(SanctuaryPost & { deleteToken?: string }) | null> {
   if (!supabase) throw new Error("Supabase not configured");
+  const deleteToken = genDeleteToken();
   const { data, error } = await supabase
     .from("sanctuary_posts")
     .insert([
@@ -285,6 +297,7 @@ export async function createSanctuaryPost(post: {
         author: post.author || "赛博访客",
         avatar: post.avatar || null,
         likes: 0,
+        delete_token: deleteToken,
       },
     ] as any)
     .select()
@@ -305,7 +318,8 @@ export async function createSanctuaryPost(post: {
     reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
     comments: [],
     isNew: true,
-  } as SanctuaryPost;
+    deleteToken,
+  } as SanctuaryPost & { deleteToken?: string };
 }
 
 // ---------- 删除：作品 ----------

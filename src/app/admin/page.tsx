@@ -22,6 +22,8 @@ import {
   Send,
   Save,
   Eye,
+  EyeOff,
+  Check,
   X,
   AlertCircle,
   CheckCircle2,
@@ -47,9 +49,6 @@ import {
   deleteProject,
   deleteInsight,
   deleteSanctuaryPost,
-  toggleProjectPublish,
-  toggleInsightPublish,
-  toggleResourcePublish,
   fetchResources,
   createResource,
   deleteResource,
@@ -208,6 +207,7 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <InsightsEditor />
+              <CommentManagement />
             </motion.div>
           )}
           {activeTab === "sanctuary" && (
@@ -391,12 +391,20 @@ function PortfolioEditor() {
 
   const handleToggleProjectPublish = async (id: string | number, current: boolean) => {
     try {
-      await toggleProjectPublish(String(id), !current);
+      const res = await fetch("/api/admin/toggle-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: "projects", id: String(id), isPublished: !current }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "切换失败");
+      }
       setProjectList((prev) =>
         prev.map((p) => (p.id === id ? { ...p, isPublished: !current } : p))
       );
-    } catch {
-      alert("切换失败");
+    } catch (err: any) {
+      alert(err?.message || "切换失败");
     }
   };
 
@@ -1128,12 +1136,20 @@ function InsightsEditor() {
 
   const handleToggleInsightPublish = async (id: string | number, current: boolean) => {
     try {
-      await toggleInsightPublish(String(id), !current);
+      const res = await fetch("/api/admin/toggle-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: "insights", id: String(id), isPublished: !current }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "切换失败");
+      }
       setInsightList((prev) =>
         prev.map((i) => (i.id === id ? { ...i, isPublished: !current } : i))
       );
-    } catch {
-      alert("切换失败");
+    } catch (err: any) {
+      alert(err?.message || "切换失败");
     }
   };
 
@@ -1523,6 +1539,249 @@ function InsightsEditor() {
   );
 }
 
+// ========== Tab: 评论管理 (Comment Management) ==========
+type CommentStatus = "approved" | "pending_review" | "hidden" | "rejected";
+
+interface AdminComment {
+  id: string;
+  article_id: string;
+  article_title?: string | null;
+  nickname: string;
+  content: string;
+  status: CommentStatus;
+  has_links: boolean;
+  created_at: string | null;
+}
+
+const STATUS_META: Record<CommentStatus, { label: string; cls: string }> = {
+  approved: { label: "已通过", cls: "border-green-500/30 bg-green-500/10 text-green-400" },
+  pending_review: { label: "待审核", cls: "border-amber-500/30 bg-amber-500/10 text-amber-400" },
+  hidden: { label: "已隐藏", cls: "border-zinc-700 bg-zinc-800 text-zinc-400" },
+  rejected: { label: "已拒绝", cls: "border-red-500/30 bg-red-500/10 text-red-400" },
+};
+
+function CommentManagement() {
+  const [comments, setComments] = useState<AdminComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+  const loadComments = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/comments", { method: "GET" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setComments(Array.isArray(data.comments) ? data.comments : []);
+      } else {
+        setComments([]);
+        setStatusMsg({ type: "error", msg: data.error || "评论加载失败" });
+      }
+    } catch (err: any) {
+      console.warn("[admin] loadComments 失败:", err);
+      setComments([]);
+      setStatusMsg({ type: "error", msg: err?.message || "网络错误" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadComments();
+  }, []);
+
+  const patchStatus = async (id: string, status: CommentStatus) => {
+    setActingId(id);
+    try {
+      const res = await fetch("/api/articles/comments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "操作失败");
+      }
+      setComments((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+      setStatusMsg({ type: "success", msg: `评论已${status === "approved" ? "通过" : status === "hidden" ? "隐藏" : status === "rejected" ? "拒绝" : "更新"}` });
+    } catch (err: any) {
+      setStatusMsg({ type: "error", msg: err?.message || "操作失败" });
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const deleteComment = async (id: string) => {
+    if (!window.confirm("确定要彻底删除此条评论吗？此操作不可撤销。")) return;
+    setActingId(id);
+    try {
+      const res = await fetch(`/api/articles/comments?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "删除失败");
+      }
+      setComments((prev) => prev.filter((c) => c.id !== id));
+      setStatusMsg({ type: "success", msg: "评论已删除" });
+    } catch (err: any) {
+      setStatusMsg({ type: "error", msg: err?.message || "删除失败" });
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const fmtDate = (iso: string | null): string => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString("zh-CN");
+    } catch {
+      return iso;
+    }
+  };
+
+  const truncate = (s: string, n: number): string =>
+    s.length > n ? s.slice(0, n) + "…" : s;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-purple-400" />
+          <div>
+            <h2 className="text-xl font-bold text-zinc-50">评论管理</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">审核、隐藏或删除全站灵感文章评论（共 {comments.length} 条）</p>
+          </div>
+        </div>
+        <button
+          onClick={loadComments}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 disabled:opacity-50"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          刷新
+        </button>
+      </div>
+
+      {statusMsg && (
+        <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+          statusMsg.type === "success"
+            ? "border border-green-500/30 bg-green-500/10 text-green-400"
+            : "border border-red-500/30 bg-red-500/10 text-red-400"
+        }`}>
+          {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          {statusMsg.msg}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+          </div>
+        ) : comments.length === 0 ? (
+          <div className="py-16 text-center">
+            <MessageCircle className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
+            <p className="text-sm text-zinc-500">暂无评论数据</p>
+            <p className="mt-1 text-xs text-zinc-600">访客在灵感文章下的评论将显示在这里</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {/* 表头（桌面端） */}
+            <div className="hidden gap-4 px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-zinc-500 md:flex">
+              <div className="w-24">昵称</div>
+              <div className="flex-1">内容</div>
+              <div className="w-40">所属文章</div>
+              <div className="w-20">状态</div>
+              <div className="w-36">时间</div>
+              <div className="w-32 text-right">操作</div>
+            </div>
+            {comments.map((c) => {
+              const meta = STATUS_META[c.status] || STATUS_META.pending_review;
+              return (
+                <div key={c.id} className="flex flex-col gap-3 p-5 md:flex-row md:items-start md:gap-4">
+                  {/* 昵称 */}
+                  <div className="w-full md:w-24">
+                    <span className="text-[10px] text-zinc-600 md:hidden">昵称</span>
+                    <span className="truncate text-sm font-medium text-zinc-100">{c.nickname || "匿名"}</span>
+                  </div>
+                  {/* 内容 */}
+                  <div className="flex-1">
+                    <span className="text-[10px] text-zinc-600 md:hidden">内容</span>
+                    <p className="text-sm leading-relaxed text-zinc-200 break-words" title={c.content}>
+                      {truncate(c.content, 140)}
+                    </p>
+                    {c.has_links && (
+                      <span className="mt-1 inline-block rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
+                        含外链
+                      </span>
+                    )}
+                  </div>
+                  {/* 所属文章 */}
+                  <div className="w-full md:w-40">
+                    <span className="text-[10px] text-zinc-600 md:hidden">所属文章</span>
+                    <p className="truncate text-xs text-zinc-400" title={c.article_title || c.article_id}>
+                      {c.article_title || truncate(String(c.article_id || ""), 20) || "—"}
+                    </p>
+                  </div>
+                  {/* 状态 */}
+                  <div className="w-full md:w-20">
+                    <span className="text-[10px] text-zinc-600 md:hidden">状态</span>
+                    <span className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                  {/* 时间 */}
+                  <div className="w-full md:w-36">
+                    <span className="text-[10px] text-zinc-600 md:hidden">时间</span>
+                    <span className="text-xs text-zinc-500">{fmtDate(c.created_at)}</span>
+                  </div>
+                  {/* 操作 */}
+                  <div className="flex w-full flex-wrap items-center gap-1.5 md:w-32 md:justify-end">
+                    <button
+                      onClick={() => patchStatus(c.id, "approved")}
+                      disabled={actingId === c.id}
+                      title="通过"
+                      className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1.5 text-[11px] text-green-400 transition-all hover:border-green-500/60 hover:bg-green-500/20 disabled:opacity-50"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      通过
+                    </button>
+                    <button
+                      onClick={() => patchStatus(c.id, "hidden")}
+                      disabled={actingId === c.id}
+                      title="隐藏"
+                      className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-[11px] text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      <EyeOff className="h-3.5 w-3.5" />
+                      隐藏
+                    </button>
+                    <button
+                      onClick={() => deleteComment(c.id)}
+                      disabled={actingId === c.id}
+                      title="删除"
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400 transition-all hover:border-red-500/60 hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      {actingId === c.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      删除
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ========== Tab: 资源包编辑器 ==========
 function ResourceEditor() {
   const [form, setForm] = useState({
@@ -1639,7 +1898,13 @@ function ResourceEditor() {
       setFileInfo(null);
       loadResources();
     } catch (err: any) {
-      setStatus({ type: "error", msg: err.message || "发布失败" });
+      const errMsg = String(err?.message || "");
+      // 表不存在或 schema cache 未加载时给出友好提示
+      if (errMsg.includes("Could not find the table") || errMsg.includes("schema cache") || errMsg.includes("does not exist")) {
+        setStatus({ type: "error", msg: "resources 表尚未创建，请先在 Supabase SQL Editor 执行建表 SQL（见 supabase.ts 顶部注释）" });
+      } else {
+        setStatus({ type: "error", msg: errMsg || "发布失败" });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1653,7 +1918,12 @@ function ResourceEditor() {
       setResourceList((prev) => prev.filter((r) => r.id !== id));
       setStatus({ type: "success", msg: "资源包已删除" });
     } catch (err: any) {
-      setStatus({ type: "error", msg: err.message || "删除失败" });
+      const errMsg = String(err?.message || "");
+      if (errMsg.includes("Could not find the table") || errMsg.includes("schema cache") || errMsg.includes("does not exist")) {
+        setStatus({ type: "error", msg: "resources 表尚未创建，请先在 Supabase SQL Editor 执行建表 SQL" });
+      } else {
+        setStatus({ type: "error", msg: errMsg || "删除失败" });
+      }
     } finally {
       setDeletingId(null);
     }
@@ -1662,12 +1932,21 @@ function ResourceEditor() {
   const handleTogglePublish = async (id: string, current: boolean) => {
     setTogglingId(id);
     try {
-      await toggleResourcePublish(id, !current);
-      setResourceList((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, isPublished: !current } : r))
-      );
-    } catch {
-      alert("切换失败");
+      const res = await fetch("/api/admin/toggle-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: "resources", id: String(id), isPublished: !current }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResourceList((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, isPublished: !current } : r))
+        );
+      } else {
+        alert(data.error || "切换失败，请先在 Supabase 执行 resources 建表 SQL");
+      }
+    } catch (err: any) {
+      alert(err?.message || "切换失败");
     } finally {
       setTogglingId(null);
     }

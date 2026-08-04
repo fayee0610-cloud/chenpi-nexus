@@ -19,6 +19,8 @@ import {
   RefreshCw,
   ArrowRight,
   Image as ImageIcon,
+  Trash2,
+  Check,
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { QRCodeSVG } from "qrcode.react";
@@ -45,6 +47,9 @@ const reactionButtons = [
   { key: "hard" as const, label: "⚠️ 难点" },
   { key: "fake" as const, label: "😅 伪需求" },
 ];
+
+// localStorage key：保存用户自己创建帖子的删除凭证 { postId: deleteToken }
+const DELETE_TOKENS_STORAGE_KEY = "cp_sanctuary_delete_tokens";
 
 // ========== 4 种赛博配色主题 ==========
 type FortuneTheme = {
@@ -151,6 +156,41 @@ function genSerial(): string {
   return `NO.${ymd}-${rand}`;
 }
 
+// ---------- 删除凭证 localStorage 管理 ----------
+function loadDeleteTokens(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(DELETE_TOKENS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDeleteToken(postId: string | number, token: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const tokens = loadDeleteTokens();
+    tokens[String(postId)] = token;
+    window.localStorage.setItem(DELETE_TOKENS_STORAGE_KEY, JSON.stringify(tokens));
+  } catch {
+    // localStorage 写入失败（隐私模式等），静默忽略
+  }
+}
+
+function removeDeleteToken(postId: string | number): void {
+  if (typeof window === "undefined") return;
+  try {
+    const tokens = loadDeleteTokens();
+    delete tokens[String(postId)];
+    window.localStorage.setItem(DELETE_TOKENS_STORAGE_KEY, JSON.stringify(tokens));
+  } catch {
+    // 静默忽略
+  }
+}
+
 // ========== 粒子动画组件 ==========
 function SmokeParticles({ active, color }: { active: boolean; color: string }) {
   if (!active) return null;
@@ -181,16 +221,23 @@ function CommunityCard({
   onReaction,
   onEnergy,
   onComment,
+  canDelete,
+  onDelete,
+  isDeleting,
 }: {
   fart: SanctuaryPost;
   onReaction: (id: number, key: keyof SanctuaryPost["reactions"]) => void;
   onEnergy: (id: number) => void;
   onComment: (id: number, text: string) => void;
+  canDelete: boolean;
+  onDelete: (id: number) => void;
+  isDeleting: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [energyPulse, setEnergyPulse] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleReaction = (key: keyof SanctuaryPost["reactions"]) => {
     onReaction(fart.id, key);
@@ -217,8 +264,47 @@ function CommunityCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ duration: 0.4 }}
-      className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 transition-all hover:border-zinc-700"
+      className="relative flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 transition-all hover:border-zinc-700"
     >
+      {/* 删除按钮（仅自己创建的帖子显示） */}
+      {canDelete && (
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
+          {isDeleting ? (
+            <div className="rounded-lg border border-zinc-700 bg-zinc-950/90 px-2 py-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+            </div>
+          ) : confirmingDelete ? (
+            <div className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-950/90 px-1.5 py-1">
+              <button
+                onClick={() => {
+                  setConfirmingDelete(false);
+                  onDelete(fart.id);
+                }}
+                className="rounded p-1 text-red-400 transition-colors hover:bg-red-500/20 hover:text-red-300"
+                title="确认删除"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setConfirmingDelete(false)}
+                className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                title="取消"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="rounded p-1 text-zinc-600 opacity-40 transition-all hover:opacity-100 hover:text-red-400"
+              title="删除我的帖子"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 标签 + 作者 */}
       <div className="mb-3 flex items-center justify-between">
         <span className={`inline-block rounded-md px-2 py-1 text-[10px] font-semibold ${fart.tagColor}`}>
@@ -373,6 +459,10 @@ export default function Sanctuary({
   const [posting, setPosting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // 用户自主删除凭证：{ postId: deleteToken }，从 localStorage 加载
+  const [deleteTokens, setDeleteTokens] = useState<Record<string, string>>({});
+  // 正在删除中的帖子 id 集合（用于显示 loading）
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   // 上香持久化：加载状态 & 防刷防抖
   const [loadingStats, setLoadingStats] = useState(true);
   const lastIncenseClickRef = useRef(0);
@@ -381,9 +471,11 @@ export default function Sanctuary({
   const canvasRef = useRef<HTMLDivElement>(null);
   const fartIdRef = useRef(4);
 
-  // 加载时从 Supabase 读取最新帖子 + 上香累计数据
+  // 加载时从 Supabase 读取最新帖子 + 上香累计数据 + localStorage 删除凭证
   useEffect(() => {
     let mounted = true;
+    // 加载用户保存的删除凭证（判断哪些帖子可删）
+    setDeleteTokens(loadDeleteTokens());
     fetchSanctuaryPosts().then((data) => {
       if (mounted) {
         setFarts(data);
@@ -534,6 +626,41 @@ export default function Sanctuary({
     );
   }, []);
 
+  // 用户自主删除自己的帖子（凭 localStorage 中保存的 delete_token）
+  const handleDeletePost = useCallback(async (fartId: number) => {
+    const token = deleteTokens[String(fartId)];
+    if (!token) return;
+    setDeletingIds((prev) => new Set(prev).add(String(fartId)));
+    try {
+      const res = await fetch(`/api/sanctuary/posts?id=${encodeURIComponent(String(fartId))}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deleteToken: token }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      // 删除成功：从状态移除帖子 + 清除 localStorage 凭证
+      setFarts((prev) => prev.filter((f) => f.id !== fartId));
+      removeDeleteToken(fartId);
+      setDeleteTokens((prev) => {
+        const next = { ...prev };
+        delete next[String(fartId)];
+        return next;
+      });
+    } catch (err) {
+      console.warn("[Sanctuary] 删除帖子失败:", err instanceof Error ? err.message : err);
+      window.alert("删除失败：" + (err instanceof Error ? err.message : err));
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(String(fartId));
+        return next;
+      });
+    }
+  }, [deleteTokens]);
+
   // 发布脑洞 — 写入 Supabase 持久化
   const handlePost = async () => {
     if (!postContent.trim() || posting) return;
@@ -563,6 +690,11 @@ export default function Sanctuary({
           };
       setFarts((prev) => [finalPost, ...prev]);
       setPostContent("");
+      // 保存删除凭证到 localStorage + state（仅 Supabase 写入成功时）
+      if (newPost?.deleteToken) {
+        saveDeleteToken(finalPost.id, newPost.deleteToken);
+        setDeleteTokens((prev) => ({ ...prev, [String(finalPost.id)]: newPost.deleteToken! }));
+      }
     } catch (err) {
       // Supabase 写入失败 — 打印详细错误便于排查，仍在前端临时显示
       console.warn("[Sanctuary] 发帖写入 Supabase 失败:", err instanceof Error ? err.message : err);
@@ -866,6 +998,9 @@ export default function Sanctuary({
                     onReaction={handleReaction}
                     onEnergy={handleEnergy}
                     onComment={handleComment}
+                    canDelete={!!deleteTokens[String(fart.id)]}
+                    onDelete={handleDeletePost}
+                    isDeleting={deletingIds.has(String(fart.id))}
                   />
                 ))}
               </AnimatePresence>

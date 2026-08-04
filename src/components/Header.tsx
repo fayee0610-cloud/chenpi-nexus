@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Cpu } from "lucide-react";
 import type { SiteConfig } from "@/lib/dataApi";
+import AuthModal, { useAuthUser, UserMenu } from "@/components/AuthModal";
 
 interface HeaderProps {
   config?: Partial<SiteConfig> | null;
@@ -22,6 +23,8 @@ const ALL_NAV_ITEMS: { label: string; href: string; flag?: keyof SiteConfig }[] 
 
 export default function Header({ config }: HeaderProps = {}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const { user, loading: authLoading, signOut } = useAuthUser();
 
   // 根据站点配置过滤导航项：无 flag 的项始终显示，有 flag 的项在 config[flag] !== false 时显示
   const navItems = ALL_NAV_ITEMS.filter((item) => {
@@ -58,8 +61,21 @@ export default function Header({ config }: HeaderProps = {}) {
           ))}
         </nav>
 
-        {/* 右侧占位（保持布局平衡） */}
-        <div className="hidden w-32 md:block" />
+        {/* 右侧：登录/注册 或 用户菜单 */}
+        <div className="hidden items-center gap-2 md:flex">
+          {authLoading ? (
+            <div className="h-8 w-8 animate-pulse rounded-full bg-zinc-800" />
+          ) : !user ? (
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+            >
+              登录 / 注册
+            </button>
+          ) : (
+            <UserMenu user={user} onSignOut={signOut} />
+          )}
+        </div>
 
         {/* Mobile Toggle */}
         <button
@@ -90,10 +106,21 @@ export default function Header({ config }: HeaderProps = {}) {
                   {item.label}
                 </Link>
               ))}
+              {!user && (
+                <button
+                  onClick={() => { setIsOpen(false); setAuthModalOpen(true); }}
+                  className="mt-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                >
+                  登录 / 注册
+                </button>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 登录/注册弹窗 */}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </header>
   );
 }
