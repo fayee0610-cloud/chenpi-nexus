@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Radar, Sparkles, TrendingUp, Bot, Loader2 } from "lucide-react";
+import { ExternalLink, Radar, Sparkles, TrendingUp, Bot, Loader2, Copy, CheckCheck, RefreshCw } from "lucide-react";
 import { fetchInsightsHub } from "@/lib/dataApi";
 import { type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
 import LoadMoreButton from "@/components/LoadMoreButton";
@@ -26,6 +26,36 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [aiRefreshing, setAiRefreshing] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // 一键复制情报文本（带落款链接）
+  const handleCopyInsight = async (item: InsightHubItem) => {
+    const tagLine = `—— 摘自【陈皮同学 · 赛博情报站】| ${
+      typeof window !== "undefined" ? `${window.location.origin}/hub` : "https://chenpi.dev/hub"
+    }`;
+    const payload = `${item.title}\n[${item.category}] ${item.sourceName || "匿名来源"} | ${item.publishedAt || ""}\n\n${
+      item.summary || ""
+    }\n${tagLine}`;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(payload);
+      } else {
+        // 降级方案：textarea + execCommand
+        const ta = document.createElement("textarea");
+        ta.value = payload;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId((cur) => (cur === item.id ? null : cur)), 1800);
+    } catch {
+      setCopiedId(null);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -256,22 +286,49 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                     </div>
                   )}
 
-                  {/* 底部：来源 + 日期 + 查看原文 */}
+                  {/* 底部：来源 + 日期 + 分享通道 + 查看原文 */}
                   <div className="flex items-center justify-between border-t border-zinc-800/60 pt-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] text-zinc-500">{item.sourceName}</span>
                       <span className="text-[10px] text-zinc-600">{item.publishedAt}</span>
                     </div>
-                    <a
-                      href={/^https?:\/\//.test(item.originalUrl) ? item.originalUrl : `https://${item.originalUrl}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-800"
-                    >
-                      查看原文
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyInsight(item);
+                        }}
+                        title="一键复制（精髓 + 陈皮洞察 + 站点落款）"
+                        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-medium transition-all ${
+                          copiedId === item.id
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            : "border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-purple-500/40 hover:bg-zinc-800 hover:text-purple-300"
+                        }`}
+                      >
+                        {copiedId === item.id ? (
+                          <>
+                            <CheckCheck className="h-3 w-3" />
+                            已复制
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3" />
+                            分享/复制
+                          </>
+                        )}
+                      </button>
+                      <a
+                        href={/^https?:\/\//.test(item.originalUrl) ? item.originalUrl : `https://${item.originalUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-800"
+                      >
+                        查看原文
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </div>
                 </motion.div>
               );

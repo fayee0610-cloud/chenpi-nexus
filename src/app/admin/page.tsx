@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import {
   createInsight,
+  updateInsight,
   fetchProjects,
   fetchInsights,
   fetchSanctuaryPosts,
@@ -64,7 +65,8 @@ import {
   uploadPortfolioCover,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
-import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory } from "@/data/siteData";
+import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory, HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
+import { HARDCORE_TAGS_POOL as HARDCORE_TAGS_POOL_CONST, FLAT_HARDCORE_TAGS as FLAT_HARDCORE_TAGS_CONST } from "@/data/siteData";
 
 type AdminTab = "portfolio" | "insights" | "sanctuary" | "resources" | "leads" | "hub" | "config";
 
@@ -1059,6 +1061,7 @@ function InsightsEditor() {
     author: "",
     summary: "",
     contentText: "",
+    tags: [] as string[],
   });
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1066,11 +1069,50 @@ function InsightsEditor() {
   const [listLoading, setListLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
+  // 标签编辑（单篇文章）
+  const [editingInsightId, setEditingInsightId] = useState<string | number | null>(null);
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+  const [tagSavingId, setTagSavingId] = useState<string | number | null>(null);
+
+  const toggleTagInForm = (tag: string) => {
+    setForm((prev) => {
+      const exists = prev.tags.includes(tag);
+      return { ...prev, tags: exists ? prev.tags.filter((t) => t !== tag) : [...prev.tags, tag] };
+    });
+  };
+
+  const toggleTagInEdit = (tag: string) => {
+    setEditingTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const openTagsEditor = (item: AdminInsight) => {
+    setEditingInsightId(item.id);
+    setEditingTags(Array.isArray(item.tags) ? [...item.tags] : []);
+  };
+
+  const saveTagsForInsight = async () => {
+    if (editingInsightId == null) return;
+    setTagSavingId(editingInsightId);
+    try {
+      await updateInsight(editingInsightId, { tags: editingTags });
+      setInsightList((prev) =>
+        prev.map((i) => (i.id === editingInsightId ? { ...i, tags: editingTags } : i))
+      );
+      setEditingInsightId(null);
+      setEditingTags([]);
+    } catch (err: any) {
+      setStatus({ type: "error", msg: "保存标签失败：" + (err?.message || err) });
+    } finally {
+      setTagSavingId(null);
+    }
+  };
+
   const loadInsights = async () => {
     setListLoading(true);
     try {
       const data = await fetchInsights();
-      // fetchInsights 未映射 is_published 字段，此处补充默认值 true
       setInsightList(data.map((i) => ({ ...i, isPublished: true })));
     } catch (err) {
       console.warn("[admin] loadInsights 失败:", err);
@@ -1149,6 +1191,7 @@ function InsightsEditor() {
       const insight: Partial<InsightItem> = {
         title: form.title,
         category: form.category,
+        tags: form.tags.length ? form.tags : undefined,
         readTime: form.readTime || undefined,
         listenTime: form.audioUrl || undefined,
         date: form.date,
@@ -1162,6 +1205,7 @@ function InsightsEditor() {
         title: "", category: "✦ 深度长文",
         readTime: "", audioUrl: "",
         date: "", author: "", summary: "", contentText: "",
+        tags: [],
       });
       loadInsights();
     } catch (err: any) {
@@ -1175,7 +1219,7 @@ function InsightsEditor() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-zinc-50">发布灵感文章</h2>
-        <p className="mt-1 text-sm text-zinc-500">新增一篇深度思考内容，支持简易 Markdown 语法（标题 / 引用 / 列表 / 代码块）</p>
+        <p className="mt-1 text-sm text-zinc-500">新增一篇深度思考内容，支持简易 Markdown 语法（标题 / 引用 / 列表 / 代码块）与全套硬核结构化标签</p>
       </div>
 
       <div className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
@@ -1201,13 +1245,54 @@ function InsightsEditor() {
           </FormField>
         </div>
 
+        {/* 硬核结构化标签池（多选） */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-zinc-100">硬核结构化标签（多选）</h4>
+              <p className="mt-0.5 text-xs text-zinc-500">覆盖出海、硬科技、品牌心智、前沿战术，用于前台筛选 + GEO SEO keywords 注入</p>
+            </div>
+            <span className="text-[11px] text-zinc-500">已选 {form.tags.length} / {FLAT_HARDCORE_TAGS_CONST.length}</span>
+          </div>
+          <div className="space-y-3">
+            {HARDCORE_TAGS_POOL_CONST.map((group) => (
+              <div key={group.group}>
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <span className="text-sm">{group.groupIcon}</span>
+                  <span className="text-[11px] font-medium text-zinc-400">{group.group}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.tags.map((tag) => {
+                    const selected = form.tags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTagInForm(tag)}
+                        className={`rounded-md border px-2.5 py-1 text-[11px] transition-all ${
+                          selected
+                            ? "border-purple-500/60 bg-purple-500/15 text-purple-200"
+                            : "border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                        }`}
+                      >
+                        {selected && <span className="mr-1">✓</span>}
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* 摘要 */}
         <FormField label="摘要">
           <textarea
             value={form.summary}
             onChange={(e) => updateField("summary", e.target.value)}
             rows={2}
-            placeholder="一句话概括文章核心观点..."
+            placeholder="一句话概括文章核心观点（同时用作 JSON-LD description）"
             className="input-insight resize-none"
           />
         </FormField>
@@ -1218,7 +1303,7 @@ function InsightsEditor() {
             value={form.contentText}
             onChange={(e) => updateField("contentText", e.target.value)}
             rows={12}
-            placeholder={`支持语法：\n\n普通段落（空行分隔）\n\n## 二级标题\n\n> 引用金句\n\n- 列表项1\n- 列表项2\n\n\`\`\`js\n代码块\n\`\`\``}
+            placeholder={`建议首行用 "> " 书写【TL;DR 核心战术摘要】，之后再写正文。\n\n支持语法：\n\n普通段落（空行分隔）\n\n## 二级标题\n\n> 引用金句 / TL;DR\n\n- 列表项1\n- 列表项2\n\n\`\`\`js\n代码块\n\`\`\``}
             className="input-insight resize-y font-mono text-xs leading-relaxed"
           />
         </FormField>
@@ -1294,7 +1379,7 @@ function InsightsEditor() {
             {insightList.map((i) => (
               <div key={i.id} className="flex items-start gap-4 p-4">
                 <div className="flex-1 min-w-0">
-                  <div className="mb-1 flex items-center gap-2">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
                     <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
                       {i.category}
                     </span>
@@ -1303,9 +1388,28 @@ function InsightsEditor() {
                   </div>
                   <h4 className="truncate text-sm font-medium text-zinc-100">{i.title}</h4>
                   {i.excerpt && <p className="mt-0.5 truncate text-xs text-zinc-500">{i.excerpt}</p>}
+                  {i.tags && i.tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {i.tags.slice(0, 6).map((t) => (
+                        <span key={t} className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-300">
+                          # {t}
+                        </span>
+                      ))}
+                      {i.tags.length > 6 && (
+                        <span className="text-[10px] text-zinc-600">+{i.tags.length - 6}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {/* 发布状态开关 */}
+                {/* 操作按钮组 */}
                 <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  <button
+                    onClick={() => openTagsEditor(i)}
+                    title="编辑标签"
+                    className="rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-purple-500/50 hover:bg-purple-500/10 hover:text-purple-400"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </button>
                   <span className={`text-[10px] ${i.isPublished ? "text-green-400" : "text-zinc-500"}`}>
                     {i.isPublished ? "已发布" : "未发布"}
                   </span>
@@ -1332,6 +1436,89 @@ function InsightsEditor() {
           </div>
         )}
       </div>
+
+      {/* 标签编辑弹窗 */}
+      <AnimatePresence>
+        {editingInsightId != null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setEditingInsightId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="mx-4 w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100">编辑硬核结构化标签</h3>
+                  <p className="mt-1 text-xs text-zinc-500">影响前台筛选、相关推荐与 JSON-LD keywords 注入</p>
+                </div>
+                <button onClick={() => setEditingInsightId(null)} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+                {HARDCORE_TAGS_POOL_CONST.map((group) => (
+                  <div key={group.group}>
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <span>{group.groupIcon}</span>
+                      <span className="text-xs font-medium text-zinc-400">{group.group}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.tags.map((tag) => {
+                        const selected = editingTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => toggleTagInEdit(tag)}
+                            className={`rounded-md border px-2.5 py-1 text-[11px] transition-all ${
+                              selected
+                                ? "border-purple-500/60 bg-purple-500/15 text-purple-200"
+                                : "border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                            }`}
+                          >
+                            {selected && <span className="mr-1">✓</span>}
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex items-center justify-between border-t border-zinc-800 pt-4">
+                <span className="text-xs text-zinc-500">已选 {editingTags.length} 个标签</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditingInsightId(null)}
+                    className="rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={saveTagsForInsight}
+                    disabled={tagSavingId !== null}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+                  >
+                    {tagSavingId !== null ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> 保存中</>
+                    ) : (
+                      <><Save className="h-4 w-4" /> 保存标签</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2138,6 +2325,44 @@ function InsightHubEditor() {
     }
   };
 
+  // Admin 专属：一键把情报转为灵感素材（写入 insights 草稿）
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const CONVERT_TO_INSIGHT_CATEGORY = "✦ 情报洞察";
+  const handleConvertToInsight = async (hub: InsightHubItem) => {
+    if (!window.confirm(`确定把情报「${hub.title}」转为灵感素材草稿吗？`)) return;
+    setConvertingId(hub.id);
+    try {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+      const dateStr = `${y}.${m}.${d}`;
+      const body = `## 情报溯源\n\n原分类：${hub.category}；来源：${hub.sourceName || "匿名"}；发布日期：${hub.publishedAt || ""}\n\n${hub.originalUrl ? `参考链接：${hub.originalUrl}\n\n` : ""}## 陈皮战术洞察\n\n${hub.summary || ""}\n\n> —— 从赛博情报站迁移为灵感素材`;
+      const contentBlocks = body
+        .split("\n\n")
+        .filter(Boolean)
+        .map((para) => {
+          if (para.startsWith("## ")) return { type: "heading" as const, text: para.slice(3) };
+          if (para.startsWith("> ")) return { type: "blockquote" as const, text: para.slice(2) };
+          return { type: "paragraph" as const, text: para };
+        });
+      await createInsight({
+        title: `[情报迁移] ${hub.title}`,
+        category: CONVERT_TO_INSIGHT_CATEGORY,
+        author: "陈皮（情报自动迁移）",
+        date: dateStr,
+        excerpt: hub.summary?.slice(0, 160) || hub.title,
+        content: contentBlocks,
+        readTime: "3 min",
+      });
+      setStatus({ type: "success", msg: `✅ 已转为灵感素材草稿：${hub.title.slice(0, 24)}…` });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: "转为灵感素材失败：" + (err?.message || err) });
+    } finally {
+      setConvertingId(null);
+    }
+  };
+
   // 编辑情报
   const [editingHub, setEditingHub] = useState<InsightHubItem | null>(null);
   const [editForm, setEditForm] = useState<{ title: string; summary: string; category: InsightHubCategory; sourceName: string; originalUrl: string; publishedAt: string }>({ title: "", summary: "", category: "🤖 机器人/具身智能", sourceName: "", originalUrl: "", publishedAt: "" });
@@ -2416,6 +2641,19 @@ function InsightHubEditor() {
                 </div>
                 {/* 操作按钮组 */}
                 <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  {/* Admin 专属：转为灵感素材 */}
+                  <button
+                    onClick={() => handleConvertToInsight(h)}
+                    disabled={convertingId === h.id || togglingId === h.id}
+                    title="一键转为灵感素材（Admin 专属）"
+                    className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-2 text-purple-400 transition-all hover:border-purple-500/60 hover:bg-purple-500/20 disabled:opacity-50"
+                  >
+                    {convertingId === h.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </button>
                   {/* 置顶按钮 */}
                   <button
                     onClick={() => handleToggleFeature(h.id, h.isFeatured ?? false)}

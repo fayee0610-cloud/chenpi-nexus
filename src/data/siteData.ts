@@ -45,6 +45,7 @@ export interface InsightItem {
   image: string;
   type: "all" | "featured" | "article" | "short" | "podcast";
   category: string;
+  tags?: string[]; // 结构化硬核标签池（与 HARDCORE_TAGS_POOL 对齐）
   readTime?: string;
   listenTime?: string;
   isFeatured?: boolean;
@@ -54,6 +55,54 @@ export interface InsightItem {
   likes: number;
   content: ContentBlock[];
 }
+
+// ============================================================
+// 灵感库：硬核结构化标签池（出海/硬科技/心智/前沿）
+// 后台发布多选 & 前台按 tag 筛选 & JSON-LD keywords 注入共用
+// ============================================================
+export const HARDCORE_TAGS_POOL: { group: string; groupIcon: string; tags: string[] }[] = [
+  {
+    group: "跨境与出海",
+    groupIcon: "🌐",
+    tags: [
+      "马来西亚/东盟GTM",
+      "出海品牌公关",
+      "跨境实战SOP",
+      "独立站运营/SEO",
+    ],
+  },
+  {
+    group: "硬科技与机器人",
+    groupIcon: "🤖",
+    tags: [
+      "机器人/具身智能营销",
+      "ToB/ToC硬科技策略",
+      "技术参数转场景叙事",
+    ],
+  },
+  {
+    group: "底层理论与心智",
+    groupIcon: "🧠",
+    tags: [
+      "消费者心理与行为学",
+      "品牌叙事与定位",
+      "商业模式拆解",
+    ],
+  },
+  {
+    group: "前沿战术",
+    groupIcon: "🚀",
+    tags: [
+      "GEO搜索引擎优化",
+      "AI工作流/自动化",
+    ],
+  },
+];
+
+// 平铺版（用于前端按标签过滤/搜索）
+export const FLAT_HARDCORE_TAGS: string[] = HARDCORE_TAGS_POOL.flatMap(
+  (g) => g.tags
+);
 
 export interface SanctuaryComment {
   author: string;

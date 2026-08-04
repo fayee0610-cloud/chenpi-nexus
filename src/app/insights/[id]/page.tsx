@@ -6,12 +6,16 @@ import {
   User,
   Eye,
   Clock,
+  Tag,
+  Sparkles,
 } from "lucide-react";
 import { fetchInsightById } from "@/lib/dataApi";
 import Header from "@/components/Header";
 import { notFound } from "next/navigation";
 import InsightShareClient from "./InsightShareClient";
+import ArticleComments from "./ArticleComments";
 import type { ContentBlock } from "@/data/siteData";
+import { HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +32,16 @@ export async function generateMetadata({
   }
   const title = insight.title;
   const description = insight.excerpt || "陈皮同学灵感点深度思考";
+  const tagsFlat = Array.isArray(insight.tags) ? insight.tags : [];
   return {
     title,
     description,
+    keywords: tagsFlat.length ? tagsFlat.join(",") : undefined,
     openGraph: {
       type: "article",
       title: `${title} | 陈皮同学灵感点`,
       description,
+      tags: tagsFlat.length ? tagsFlat : undefined,
       images: insight.image ? [{ url: insight.image, width: 1200, height: 630 }] : undefined,
       publishedTime: insight.date,
       authors: insight.author ? [insight.author] : undefined,
@@ -48,8 +55,8 @@ export async function generateMetadata({
   };
 }
 
-// 正文渲染
-function renderBlock(block: ContentBlock, i: number) {
+// 正文渲染（首行 blockquote 作为 TL;DR 高亮区）
+function renderBlock(block: ContentBlock, i: number, opts: { isFirstBlockquote: boolean }) {
   if (block.type === "heading") {
     return (
       <h2 key={i} className="pt-2 text-lg font-bold text-zinc-100 sm:text-xl">
@@ -65,6 +72,23 @@ function renderBlock(block: ContentBlock, i: number) {
     );
   }
   if (block.type === "blockquote") {
+    if (opts.isFirstBlockquote) {
+      return (
+        <section
+          key={i}
+          aria-label="TL;DR 核心战术摘要"
+          className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-zinc-900/40 to-blue-500/10 p-5"
+        >
+          <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-zinc-950/60 px-2 py-0.5 text-[11px] font-semibold text-purple-200">
+            <Sparkles className="h-3 w-3" />
+            TL;DR · 核心战术摘要
+          </div>
+          <blockquote className="mt-5 pr-1 text-base font-medium leading-relaxed text-zinc-100 md:text-lg md:leading-loose">
+            {block.text}
+          </blockquote>
+        </section>
+      );
+    }
     return (
       <blockquote
         key={i}
@@ -96,6 +120,15 @@ function renderBlock(block: ContentBlock, i: number) {
   return null;
 }
 
+function normalizeDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  // 支持常见的 2024.07.15 / 2024-07-15
+  let s = String(iso).trim().replace(/\./g, "-").replace(/\//g, "-");
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString();
+  return undefined;
+}
+
 export default async function InsightDetailPage({
   params,
 }: {
@@ -106,10 +139,74 @@ export default async function InsightDetailPage({
 
   if (!insight) notFound();
 
+  // 首段 blockquote 视为 TL;DR
+  let firstBlockquoteIndex: number | null = null;
+  for (let i = 0; i < insight.content.length; i++) {
+    if (insight.content[i].type === "blockquote") {
+      firstBlockquoteIndex = i;
+      break;
+    }
+  }
+
+  const tags = Array.isArray(insight.tags) ? insight.tags : [];
+
+  // JSON-LD Article（符合 Schema.org，GEO 爬虫可识别）
+  const headline = insight.title;
+  const description = insight.excerpt || insight.title;
+  const authorName = insight.author?.trim() ? insight.author.trim() : "陈皮";
+  const datePublished = normalizeDate(insight.date) || undefined;
+  const keywordsFlat = tags.length ? tags : FLAT_HARDCORE_TAGS.slice(0, 4);
+  const articleUrl =
+    typeof window === "undefined"
+      ? `https://chenpi.dev/insights/${encodeURIComponent(id)}`
+      : `/insights/${encodeURIComponent(id)}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline,
+    description,
+    author: [
+      {
+        "@type": "Person",
+        name: authorName,
+        url: "https://chenpi.dev",
+        alternativeName: "陈皮 · 陈述中马",
+        description:
+          "深耕 AI / 具身智能 / 出海 GTM 与品牌心智的策略研究者，做真正落地的 GEO 与营销思考。",
+      },
+    ],
+    publisher: {
+      "@type": "Person",
+      name: "陈皮 · 陈述中马",
+      url: "https://chenpi.dev",
+    },
+    keywords: keywordsFlat.join(","),
+    articleSection: insight.category || "灵感思考",
+    mainEntityOfPage: { "@type": "WebPage", "@id": articleUrl },
+    ...(datePublished ? { datePublished } : {}),
+    ...(datePublished ? { dateModified: datePublished } : {}),
+  };
+
+  // 标签分组展示（只展示命中池中的真实 tag）
+  const tagsByGroup: { group: string; icon: string; tags: string[] }[] =
+    HARDCORE_TAGS_POOL.map((g) => ({
+      group: g.group,
+      icon: g.groupIcon,
+      tags: g.tags.filter((t) => tags.includes(t)),
+    })).filter((g) => g.tags.length > 0);
+  // 其他非池化标签作为"自定义/其他"展示
+  const otherTags = tags.filter((t) => !FLAT_HARDCORE_TAGS.includes(t));
+
   return (
     <>
       <Header />
       <main className="mx-auto max-w-3xl px-6 py-12">
+        {/* JSON-LD Script（GEO 结构化数据注入） */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+
         {/* 返回按钮 */}
         <Link
           href="/insights"
@@ -153,6 +250,49 @@ export default async function InsightDetailPage({
               {insight.views} 阅读
             </span>
           </div>
+
+          {/* 硬核结构化标签展示 */}
+          {(tagsByGroup.length > 0 || otherTags.length > 0) && (
+            <div className="mt-5 space-y-3">
+              {tagsByGroup.map((g) => (
+                <div key={g.group} className="flex flex-wrap items-start gap-2">
+                  <span className="mt-1 inline-flex items-center gap-1 shrink-0 text-[11px] font-medium text-zinc-400">
+                    <span>{g.icon}</span>
+                    {g.group}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {g.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[11px] text-purple-200"
+                      >
+                        <Tag className="h-3 w-3 opacity-80" />
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {otherTags.length > 0 && (
+                <div className="flex flex-wrap items-start gap-2">
+                  <span className="mt-1 inline-flex items-center gap-1 shrink-0 text-[11px] font-medium text-zinc-400">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    自定义
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {otherTags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[11px] text-zinc-300"
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </header>
 
         {/* 摘要 */}
@@ -162,15 +302,20 @@ export default async function InsightDetailPage({
           </p>
         )}
 
-        {/* 正文排版 */}
+        {/* 正文排版（首段 blockquote 高亮为 TL;DR） */}
         <article className="space-y-5">
-          {insight.content.map((block, i) => renderBlock(block, i))}
+          {insight.content.map((block, i) =>
+            renderBlock(block, i, { isFirstBlockquote: firstBlockquoteIndex === i })
+          )}
         </article>
 
         {/* 底部分享区 */}
         <section className="mt-12 border-t border-zinc-800 pt-6">
           <InsightShareClient title={insight.title} />
         </section>
+
+        {/* 读者战术讨论区 */}
+        <ArticleComments articleId={String(id)} />
       </main>
     </>
   );

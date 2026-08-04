@@ -45,28 +45,21 @@ export default function Header({ config }: HeaderProps = {}) {
           </span>
         </Link>
 
-        {/* Desktop Nav */}
+        {/* Desktop Nav - 居中平衡排版 */}
         <nav className="hidden items-center gap-1 md:flex">
-          {navItems.map((item) => (
+          {navItems.map((item, i) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+              className="relative rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        {/* Right Actions */}
-        <div className="hidden items-center gap-3 md:flex">
-          <button className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100">
-            登录
-          </button>
-          <button className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-zinc-200">
-            注册
-          </button>
-        </div>
+        {/* 右侧占位（保持布局平衡） */}
+        <div className="hidden w-32 md:block" />
 
         {/* Mobile Toggle */}
         <button
@@ -97,14 +90,6 @@ export default function Header({ config }: HeaderProps = {}) {
                   {item.label}
                 </Link>
               ))}
-              <div className="mt-2 flex gap-3 border-t border-zinc-800/60 pt-4">
-                <button className="flex-1 rounded-lg py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-100">
-                  登录
-                </button>
-                <button className="flex-1 rounded-lg bg-zinc-100 py-2.5 text-sm font-medium text-zinc-950 hover:bg-zinc-200">
-                  注册
-                </button>
-              </div>
             </div>
           </motion.div>
         )}

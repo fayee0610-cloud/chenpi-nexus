@@ -31,6 +31,7 @@
  *   title TEXT NOT NULL,
  *   summary TEXT,
  *   category TEXT NOT NULL,
+ *   tags TEXT,                -- 硬核结构化标签池（JSON 字符串数组）
  *   read_time TEXT,
  *   date TEXT,
  *   author TEXT,
@@ -39,7 +40,32 @@
  *   is_published BOOLEAN DEFAULT TRUE,
  *   created_at TIMESTAMPTZ DEFAULT NOW()
  * );
+ * -- 若表已存在，补加标签字段：
+ * -- ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS tags TEXT;
  * -- ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
+ *
+ * -- 8. 灵感文章评论表（读者战术讨论区，带防垃圾策略）
+ * CREATE TABLE IF NOT EXISTS public.article_comments (
+ *   id TEXT PRIMARY KEY,
+ *   article_id TEXT NOT NULL,           -- 关联 insights.id
+ *   nickname TEXT NOT NULL,             -- 评论昵称（必填）
+ *   email TEXT,                         -- 邮箱（选填，用于后续联系/通知）
+ *   content TEXT NOT NULL,              -- 正文（存储时已做 HTML 转义，防 XSS）
+ *   ip_hash TEXT,                       -- 提交 IP 的 SHA-256 哈希（用于 60s 防刷，不存明文）
+ *   user_agent TEXT,
+ *   has_links BOOLEAN DEFAULT FALSE,    -- 是否包含外链
+ *   status TEXT DEFAULT 'approved',     -- approved | pending_review | rejected（外链默认 pending_review）
+ *   parent_id TEXT,                     -- 回复某条评论（层级）
+ *   created_at TIMESTAMPTZ DEFAULT NOW(),
+ *   updated_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * CREATE INDEX IF NOT EXISTS idx_article_comments_article ON public.article_comments (article_id, created_at DESC);
+ * CREATE INDEX IF NOT EXISTS idx_article_comments_parent ON public.article_comments (parent_id);
+ * -- RLS：仅公开读已批准内容，写入通过服务端 API（service_role 绕过 RLS），避免 anon 直接刷
+ * ALTER TABLE public.article_comments ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "article_comments public read approved only" ON public.article_comments
+ *   FOR SELECT USING (status = 'approved');
+ * -- 若想让 Admin 后台也能直接读取 pending_review：保持通过 API 即可，不必给 anon 读全表
  *
  * -- 5. 资源包表（PDF 资源管理）
  * CREATE TABLE IF NOT EXISTS public.resources (

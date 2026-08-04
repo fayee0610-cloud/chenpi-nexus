@@ -193,6 +193,20 @@ function mapInsightRow(row: any): InsightItem {
   if (cat.includes("短观点")) type = "short";
   else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
 
+  let tags: string[] | undefined = undefined;
+  if (row.tags) {
+    if (typeof row.tags === "string") {
+      try {
+        tags = JSON.parse(row.tags);
+      } catch {
+        tags = row.tags.split(",").map((s: string) => s.trim()).filter(Boolean);
+      }
+    } else if (Array.isArray(row.tags)) {
+      tags = row.tags;
+    }
+    if (tags && !Array.isArray(tags)) tags = undefined;
+  }
+
   return {
     id: row.id,
     title: row.title || "",
@@ -200,6 +214,7 @@ function mapInsightRow(row: any): InsightItem {
     image: "",
     type,
     category: row.category || "",
+    tags,
     readTime: row.read_time || undefined,
     listenTime: row.audio_url ? "15 min" : undefined,
     isFeatured: false,
@@ -489,6 +504,7 @@ export async function createInsight(insight: Partial<InsightItem>) {
         title: insight.title,
         summary: insight.excerpt, // DB 列名为 summary
         category: insight.category,
+        tags: Array.isArray(insight.tags) ? JSON.stringify(insight.tags) : null,
         read_time: insight.readTime,
         date: insight.date,
         author: insight.author,
@@ -502,6 +518,39 @@ export async function createInsight(insight: Partial<InsightItem>) {
     .select();
   if (error) throw error;
   return data;
+}
+
+// ---------- 更新灵感文章 ----------
+export async function updateInsight(
+  id: string | number,
+  patch: Partial<{
+    title: string;
+    excerpt: string;
+    category: string;
+    tags: string[];
+    readTime: string;
+    date: string;
+    author: string;
+    content: ContentBlock[];
+    listenTime: string;
+  }>
+) {
+  if (!supabase) throw new Error("Supabase not configured");
+  const payload: Record<string, any> = {};
+  if (patch.title !== undefined) payload.title = patch.title;
+  if (patch.excerpt !== undefined) payload.summary = patch.excerpt;
+  if (patch.category !== undefined) payload.category = patch.category;
+  if (patch.tags !== undefined) payload.tags = JSON.stringify(patch.tags || []);
+  if (patch.readTime !== undefined) payload.read_time = patch.readTime;
+  if (patch.date !== undefined) payload.date = patch.date;
+  if (patch.author !== undefined) payload.author = patch.author;
+  if (patch.content !== undefined) payload.content = serializeContent(patch.content);
+  if (patch.listenTime !== undefined) payload.audio_url = patch.listenTime;
+  const { error } = await supabase
+    .from("insights")
+    .update(payload)
+    .eq("id", String(id));
+  if (error) throw error;
 }
 
 // ---------- 切换发布状态 ----------
