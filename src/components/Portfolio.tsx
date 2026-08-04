@@ -19,12 +19,13 @@ import {
 import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
 import { fetchProjects } from "@/lib/dataApi";
+import LoadMoreButton from "@/components/LoadMoreButton";
 
 type TabKey = "brand" | "ai" | "experiment";
 
 const tabs = siteData.portfolio.categories;
 
-export default function Portfolio() {
+export default function Portfolio({ showLimit }: { showLimit?: number }) {
   const [activeTab, setActiveTab] = useState<TabKey>("brand");
   const [selectedProject, setSelectedProject] = useState<PortfolioProject | null>(null);
   const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>([]);
@@ -44,7 +45,13 @@ export default function Portfolio() {
     return () => { mounted = false; };
   }, []);
 
-  const filtered = portfolioProjects.filter((p) => p.tab === activeTab);
+  const filtered = (() => {
+    const list = portfolioProjects.filter((p) => p.tab === activeTab);
+    if (typeof showLimit === "number" && showLimit > 0) {
+      return list.slice(0, showLimit);
+    }
+    return list;
+  })();
 
   // ESC 关闭 + 禁用背景滚动
   useEffect(() => {
@@ -205,6 +212,11 @@ export default function Portfolio() {
             ))}
           </motion.div>
         </AnimatePresence>
+        )}
+
+        {/* 首页模式：跳转量子页面 */}
+        {typeof showLimit === "number" && !loading && filtered.length > 0 && (
+          <LoadMoreButton href="/portfolio" label="进入作品集完整列表" />
         )}
       </div>
 

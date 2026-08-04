@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { InsightItem } from "@/data/siteData";
 import { fetchInsights } from "@/lib/dataApi";
+import LoadMoreButton from "@/components/LoadMoreButton";
 
 type FilterKey = "all" | "featured" | "article" | "short" | "podcast";
 
@@ -47,7 +48,7 @@ const typeLabel: Record<string, string> = {
   podcast: "播客",
 };
 
-export default function Insights() {
+export default function Insights({ showLimit }: { showLimit?: number }) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selectedInsight, setSelectedInsight] = useState<InsightItem | null>(null);
   const [copied, setCopied] = useState(false);
@@ -72,15 +73,35 @@ export default function Insights() {
     return () => { mounted = false; };
   }, []);
 
-  const featured = insightsData.filter((i) => i.isFeatured);
+  // 首页模式：仅取前 N 条（featured 优先）
+  const scopedData = (() => {
+    if (typeof showLimit === "number" && showLimit > 0) {
+      const sorted = [...insightsData].sort((a, b) => {
+        if (a.isFeatured && !b.isFeatured) return -1;
+        if (!a.isFeatured && b.isFeatured) return 1;
+        return 0;
+      });
+      return sorted.slice(0, showLimit);
+    }
+    return insightsData;
+  })();
+
+  const featured = scopedData.filter((i) => i.isFeatured);
   const heroFeatured = featured[0];
   const sideFeatured = featured.slice(1);
 
-  const regular = insightsData.filter((i) => {
+  const regular = scopedData.filter((i) => {
     if (filter === "all") return !i.isFeatured;
     if (filter === "featured") return false;
     return !i.isFeatured && i.type === filter;
   });
+
+  // 是否显示 LoadMore
+  const hasMoreToShow = (() => {
+    if (typeof showLimit !== "number" || showLimit <= 0) return false;
+    // 只要全量数据超过首页展示数，就显示跳转按钮
+    return insightsData.length > scopedData.length;
+  })();
 
   // ESC 关闭 + 禁用背景滚动
   useEffect(() => {
@@ -352,6 +373,11 @@ export default function Insights() {
           </motion.div>
         </AnimatePresence>
         </>
+        )}
+
+        {/* 首页模式：跳转量子页面 */}
+        {typeof showLimit === "number" && !loading && (hasMoreToShow || insightsData.length > 0) && (
+          <LoadMoreButton href="/insights" label="进入灵感点完整列表" />
         )}
       </div>
 

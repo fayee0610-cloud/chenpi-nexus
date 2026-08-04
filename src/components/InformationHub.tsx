@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ExternalLink, Radar, Sparkles, TrendingUp, Bot, Loader2 } from "lucide-react";
 import { fetchInsightsHub } from "@/lib/dataApi";
 import { type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
+import LoadMoreButton from "@/components/LoadMoreButton";
 
 const CATEGORY_TABS = [
   { key: "all", label: "全部分类", icon: Radar },
@@ -19,7 +20,7 @@ const CATEGORY_STYLES: Record<string, { border: string; bg: string; text: string
   "📈 品牌策略/GTM干货": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
 };
 
-export default function InformationHub() {
+export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [items, setItems] = useState<InsightHubItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -110,12 +111,17 @@ export default function InformationHub() {
 
   // 置顶卡片排前
   const sortedItems = useMemo(() => {
-    return [...filteredItems].sort((a, b) => {
+    const sorted = [...filteredItems].sort((a, b) => {
       if (a.isFeatured && !b.isFeatured) return -1;
       if (!a.isFeatured && b.isFeatured) return 1;
       return 0;
     });
-  }, [filteredItems]);
+    // 首页模式：限制展示条数
+    if (typeof showLimit === "number" && showLimit > 0) {
+      return sorted.slice(0, showLimit);
+    }
+    return sorted;
+  }, [filteredItems, showLimit]);
 
   return (
     <section id="hub" className="relative mx-auto max-w-7xl px-6 py-20">
@@ -286,6 +292,11 @@ export default function InformationHub() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 首页模式：跳转量子页面 */}
+      {typeof showLimit === "number" && !loading && sortedItems.length > 0 && (
+        <LoadMoreButton href="/hub" label="进入情报站完整列表" />
+      )}
     </section>
   );
 }

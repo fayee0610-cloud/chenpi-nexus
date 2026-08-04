@@ -939,3 +939,68 @@ export async function updateResource(id: string, updates: Partial<ResourceItem>)
   if (error) throw error;
   return data;
 }
+
+// ---------- Asylum Stats（庇护所统计：全网累计上香次数）----------
+export interface AsylumStats {
+  incenseCount: number;
+}
+
+const ASYLUM_STATS_ROW_ID = "main";
+
+export async function fetchAsylumStats(): Promise<AsylumStats> {
+  const fallback: AsylumStats = { incenseCount: 0 };
+  if (!supabase) return fallback;
+  try {
+    const { data, error } = await supabase
+      .from("asylum_stats")
+      .select("incense_count")
+      .eq("id", ASYLUM_STATS_ROW_ID)
+      .single();
+    if (error) {
+      // 表不存在 / 行不存在 → 返回 0
+      if (
+        error.code === "PGRST116" || // 0 rows returned
+        error.message?.includes("does not exist") ||
+        error.message?.includes("relation") ||
+        error.code === "42P01"
+      ) {
+        return fallback;
+      }
+      console.warn("[dataApi] fetchAsylumStats 异常:", error.message);
+      return fallback;
+    }
+    const row = data as { incense_count?: unknown };
+    return {
+      incenseCount: typeof row.incense_count === "number" ? row.incense_count : 0,
+    };
+  } catch (err) {
+    logNetworkFallback("fetchAsylumStats", err);
+    return fallback;
+  }
+}
+
+/**
+ * 上香次数原子递增（客户端调用 → 转发到服务端 API Route）
+ * 服务端使用 service_role key 执行 UPDATE asylum_stats SET incense_count = incense_count + 1 RETURNING incense_count
+ * 保证并发安全；若服务端失败则返回 null，前端降级为纯内存临时计数。
+ */
+export async function incrementIncense(): Promise<number | null> {
+  try {
+    const res = await fetch("/api/asylum/incense", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+    }
+    const json = await res.json();
+    if (json && typeof json.incenseCount === "number") {
+      return json.incenseCount;
+    }
+    return null;
+  } catch (err) {
+    logNetworkFallback("incrementIncense", err);
+    throw err;
+  }
+}

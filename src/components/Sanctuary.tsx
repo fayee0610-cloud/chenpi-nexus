@@ -24,8 +24,14 @@ import { toPng } from "html-to-image";
 import { QRCodeSVG } from "qrcode.react";
 import { siteData } from "@/data/siteData";
 import type { Incense, SanctuaryPost } from "@/data/siteData";
-import { fetchSanctuaryPosts, createSanctuaryPost } from "@/lib/dataApi";
+import {
+  fetchSanctuaryPosts,
+  createSanctuaryPost,
+  fetchAsylumStats,
+  incrementIncense,
+} from "@/lib/dataApi";
 import { getOrCreateCyberId, getCyberHash } from "@/lib/cyberId";
+import LoadMoreButton from "@/components/LoadMoreButton";
 
 // ========== 常量数据（从 siteData 导入：仅 UI 配置，非数据库内容）==========
 const buffs = siteData.sanctuary.incenseBuffs;
@@ -341,7 +347,13 @@ function CommunityCard({
 }
 
 // ========== 主组件 ==========
-export default function Sanctuary({ showInspirationSign = true }: { showInspirationSign?: boolean } = {}) {
+export default function Sanctuary({
+  showInspirationSign = true,
+  showCanvasLimit,
+}: {
+  showInspirationSign?: boolean;
+  showCanvasLimit?: number;
+} = {}) {
   const [incenses, setIncenses] = useState<Incense[]>(initialIncenses);
   const [activeIncense, setActiveIncense] = useState<string | null>(null);
   const [buffText, setBuffText] = useState<string | null>(null);
@@ -361,11 +373,15 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   const [posting, setPosting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // 上香持久化：加载状态 & 防刷防抖
+  const [loadingStats, setLoadingStats] = useState(true);
+  const lastIncenseClickRef = useRef(0);
+  const INCENSE_COOLDOWN_MS = 500; // 500ms 防刷
   const fortuneRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fartIdRef = useRef(4);
 
-  // 加载时从 Supabase 读取最新帖子
+  // 加载时从 Supabase 读取最新帖子 + 上香累计数据
   useEffect(() => {
     let mounted = true;
     fetchSanctuaryPosts().then((data) => {
@@ -376,6 +392,17 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     }).catch(() => {
       if (mounted) setLoadingFarts(false);
     });
+    // 读取全网累计上香次数（totalEnergy 持久化）
+    fetchAsylumStats()
+      .then((stats) => {
+        if (mounted && typeof stats.incenseCount === "number") {
+          setTotalEnergy(stats.incenseCount);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoadingStats(false);
+      });
     return () => { mounted = false; };
   }, []);
 
@@ -436,6 +463,13 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
   }, [pickRandomQuote]);
 
   const handleIncenseClick = useCallback((id: string) => {
+    // 1) 前端防刷：500ms 冷却期
+    const now = Date.now();
+    if (now - lastIncenseClickRef.current < INCENSE_COOLDOWN_MS) {
+      return;
+    }
+    lastIncenseClickRef.current = now;
+
     // 仅触发赛博上香视觉特效：发光烟雾、Buff 飘字、功德计数 +1
     // 严禁触发任何海报/便签弹窗（已解耦）
     setActiveIncense(id);
@@ -445,7 +479,19 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     setIncenses((prev) =>
       prev.map((inc) => (inc.id === id ? { ...inc, count: inc.count + 1 } : inc))
     );
+    // 先乐观更新 UI，后端完成后再同步真实值
     setTotalEnergy((prev) => prev + 1);
+
+    // 2) 持久化：原子递增 DB incense_count 字段
+    incrementIncense()
+      .then((dbCount) => {
+        if (typeof dbCount === "number") {
+          setTotalEnergy(dbCount);
+        }
+      })
+      .catch((err) => {
+        console.warn("[Sanctuary] 上香持久化失败，将在下次刷新时同步:", err?.message || err);
+      });
 
     setTimeout(() => setActiveIncense(null), 1000);
     setTimeout(() => setBuffText(null), 2500);
@@ -583,6 +629,14 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
     }
   }, [downloading, fortuneHash]);
 
+  // 脑洞画布列表：首页限制条数
+  const displayedFarts = (() => {
+    if (typeof showCanvasLimit === "number" && showCanvasLimit > 0) {
+      return farts.slice(0, showCanvasLimit);
+    }
+    return farts;
+  })();
+
   // 滚动至发帖框
   const scrollToCanvas = () => {
     canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -625,15 +679,19 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
             >
               <Zap className="h-4 w-4 text-purple-400 transition-transform group-hover:scale-125" />
               <span className="text-sm text-zinc-300">今日全网已注入能量：</span>
-              <motion.span
-                key={totalEnergy}
-                initial={{ scale: 1.3, color: "#a855f7" }}
-                animate={{ scale: 1, color: "#fafafa" }}
-                transition={{ duration: 0.3 }}
-                className="text-sm font-bold text-zinc-50"
-              >
-                {totalEnergy.toLocaleString()}
-              </motion.span>
+              {loadingStats ? (
+                <span className="h-4 w-16 animate-pulse rounded-md bg-zinc-800 text-transparent">0</span>
+              ) : (
+                <motion.span
+                  key={totalEnergy}
+                  initial={{ scale: 1.3, color: "#a855f7" }}
+                  animate={{ scale: 1, color: "#fafafa" }}
+                  transition={{ duration: 0.3 }}
+                  className="text-sm font-bold text-zinc-50"
+                >
+                  {totalEnergy.toLocaleString()}
+                </motion.span>
+              )}
               <span className="text-sm text-purple-400">⚡</span>
             </button>
           </div>
@@ -792,25 +850,31 @@ export default function Sanctuary({ showInspirationSign = true }: { showInspirat
                 <div key={i} className="h-48 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
               ))}
             </div>
-          ) : farts.length === 0 ? (
+          ) : displayedFarts.length === 0 ? (
             <div className="py-16 text-center">
               <MessageSquare className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
               <p className="text-sm text-zinc-500">还没有人留下脑洞，来抢沙发吧</p>
             </div>
           ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <AnimatePresence>
-              {farts.map((fart) => (
-                <CommunityCard
-                  key={fart.id}
-                  fart={fart}
-                  onReaction={handleReaction}
-                  onEnergy={handleEnergy}
-                  onComment={handleComment}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <AnimatePresence>
+                {displayedFarts.map((fart) => (
+                  <CommunityCard
+                    key={fart.id}
+                    fart={fart}
+                    onReaction={handleReaction}
+                    onEnergy={handleEnergy}
+                    onComment={handleComment}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+            {/* 首页模式：跳转量子页面 */}
+            {typeof showCanvasLimit === "number" && farts.length > displayedFarts.length && (
+              <LoadMoreButton href="/sanctuary" label="进入脑洞画布完整列表" />
+            )}
+          </>
           )}
 
           {/* 独立海报生成按钮（与上香解耦，仅主动点击才弹出 9:16 海报 Modal） */}

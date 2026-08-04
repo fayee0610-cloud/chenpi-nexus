@@ -162,6 +162,52 @@
  * CREATE POLICY "anyone can delete sanctuary_posts" ON public.sanctuary_posts
  *   FOR DELETE USING (true);
  *
+ * -- 9. 庇护所统计：全网累计上香次数（asylum_stats）
+ * CREATE TABLE IF NOT EXISTS public.asylum_stats (
+ *   id TEXT PRIMARY KEY,
+ *   incense_count BIGINT NOT NULL DEFAULT 0,
+ *   updated_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * -- 初始化默认行（id='main'）：如果不存在就插一行
+ * INSERT INTO public.asylum_stats (id, incense_count)
+ *   VALUES ('main', 0)
+ *   ON CONFLICT (id) DO NOTHING;
+ * -- RLS：公开可读，写入仅允许服务端（service_role 绕过 RLS），防止 anon 直接刷 count
+ * ALTER TABLE public.asylum_stats ENABLE ROW LEVEL SECURITY;
+ * CREATE POLICY "asylum_stats is readable by everyone" ON public.asylum_stats
+ *   FOR SELECT USING (true);
+ * -- 为了让 /api/asylum/incense 的降级路径在使用 service_role 时依然能写入，此处无需 anon 写 policy；
+ * -- 若未来想允许 anon 直接写，可再加以下 POLICY（不推荐，应通过 API）：
+ * -- CREATE POLICY "service can update asylum_stats" ON public.asylum_stats
+ * --   FOR UPDATE USING (true) WITH CHECK (true);
+ *
+ * -- 10. 原子递增 incense_count 的 Postgres 函数（推荐使用，真正原子）
+ * CREATE OR REPLACE FUNCTION public.asylum_incense_increment(row_id TEXT DEFAULT 'main')
+ * RETURNS BIGINT
+ * LANGUAGE plpgsql
+ * SECURITY DEFINER
+ * SET search_path = public
+ * AS $$
+ * DECLARE
+ *   new_count BIGINT;
+ * BEGIN
+ *   -- 1) 若行不存在则插入，然后对目标行加 FOR UPDATE 锁
+ *   INSERT INTO public.asylum_stats (id, incense_count)
+ *   VALUES (row_id, 1)
+ *   ON CONFLICT (id) DO NOTHING;
+ *
+ *   -- 2) 原子递增 incense_count + 返回最新值
+ *   UPDATE public.asylum_stats
+ *   SET incense_count = incense_count + 1,
+ *       updated_at    = NOW()
+ *   WHERE id = row_id
+ *   RETURNING incense_count
+ *   INTO new_count;
+ *
+ *   RETURN new_count;
+ * END;
+ * $$;
+ *
  * -- 4. 站点配置表（Feature Flags 模块显隐控制）
  * CREATE TABLE IF NOT EXISTS public.site_config (
  *   key TEXT PRIMARY KEY,

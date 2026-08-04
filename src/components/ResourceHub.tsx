@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Download, Lock, X, Package } from "lucide-react";
 import { fetchResources, incrementResourceDownload, createLead } from "@/lib/dataApi";
 import { type ResourceItem } from "@/data/siteData";
+import LoadMoreButton from "@/components/LoadMoreButton";
 
-export default function ResourceHub() {
+export default function ResourceHub({ showLimit }: { showLimit?: number }) {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [lockResource, setLockResource] = useState<ResourceItem | null>(null);
@@ -73,6 +74,14 @@ export default function ResourceHub() {
     setSubmitting(false);
   }, [email, lockResource, triggerDownload]);
 
+  // 首页模式：限制展示条数
+  const displayedResources = (() => {
+    if (typeof showLimit === "number" && showLimit > 0) {
+      return resources.slice(0, showLimit);
+    }
+    return resources;
+  })();
+
   return (
     <section id="resources" className="relative mx-auto max-w-7xl px-6 py-20">
       {/* 标题 */}
@@ -105,8 +114,9 @@ export default function ResourceHub() {
           <p className="text-sm text-zinc-500">资源包正在准备中，敬请期待</p>
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {resources.map((resource, i) => (
+        <>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {displayedResources.map((resource, i) => (
               <motion.div
                 key={resource.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -184,7 +194,13 @@ export default function ResourceHub() {
                 </div>
               </motion.div>
             ))}
-        </div>
+          </div>
+
+          {/* 首页模式：跳转量子页面 */}
+          {typeof showLimit === "number" && displayedResources.length > 0 && (
+            <LoadMoreButton href="/resources" label="进入资源包完整列表" />
+          )}
+        </>
       )}
 
       {/* 下载壁垒弹窗（极简邮箱留存） */}
