@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Mail, Lock, User, Loader2, CheckCircle2, AlertCircle, LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +19,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // 确保客户端挂载后再使用 Portal（避免 SSR 报错）
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -26,7 +33,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   }, [isOpen]);
 
-  // 背景滚动锁定：Modal 打开时禁用 body 滚动，关闭时恢复
+  // 滑动防穿透：Modal 打开时锁定 body 滚动，关闭时还原
   useEffect(() => {
     if (!isOpen) return;
     const original = document.body.style.overflow;
@@ -35,6 +42,16 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       document.body.style.overflow = original;
     };
   }, [isOpen]);
+
+  // ESC 键关闭
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) return;
@@ -69,7 +86,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
-  return (
+  // 弹窗内容：使用 Portal 挂载到 document.body，脱离 Header DOM 树
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -77,40 +95,41 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
         >
           <motion.div
             initial={{ scale: 0.92, y: 16 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.92, y: 16 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl"
+            className="relative w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl"
           >
+            {/* 顶部关闭按钮 */}
+            <button
+              onClick={onClose}
+              aria-label="关闭"
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
             {/* 头部 */}
-            <div className="relative border-b border-zinc-800 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-500">
-                  <User className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-zinc-100">
-                    {mode === "login" ? "登录通行证" : "注册通行证"}
-                  </h2>
-                  <p className="text-[11px] text-zinc-500">
-                    登录后可下载专属资源包
-                  </p>
-                </div>
+            <div className="mb-5 flex items-center gap-3 pr-8">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-500">
+                <User className="h-5 w-5 text-white" />
               </div>
-              <button
-                onClick={onClose}
-                className="absolute right-4 top-4 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div>
+                <h2 className="text-base font-bold text-zinc-100">
+                  {mode === "login" ? "登录通行证" : "注册通行证"}
+                </h2>
+                <p className="text-[11px] text-zinc-500">
+                  登录后可下载专属资源包
+                </p>
+              </div>
             </div>
 
             {/* 表单 */}
-            <div className="space-y-4 px-6 py-5">
+            <div className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 flex items-center gap-1 text-xs font-medium text-zinc-400">
                   <Mail className="h-3.5 w-3.5" />
@@ -197,6 +216,10 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       )}
     </AnimatePresence>
   );
+
+  // 仅在客户端挂载后通过 Portal 渲染到 body 最外层，彻底脱离 Header DOM 树
+  if (!mounted) return null;
+  return createPortal(modalContent, document.body);
 }
 
 // 用户状态 Hook（供 Header 使用）
