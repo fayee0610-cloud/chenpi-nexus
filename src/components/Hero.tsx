@@ -98,20 +98,10 @@ export default function Hero() {
                   📡 SYSTEM: ONLINE
                 </div>
 
-                {/* 角停浮层：底部标签与引语（贴底部边缘，高不超过 20%，不挡脸） */}
-                <div className="absolute bottom-3 left-3 right-3">
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    {profile.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-md border border-zinc-700/60 bg-zinc-950/70 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-sm font-medium text-zinc-200">
-                    &ldquo;{profile.quote}&rdquo;
+                {/* 底部个人标语：半透明背景，仅覆盖底部边缘，不挡脸 */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-md px-4 py-3">
+                  <p className="text-sm font-medium tracking-wide text-zinc-100 text-center">
+                    &ldquo;谋于策略，成于闭环，对结果负责。&rdquo;
                   </p>
                 </div>
 
