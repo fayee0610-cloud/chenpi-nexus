@@ -69,17 +69,27 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="w-full max-w-md mx-auto lg:max-w-lg lg:flex-1"
           >
-            <div className="group relative">
-              {/* 人像卡片：照片 100% 原色清晰，无任何蒙层/滤镜/overlay */}
-              <div className="relative aspect-square overflow-hidden rounded-2xl border border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-500 hover:shadow-[0_0_28px_rgba(168,85,247,0.45)]">
+            {/* 最外层：控制 Hover 升起、外发光与流光边框（p-[2px] + 渐变背景 = 纯净渐变边框） */}
+            <div
+              className="relative group rounded-2xl p-[2px] animate-border-flow transition-all duration-300 hover:-translate-y-1 shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(168,85,247,0.5)]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, #7c3aed, #3b82f6, #6366f1, #a855f7, #3b82f6, #7c3aed)",
+              }}
+            >
+
+              {/* 内层容器：裁剪溢出的图片，内圆角 14px 与外圆角 2xl 搭配形成 2px 边框 */}
+              <div className="relative w-full h-full rounded-[14px] overflow-hidden bg-slate-900">
+
+                {/* 核心图片：高清原色，Hover 微放大，绝对无任何遮罩/滤镜 */}
                 <img
                   src={profile.avatarUrl}
-                  alt="Avatar"
-                  className="h-full w-full object-cover"
+                  alt="陈皮"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
 
-                {/* 右上角科技角标：状态灯呼吸脉冲（独立浮层，非蒙层） */}
-                <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-green-500/30 bg-zinc-950/80 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur-sm">
+                {/* 角停浮层：右上角 SYSTEM: ONLINE 呼吸灯（边缘浮层，不挡脸） */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md border border-green-500/30 bg-zinc-950/80 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur-sm">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
@@ -88,25 +98,23 @@ export default function Hero() {
                   📡 SYSTEM: ONLINE
                 </div>
 
-                {/* 霓虹流光边框：渐变光带沿边框流动（仅边框，不覆盖图片） */}
-                <div className="animate-border-flow pointer-events-none absolute -inset-px rounded-2xl bg-[linear-gradient(90deg,transparent,rgba(168,85,247,0.6),transparent,rgba(59,130,246,0.6),transparent)] opacity-60 [mask:linear-gradient(#000_0_0)_content-box,linear-gradient(#000_0_0)] [mask-composite:exclude] p-px" />
-              </div>
-
-              {/* 照片下方属性标签区（移出照片外部，不再遮挡人像） */}
-              <div className="mt-4 px-1">
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {profile.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-md border border-zinc-700/60 bg-zinc-900/70 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+                {/* 角停浮层：底部标签与引语（贴底部边缘，高不超过 20%，不挡脸） */}
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {profile.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-md border border-zinc-700/60 bg-zinc-950/70 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-zinc-200">
+                    &ldquo;{profile.quote}&rdquo;
+                  </p>
                 </div>
-                <p className="text-sm font-medium text-zinc-300">
-                  &ldquo;{profile.quote}&rdquo;
-                </p>
+
               </div>
             </div>
           </motion.div>
