@@ -203,7 +203,7 @@ export default function Mascot() {
                     <button
                       key={q}
                       onClick={() => sendMessage(q)}
-                      className="rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[10px] font-medium text-zinc-400 transition-all hover:border-purple-500/40 hover:bg-purple-950/20 hover:text-purple-300"
+                      className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium leading-relaxed text-zinc-400 transition-all hover:border-purple-500/40 hover:bg-purple-950/20 hover:text-purple-300"
                     >
                       {q}
                     </button>

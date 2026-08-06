@@ -475,6 +475,8 @@ export const sanctuary = {
 
   postTagOptions: [
     { label: "💡 概念萌芽", color: "text-blue-400 bg-blue-500/10" },
+    { label: "🧠 营销脑洞", color: "text-amber-400 bg-amber-500/10" },
+    { label: "🚀 出海进行中", color: "text-emerald-400 bg-emerald-500/10" },
     { label: "🔥 职场发疯/吐槽", color: "text-red-400 bg-red-500/10" },
     { label: "🤖 AI 硬件想法", color: "text-purple-400 bg-purple-500/10" },
   ],
@@ -541,10 +543,10 @@ export const mascot = {
   ],
 
   quickPrompts: [
-    "💡 陈皮的主要背景与核心能力",
-    "🚀 陶瓷品牌出海与跨境营销案例",
-    "🧠 推荐关于 OPC / AI 自动化流程的深度文章",
-    "🤝 如何与陈皮建立项目合作？",
+    "💡 陈皮的主要背景与实战项目经历",
+    "🧠 如何看待 AI 对 B2B / B2C 营销流程的重塑？",
+    "🤖 陈皮对出海机器人与具身 AI 市场策略的思考",
+    "🚀 品牌出海时，如何做到战术级的市场穿透？",
   ],
 };
 
