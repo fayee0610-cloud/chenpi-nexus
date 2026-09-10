@@ -255,8 +255,8 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
     }
     if (!data || data.length === 0) return [];
 
-    // 树状回复分组：parent_id 为 null 的是主帖，有 parent_id 的是回复
-    const allRows = data.filter((row: any) => row.is_published !== false);
+    // sanctuary_posts 表无 is_published 列，全部展示
+    const allRows = data;
     const topLevel = allRows.filter((row: any) => !row.parent_id);
     const replies = allRows.filter((row: any) => !!row.parent_id);
 
@@ -632,7 +632,7 @@ export async function fetchResources(): Promise<ResourceItem[]> {
         fileSize: row.file_size || "",
         category: row.category || "指南",
         requireLogin: row.require_login ?? false,
-        isPublished: row.is_published ?? true,
+        isPublished: true,
         downloadCount: row.download_count || 0,
         date: row.created_at ? new Date(row.created_at).toLocaleDateString("zh-CN").replace(/\//g, ".") : "",
       })) as ResourceItem[];
@@ -868,7 +868,7 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
           sourceName: row.source_name || "",
           originalUrl: row.original_url || "",
           publishedAt: row.published_at || "",
-          isPublished: row.is_published ?? true,
+          isPublished: true,
           isFeatured: row.is_featured ?? false,
           apiSource: "manual",
           tags: [],
@@ -890,7 +890,7 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
         sourceName: row.source_name || "",
         originalUrl: row.original_url || "",
         publishedAt: row.published_at || "",
-        isPublished: row.is_published ?? true,
+        isPublished: true,
         isFeatured: row.is_featured ?? false,
         apiSource: row.api_source || "manual",
         tags: row.tags ? (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags) : [],
@@ -1144,7 +1144,7 @@ export async function fetchAsylumStats(): Promise<AsylumStats> {
  */
 export async function incrementIncense(incenseId?: string): Promise<number | null> {
   // 优先直接调用 Supabase RPC（SECURITY DEFINER 绕过 RLS，并发安全原子递增）
-  // increment_incense 返回 INT8（递增后的最新 count）
+  // increment_incense 可能返回 VOID（旧版）或 INT8（修复后），两种都兼容
   if (supabase && incenseId) {
     try {
       const { data, error } = await (supabase as any).rpc("increment_incense", {
@@ -1153,9 +1153,20 @@ export async function incrementIncense(incenseId?: string): Promise<number | nul
       if (error) {
         console.error("[dataApi] ❌ increment_incense RPC 错误:", error.code, error.message);
       }
-      if (!error && data != null) {
+      if (!error && data != null && data !== "") {
         // INT8 可能以 string 或 number 形式返回
         return Number(data);
+      }
+      // RPC 返回 VOID（无返回值）→ 立即查询 incense_stats 获取最新 count
+      if (!error) {
+        const { data: statsRow, error: statsErr } = await supabase
+          .from("incense_stats")
+          .select("count")
+          .eq("id", incenseId)
+          .single();
+        if (!statsErr && statsRow) {
+          return Number(statsRow.count || 0);
+        }
       }
     } catch (rpcErr) {
       console.error("[dataApi] ❌ incrementIncense RPC 异常:", rpcErr instanceof Error ? rpcErr.message : rpcErr);

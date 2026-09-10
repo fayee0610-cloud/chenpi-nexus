@@ -131,7 +131,7 @@ async function atomicIncenseIncrement(): Promise<number> {
 async function incensePillarIncrement(incenseId: string): Promise<number> {
   const supabase = await getServerClient();
 
-  // Step 1: 优先 RPC（返回递增后的最新 count）
+  // Step 1: 优先 RPC（可能返回 VOID 或 INT8）
   try {
     const { data, error } = await (supabase as any).rpc("increment_incense", {
       incense_id: incenseId,
@@ -139,8 +139,19 @@ async function incensePillarIncrement(incenseId: string): Promise<number> {
     if (error) {
       console.error("[api/asylum/incense] RPC increment_incense 错误:", error.code, error.message);
     }
-    if (!error && data != null) {
+    if (!error && data != null && data !== "") {
       return Number(data);
+    }
+    // RPC 返回 VOID → 立即查询 incense_stats 获取最新 count
+    if (!error) {
+      const { data: statsRow, error: statsErr } = await (supabase as any)
+        .from("incense_stats")
+        .select("count")
+        .eq("id", incenseId)
+        .single();
+      if (!statsErr && statsRow) {
+        return Number(statsRow.count || 0);
+      }
     }
   } catch (rpcErr: any) {
     console.error("[api/asylum/incense] RPC increment_incense 异常:", rpcErr?.message || rpcErr);
@@ -172,25 +183,25 @@ async function incensePillarIncrement(incenseId: string): Promise<number> {
     console.error("[api/asylum/incense] incense_stats 降级失败:", statsErr?.message || statsErr);
   }
 
-  // Step 3: 最终降级到 sanctuary_incense 表（旧表）
+  // Step 3: 最终降级到 sanctuary_incense 表（旧表，使用 id 字段）
   try {
     await (supabase as any)
       .from("sanctuary_incense")
-      .upsert([{ incense_id: incenseId, count: 0 }], {
-        onConflict: "incense_id",
+      .upsert([{ id: incenseId, count: 0 }], {
+        onConflict: "id",
         ignoreDuplicates: true,
       });
     const { data: row, error: selErr } = await (supabase as any)
       .from("sanctuary_incense")
       .select("count")
-      .eq("incense_id", incenseId)
+      .eq("id", incenseId)
       .single();
     if (selErr || !row) return 0;
     const next = Number(row.count || 0) + 1;
     const { error: updErr } = await (supabase as any)
       .from("sanctuary_incense")
       .update({ count: next })
-      .eq("incense_id", incenseId);
+      .eq("id", incenseId);
     if (updErr) return 0;
     return next;
   } catch (upsertErr: any) {
@@ -225,22 +236,44 @@ export async function POST(req: Request) {
       // 无 body 也允许（兼容旧调用）
     }
 
-    // 总能量递增（主流程）
-    const count = await atomicIncenseIncrement();
-
-    // 单柱递增（失败不影响主流程）
+    const serverSupabase = await getServerClient();
+    // 优先：直接调用 increment_incense RPC 处理单柱递增
     let pillarCount: number | null = null;
     if (incenseId) {
       try {
-        pillarCount = await incensePillarIncrement(incenseId);
+        const { data: rpcData, error: rpcErr } = await (serverSupabase as any).rpc(
+          "increment_incense",
+          { incense_id: incenseId }
+        );
+        if (!rpcErr && rpcData != null && rpcData !== "") {
+          pillarCount = Number(rpcData);
+        }
+        // RPC 返回 VOID 或失败 → 降级到 incensePillarIncrement
+        if (pillarCount === null) {
+          pillarCount = await incensePillarIncrement(incenseId);
+        }
       } catch (err: any) {
         console.warn("[api/asylum/incense] 单柱递增失败（不阻断）:", err?.message || err);
+        try { pillarCount = await incensePillarIncrement(incenseId); } catch {}
       }
+    }
+
+    // 总能量：从 incense_stats 汇总所有香柱 count
+    let totalCount = 0;
+    try {
+      const { data: statsData, error: statsErr } = await (serverSupabase as any)
+        .from("incense_stats")
+        .select("count");
+      if (!statsErr && statsData) {
+        totalCount = statsData.reduce((sum: number, row: any) => sum + Number(row.count || 0), 0);
+      }
+    } catch (err: any) {
+      console.warn("[api/asylum/incense] 总能量汇总失败:", err?.message || err);
     }
 
     return NextResponse.json({
       success: true,
-      incenseCount: count,
+      incenseCount: totalCount,
       pillarCount,
     });
   } catch (err: any) {
@@ -281,13 +314,13 @@ export async function GET() {
     // 降级：读 sanctuary_incense 表（旧表）
     const { data, error } = await (supabase as any)
       .from("sanctuary_incense")
-      .select("incense_id, count");
+      .select("id, count");
     if (error) {
       console.error("[api/asylum/incense GET] sanctuary_incense 错误:", error.code, error.message);
       return NextResponse.json({ success: true, pillars: [] });
     }
     const pillars = (data || []).map((r: any) => ({
-      incenseId: r.incense_id,
+      incenseId: r.id,
       count: Number(r.count || 0),
     }));
     return NextResponse.json({ success: true, pillars });

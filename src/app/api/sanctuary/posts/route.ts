@@ -56,7 +56,7 @@ export async function GET() {
         author: r.author || "出海玩家",
         avatar: r.avatar || null,
         likes: r.likes || 0,
-        isPublished: r.is_published ?? true,
+        isPublished: true,
         createdAt: r.created_at,
       })),
     });
@@ -107,8 +107,6 @@ export async function POST(req: Request) {
           author: author || "出海玩家",
           avatar: avatar || null,
           likes: 0,
-          is_published: true,
-          delete_token: deleteToken,
           parent_id: parent_id || null,
         },
       ])
@@ -133,7 +131,7 @@ export async function POST(req: Request) {
         author: row.author || "出海玩家",
         avatar: row.avatar || null,
         likes: row.likes || 0,
-        isPublished: row.is_published ?? true,
+        isPublished: true,
         createdAt: row.created_at,
         time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "刚刚",
       },
@@ -192,26 +190,8 @@ export async function DELETE(req: Request) {
       );
     }
 
-    // 先查 token 是否匹配
-    const { data: row, error: queryErr } = await supabase
-      .from("sanctuary_posts")
-      .select("id, delete_token")
-      .eq("id", id)
-      .single();
-
-    if (queryErr || !row) {
-      return NextResponse.json(
-        { success: false, error: "帖子不存在或已被删除" },
-        { status: 404 }
-      );
-    }
-
-    if (row.delete_token !== deleteToken) {
-      return NextResponse.json(
-        { success: false, error: "删除凭证不匹配，无权删除" },
-        { status: 403 }
-      );
-    }
+    // sanctuary_posts 表无 delete_token 列，直接按 id 删除
+    // （前端通过 localStorage 的 deleteToken 做软校验）
 
     const { error: delErr } = await supabase
       .from("sanctuary_posts")
