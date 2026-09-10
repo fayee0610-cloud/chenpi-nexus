@@ -189,9 +189,9 @@ export const contact = {
 
 export const portfolio = {
   categories: [
-    { key: "brand" as const, label: "品牌与市场战术" },
-    { key: "ai" as const, label: "AI 与硬件探索" },
-    { key: "experiment" as const, label: "阶段性创意实验" },
+    { key: "brand" as const, label: "东南亚出海战术" },
+    { key: "ai" as const, label: "AI 营销实践" },
+    { key: "experiment" as const, label: "品牌与市场策略" },
   ],
   projects: [
     {
@@ -208,7 +208,7 @@ export const portfolio = {
       ],
       tags: ["品牌战术", "跨境出海", "独立站"],
       tab: "brand" as const,
-      category: "品牌与市场战术",
+      category: "东南亚出海战术",
       challenge: "新马地区消费电子品牌面临出海定位模糊、DTC 独立站流量结构单一、品牌词搜索量近乎为零的困境。传统铺货模式遭遇平台流量红利见顶，亟需建立品牌侧护城河与独立增长通道。",
       solutions: [
         { title: "品牌定位与视觉体系重塑", detail: "基于东南亚 + 欧美双市场调研，提炼品牌核心价值主张，重构视觉识别系统（VI），建立跨市场统一的品牌叙事框架。" },
@@ -231,7 +231,7 @@ export const portfolio = {
       ],
       tags: ["AI 硬件", "Coze/OpenClaw", "自动化"],
       tab: "ai" as const,
-      category: "AI 与硬件探索",
+      category: "AI 营销实践",
       challenge: "硬件选型需跨数十个供应商比对参数与价格，市场情报依赖人工爬取与整理，效率低、覆盖窄、延迟高。团队需要一个能 7×24 自动运转的情报系统来支撑快速决策。",
       solutions: [
         { title: "多 Agent 协作架构设计", detail: "基于 Coze / OpenClaw 搭建「采集 Agent → 分析 Agent → 决策 Agent」三层架构，自动抓取供应商数据、比对参数、生成选型报告。" },
@@ -254,7 +254,7 @@ export const portfolio = {
       ],
       tags: ["创意实验", "内容矩阵", "极客尝试"],
       tab: "experiment" as const,
-      category: "阶段性创意实验",
+      category: "品牌与市场策略",
       challenge: "以一人之力验证「超级个体」内容矩阵的可行性——在没有团队、没有预算的前提下，能否通过多平台内容分发与精准话题运营，在 6 个月内建立高粘性读者群？",
       solutions: [
         { title: "多平台内容矩阵搭建", detail: "同步运营公众号、小红书、即刻、少数派 4 个平台，针对不同平台调性定制内容切片策略，单篇内容复用率达到 300%。" },

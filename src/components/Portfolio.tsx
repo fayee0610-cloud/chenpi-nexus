@@ -81,10 +81,10 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
         {/* Section Header */}
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
-            作品集
+            实战案例
           </h2>
           <p className="mx-auto max-w-xl text-zinc-400">
-            从品牌战略到 AI 硬件探索，持续交付可量化的创意价值
+            从东南亚品牌出海到 AI 营销落地，持续交付可量化的商业增长价值
           </p>
           <Link
             href="/portfolio"
@@ -216,7 +216,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
 
         {/* 首页模式：跳转量子页面 */}
         {typeof showLimit === "number" && !loading && filtered.length > 0 && (
-          <LoadMoreButton href="/portfolio" label="进入作品集完整列表" />
+          <LoadMoreButton href="/portfolio" label="进入实战案例完整列表" />
         )}
       </div>
 

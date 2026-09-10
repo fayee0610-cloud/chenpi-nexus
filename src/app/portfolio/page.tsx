@@ -12,9 +12,9 @@ type TabKey = "all" | "brand" | "ai" | "experiment";
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
-  { key: "brand", label: "品牌与市场战术" },
-  { key: "ai", label: "AI 与硬件探索" },
-  { key: "experiment", label: "阶段性创意实验" },
+  { key: "brand", label: "东南亚出海战术" },
+  { key: "ai", label: "AI 营销实践" },
+  { key: "experiment", label: "品牌与市场策略" },
 ];
 
 export default function PortfolioListPage() {

@@ -4,8 +4,8 @@ import InformationHub from "@/components/InformationHub";
 import Connect from "@/components/Connect";
 
 export const metadata: Metadata = {
-  title: "赛博情报站 | 陈皮同学",
-  description: "中国企业 AI、机器人与出海 Marketing 第一手硬核商业情报提炼。",
+  title: "东南亚实局 | 陈皮同学",
+  description: "东南亚核心市场洞察 · 本土化渠道 · AI 营销杠杆 · 第一线出海实局",
 };
 
 export default function HubPage() {

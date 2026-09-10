@@ -819,18 +819,29 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
   if (!supabase) return [];
   try {
     // 显式指定列名，避免 select("*") 触发 schema cache 报错
+    // 7天TTL + 单次最多20条，防止无限制全量加载
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+
     const { data, error } = await supabase
       .from("insights_hub")
       .select("id,title,category,summary,source_name,original_url,published_at,is_published,is_featured,api_source,tags,created_at")
-      .order("created_at", { ascending: false });
+      .gte("created_at", sevenDaysAgoISO)
+      .order("created_at", { ascending: false })
+      .range(0, 19);
 
     // 若 schema 不匹配（如 tags/api_source 列缺失），降级为基础列查询
     if (error && (error.code === "PGRST204" || error.message.includes("schema cache") || error.message.includes("Could not find"))) {
       console.warn("[dataApi] insights_hub schema 不完整，降级到基础列查询:", error.message);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const basic = await supabase
         .from("insights_hub")
         .select("id,title,category,summary,source_name,original_url,published_at,is_published,is_featured,created_at")
-        .order("created_at", { ascending: false });
+        .gte("created_at", sevenDaysAgo.toISOString())
+        .order("created_at", { ascending: false })
+        .range(0, 19);
       if (basic.error || !basic.data) return [];
       return basic.data
         .filter((row: any) => row.is_published !== false)

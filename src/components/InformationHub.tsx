@@ -32,7 +32,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
 
   // 一键复制情报文本（带落款链接）
   const handleCopyInsight = async (item: InsightHubItem) => {
-    const tagLine = `—— 摘自【陈皮同学 · 赛博情报站】| ${
+    const tagLine = `—— 摘自【陈皮同学 · 东南亚实局】| ${
       typeof window !== "undefined" ? `${window.location.origin}/hub` : "https://chenpi.dev/hub"
     }`;
     const payload = `${item.title}\n[${item.category}] ${item.sourceName || "匿名来源"} | ${item.publishedAt || ""}\n\n${
@@ -171,10 +171,10 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
       {/* 标题 */}
       <div className="mb-10 text-center">
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
-          赛博情报站
+          东南亚实局
         </h2>
         <p className="mt-3 text-sm text-zinc-500">
-          具身智能 · AI大厂 · GTM战术 — 第一手硬核商业情报提炼
+          东南亚核心市场洞察 · 本土化渠道 · AI 营销杠杆 · 第一线出海实局
         </p>
 
         {/* ⚡ 实时感知按钮 */}
@@ -233,7 +233,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
       </div>
 
       {/* 瀑布流卡片 */}
-      <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 [&>*]:mb-5">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading
           ? [1, 2, 3, 4, 5, 6].map((i) => (
               <div
@@ -267,7 +267,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                   </div>
 
                   {/* 标题 */}
-                  <h3 className="mb-2 text-sm font-bold leading-snug text-zinc-100">
+                  <h3 className="mb-2 line-clamp-2 text-sm font-bold leading-snug text-zinc-100">
                     {item.title}
                   </h3>
 
@@ -287,7 +287,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                             <span className="mb-1.5 inline-block rounded bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400">
                               【陈皮提炼】
                             </span>
-                            <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-400">
+                            <p className="line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-zinc-400">
                               {raw}
                             </p>
                           </>
@@ -302,7 +302,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                               <span className="mb-1 inline-block rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-bold text-blue-400">
                                 【一手核心事实】
                               </span>
-                              <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-400">
+                              <p className="line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-zinc-400">
                                 {factMatch[1].trim()}
                               </p>
                             </div>
@@ -403,7 +403,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
 
       {/* 首页模式：跳转量子页面 */}
       {typeof showLimit === "number" && !loading && sortedItems.length > 0 && (
-        <LoadMoreButton href="/hub" label="进入情报站完整列表" />
+        <LoadMoreButton href="/hub" label="进入东南亚实局完整列表" />
       )}
     </section>
   );
