@@ -65,9 +65,12 @@ async function atomicIncenseIncrement(): Promise<number> {
     const { data, error } = await (supabase as any).rpc("asylum_incense_increment", {
       row_id: ASYLUM_STATS_ROW_ID,
     });
-    if (!error && typeof data === "number") return data;
-  } catch {
-    // ignore → 走降级
+    if (error) {
+      console.error("[api/asylum/incense] RPC asylum_incense_increment 错误:", error.code, error.message);
+    }
+    if (!error && data != null) return Number(data);
+  } catch (rpcErr: any) {
+    console.error("[api/asylum/incense] RPC asylum_incense_increment 异常:", rpcErr?.message || rpcErr);
   }
 
   // Step 2: 降级：UPSERT（确保行存在， incense_count 默认 0）
@@ -92,15 +95,15 @@ async function atomicIncenseIncrement(): Promise<number> {
     throw upsertErr;
   }
 
-  // Step 3: 再次尝试 RPC（管理员可能后来补上函数）
+  // Step 3: 再次尝试 RPC
   try {
     const { data: rpc2, error: rpcErr2 } = await (supabase as any).rpc(
       "asylum_incense_increment",
       { row_id: ASYLUM_STATS_ROW_ID }
     );
-    if (!rpcErr2 && typeof rpc2 === "number") return rpc2;
+    if (!rpcErr2 && rpc2 != null) return Number(rpc2);
   } catch {
-    // ignore
+    // 走降级
   }
 
   // Step 4: 读 → 写 → 读 降级逻辑
@@ -128,17 +131,48 @@ async function atomicIncenseIncrement(): Promise<number> {
 async function incensePillarIncrement(incenseId: string): Promise<number> {
   const supabase = await getServerClient();
 
-  // Step 1: 优先 RPC
+  // Step 1: 优先 RPC（返回递增后的最新 count）
   try {
     const { data, error } = await (supabase as any).rpc("increment_incense", {
       incense_id: incenseId,
     });
-    if (!error && typeof data === "number") return data;
-  } catch {
-    // ignore → 降级
+    if (error) {
+      console.error("[api/asylum/incense] RPC increment_incense 错误:", error.code, error.message);
+    }
+    if (!error && data != null) {
+      return Number(data);
+    }
+  } catch (rpcErr: any) {
+    console.error("[api/asylum/incense] RPC increment_incense 异常:", rpcErr?.message || rpcErr);
   }
 
-  // Step 2: UPSERT 确保行存在
+  // Step 2: 降级 UPSERT + 读-改-写 到 incense_stats 表（新表）
+  try {
+    const { data: statsRow, error: statsErr } = await (supabase as any)
+      .from("incense_stats")
+      .select("count")
+      .eq("id", incenseId)
+      .single();
+    if (!statsErr && statsRow) {
+      const next = Number(statsRow.count || 0) + 1;
+      const { error: updErr } = await (supabase as any)
+        .from("incense_stats")
+        .update({ count: next })
+        .eq("id", incenseId);
+      if (!updErr) return next;
+    }
+    // 行不存在 → INSERT
+    if (statsErr && statsErr.code === "PGRST116") {
+      const { error: insErr } = await (supabase as any)
+        .from("incense_stats")
+        .insert([{ id: incenseId, name: incenseId, count: 1 }]);
+      if (!insErr) return 1;
+    }
+  } catch (statsErr: any) {
+    console.error("[api/asylum/incense] incense_stats 降级失败:", statsErr?.message || statsErr);
+  }
+
+  // Step 3: 最终降级到 sanctuary_incense 表（旧表）
   try {
     await (supabase as any)
       .from("sanctuary_incense")
@@ -146,29 +180,23 @@ async function incensePillarIncrement(incenseId: string): Promise<number> {
         onConflict: "incense_id",
         ignoreDuplicates: true,
       });
+    const { data: row, error: selErr } = await (supabase as any)
+      .from("sanctuary_incense")
+      .select("count")
+      .eq("incense_id", incenseId)
+      .single();
+    if (selErr || !row) return 0;
+    const next = Number(row.count || 0) + 1;
+    const { error: updErr } = await (supabase as any)
+      .from("sanctuary_incense")
+      .update({ count: next })
+      .eq("incense_id", incenseId);
+    if (updErr) return 0;
+    return next;
   } catch (upsertErr: any) {
-    const msg: string = upsertErr?.message || String(upsertErr);
-    if (/does not exist/i.test(msg) || /relation/i.test(msg) || upsertErr?.code === "42P01") {
-      // 表缺失不阻断主流程，总能量仍可递增
-      return 0;
-    }
-    throw upsertErr;
+    console.error("[api/asylum/incense] sanctuary_incense 降级失败:", upsertErr?.message || upsertErr);
+    return 0;
   }
-
-  // Step 3: 读-改-写
-  const { data: row, error: selErr } = await (supabase as any)
-    .from("sanctuary_incense")
-    .select("count")
-    .eq("incense_id", incenseId)
-    .single();
-  if (selErr || !row) return 0;
-  const next = Number(row.count || 0) + 1;
-  const { error: updErr } = await (supabase as any)
-    .from("sanctuary_incense")
-    .update({ count: next })
-    .eq("incense_id", incenseId);
-  if (updErr) return 0;
-  return next;
 }
 
 export async function POST(req: Request) {
@@ -236,11 +264,26 @@ export async function POST(req: Request) {
 export async function GET() {
   try {
     const supabase = await getServerClient();
+    // 优先：读 incense_stats 表（新表，id + count）
+    const { data: statsData, error: statsErr } = await (supabase as any)
+      .from("incense_stats")
+      .select("id, count");
+    if (!statsErr && statsData && statsData.length > 0) {
+      const pillars = statsData.map((r: any) => ({
+        incenseId: r.id,
+        count: Number(r.count || 0),
+      }));
+      return NextResponse.json({ success: true, pillars });
+    }
+    if (statsErr && !statsErr.message?.includes("does not exist") && !statsErr.message?.includes("relation")) {
+      console.error("[api/asylum/incense GET] incense_stats 错误:", statsErr.code, statsErr.message);
+    }
+    // 降级：读 sanctuary_incense 表（旧表）
     const { data, error } = await (supabase as any)
       .from("sanctuary_incense")
       .select("incense_id, count");
     if (error) {
-      // 表不存在时返回空数组（前端用初始基数）
+      console.error("[api/asylum/incense GET] sanctuary_incense 错误:", error.code, error.message);
       return NextResponse.json({ success: true, pillars: [] });
     }
     const pillars = (data || []).map((r: any) => ({
@@ -249,6 +292,7 @@ export async function GET() {
     }));
     return NextResponse.json({ success: true, pillars });
   } catch (err: any) {
+    console.error("[api/asylum/incense GET] 异常:", err?.message || err);
     return NextResponse.json({ success: true, pillars: [], error: err?.message });
   }
 }

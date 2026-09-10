@@ -250,7 +250,7 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.warn("[dataApi] fetchSanctuaryPosts 查询出错:", error.message);
+      console.error("[dataApi] ❌ fetchSanctuaryPosts 查询出错:", error.code, error.message, error.details);
       return [];
     }
     if (!data || data.length === 0) return [];
@@ -1097,22 +1097,33 @@ export async function fetchAsylumStats(): Promise<AsylumStats> {
   const fallback: AsylumStats = { incenseCount: 0 };
   if (!supabase) return fallback;
   try {
+    // 优先：从 incense_stats 表汇总所有香柱的 count 总和
+    const { data: statsData, error: statsErr } = await supabase
+      .from("incense_stats")
+      .select("count");
+    if (!statsErr && statsData && statsData.length > 0) {
+      const total = statsData.reduce((sum: number, row: any) => sum + Number(row.count || 0), 0);
+      return { incenseCount: total };
+    }
+    if (statsErr && !statsErr.message?.includes("does not exist") && !statsErr.message?.includes("relation")) {
+      console.error("[dataApi] ❌ fetchAsylumStats incense_stats 查询出错:", statsErr.code, statsErr.message);
+    }
+    // 降级：读 asylum_stats 表（旧表）
     const { data, error } = await supabase
       .from("asylum_stats")
       .select("incense_count")
       .eq("id", ASYLUM_STATS_ROW_ID)
       .single();
     if (error) {
-      // 表不存在 / 行不存在 → 返回 0
       if (
-        error.code === "PGRST116" || // 0 rows returned
+        error.code === "PGRST116" ||
         error.message?.includes("does not exist") ||
         error.message?.includes("relation") ||
         error.code === "42P01"
       ) {
         return fallback;
       }
-      console.warn("[dataApi] fetchAsylumStats 异常:", error.message);
+      console.error("[dataApi] ❌ fetchAsylumStats asylum_stats 异常:", error.code, error.message);
       return fallback;
     }
     const row = data as { incense_count?: unknown };
@@ -1133,16 +1144,21 @@ export async function fetchAsylumStats(): Promise<AsylumStats> {
  */
 export async function incrementIncense(incenseId?: string): Promise<number | null> {
   // 优先直接调用 Supabase RPC（SECURITY DEFINER 绕过 RLS，并发安全原子递增）
+  // increment_incense 返回 INT8（递增后的最新 count）
   if (supabase && incenseId) {
     try {
       const { data, error } = await (supabase as any).rpc("increment_incense", {
         incense_id: incenseId,
       });
-      if (!error && typeof data === "number") {
-        return data;
+      if (error) {
+        console.error("[dataApi] ❌ increment_incense RPC 错误:", error.code, error.message);
+      }
+      if (!error && data != null) {
+        // INT8 可能以 string 或 number 形式返回
+        return Number(data);
       }
     } catch (rpcErr) {
-      logNetworkFallback("incrementIncense(rpc)", rpcErr);
+      console.error("[dataApi] ❌ incrementIncense RPC 异常:", rpcErr instanceof Error ? rpcErr.message : rpcErr);
       // 降级到 API 代理
     }
   }
@@ -1155,6 +1171,7 @@ export async function incrementIncense(incenseId?: string): Promise<number | nul
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      console.error("[dataApi] ❌ incrementIncense API 失败:", `HTTP ${res.status}`, text);
       throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
     }
     const json = await res.json();
@@ -1163,7 +1180,7 @@ export async function incrementIncense(incenseId?: string): Promise<number | nul
     }
     return null;
   } catch (err) {
-    logNetworkFallback("incrementIncense", err);
+    console.error("[dataApi] ❌ incrementIncense 全部失败:", err instanceof Error ? err.message : err);
     throw err;
   }
 }
@@ -1173,9 +1190,35 @@ export async function incrementIncense(incenseId?: string): Promise<number | nul
  * 表不存在时返回空对象，前端沿用 siteData 初始基数
  */
 export async function fetchIncensePillars(): Promise<Record<string, number>> {
+  // 优先：客户端直连 incense_stats 表读取（RLS 允许匿名 SELECT）
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("incense_stats")
+        .select("id, count");
+      if (error) {
+        console.error("[dataApi] ❌ fetchIncensePillars incense_stats 错误:", error.code, error.message);
+      }
+      if (!error && data && data.length > 0) {
+        const map: Record<string, number> = {};
+        for (const row of data as any[]) {
+          if (row && typeof row.id === "string") {
+            map[row.id] = Number(row.count || 0);
+          }
+        }
+        return map;
+      }
+    } catch (err) {
+      console.error("[dataApi] ❌ fetchIncensePillars 直连异常:", err instanceof Error ? err.message : err);
+    }
+  }
+  // 降级：通过 API 代理读取 sanctuary_incense 表
   try {
     const res = await fetch("/api/asylum/incense", { method: "GET" });
-    if (!res.ok) return {};
+    if (!res.ok) {
+      console.error("[dataApi] ❌ fetchIncensePillars API 失败:", `HTTP ${res.status}`);
+      return {};
+    }
     const json = await res.json();
     if (!json || !Array.isArray(json.pillars)) return {};
     const map: Record<string, number> = {};
@@ -1186,7 +1229,7 @@ export async function fetchIncensePillars(): Promise<Record<string, number>> {
     }
     return map;
   } catch (err) {
-    logNetworkFallback("fetchIncensePillars", err);
+    console.error("[dataApi] ❌ fetchIncensePillars 全部失败:", err instanceof Error ? err.message : err);
     return {};
   }
 }

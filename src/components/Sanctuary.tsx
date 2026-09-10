@@ -520,22 +520,28 @@ export default function Sanctuary({
     let mounted = true;
     // 加载用户保存的删除凭证（判断哪些帖子可删）
     setDeleteTokens(loadDeleteTokens());
+    // 拉取脑洞画布帖子（含 parent_id 树状回复）
     fetchSanctuaryPosts().then((data) => {
       if (mounted) {
+        console.log("[Sanctuary] 拉取帖子成功:", data.length, "条");
         setFarts(data);
         setLoadingFarts(false);
       }
-    }).catch(() => {
+    }).catch((err) => {
+      console.error("[Sanctuary] ❌ 拉取帖子失败:", err instanceof Error ? err.message : err);
       if (mounted) setLoadingFarts(false);
     });
     // 读取全网累计上香次数（totalEnergy 持久化）
     fetchAsylumStats()
       .then((stats) => {
-        if (mounted && typeof stats.incenseCount === "number") {
+        if (mounted && typeof stats.incenseCount === "number" && stats.incenseCount > 0) {
+          console.log("[Sanctuary] 全网上香总数:", stats.incenseCount);
           setTotalEnergy(stats.incenseCount);
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error("[Sanctuary] ❌ 读取上香总数失败:", err instanceof Error ? err.message : err);
+      })
       .finally(() => {
         if (mounted) setLoadingStats(false);
       });
@@ -543,6 +549,7 @@ export default function Sanctuary({
     fetchIncensePillars()
       .then((pillarMap) => {
         if (mounted && pillarMap && Object.keys(pillarMap).length > 0) {
+          console.log("[Sanctuary] 香柱 count:", pillarMap);
           setIncenses((prev) =>
             prev.map((inc) =>
               typeof pillarMap[inc.id] === "number"
@@ -552,7 +559,9 @@ export default function Sanctuary({
           );
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[Sanctuary] ❌ 读取香柱 count 失败:", err instanceof Error ? err.message : err);
+      });
     return () => { mounted = false; };
   }, []);
 

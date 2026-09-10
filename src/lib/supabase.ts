@@ -447,14 +447,22 @@ if (supabaseUrl && supabaseAnonKey) {
         auth: { persistSession: false, autoRefreshToken: false },
         global: { fetch: createSafeFetch() as any },
       });
+      // 初始化诊断日志：确认客户端已就绪
+      if (typeof window !== "undefined") {
+        console.log("[supabase] ✅ 客户端初始化成功，URL:", supabaseUrl);
+      }
     } catch (err) {
-      console.warn("[supabase] 客户端初始化失败，数据将返回空数组:", err);
+      console.error("[supabase] ❌ 客户端初始化失败:", err);
       supabaseClient = null;
     }
   } else {
-    console.warn(
-      `[supabase] NEXT_PUBLIC_SUPABASE_URL 格式不合法（应为 https://xxxxx.supabase.co），数据将返回空数组。当前值: "${supabaseUrl}"`
+    console.error(
+      `[supabase] ❌ NEXT_PUBLIC_SUPABASE_URL 格式不合法（应为 https://xxxxx.supabase.co）。当前值: "${supabaseUrl}"`
     );
+  }
+} else {
+  if (typeof window !== "undefined") {
+    console.error("[supabase] ❌ 环境变量缺失：NEXT_PUBLIC_SUPABASE_URL 或 NEXT_PUBLIC_SUPABASE_ANON_KEY 未配置，请在 .env.local 中填写");
   }
 }
 
