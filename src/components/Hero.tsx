@@ -33,12 +33,13 @@ export default function Hero() {
               {profile.status}
             </div>
 
-            {/* 大标题：严格两行结构 + 紫蓝渐变高亮「人」「AI」「市场」 */}
+            {/* 大标题：严格两行结构 + 紫蓝渐变高亮「人」「AI」「东南亚」「营销判断」 */}
             <h1 className="mb-6 text-3xl font-extrabold leading-tight tracking-tight text-zinc-50 sm:text-4xl lg:text-5xl xl:text-6xl">
               以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">人</span>为本，
               <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">AI</span> 为杠杆
               <br />
-              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">市场</span>会有答案
+              提供真实的<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">东南亚</span>
+              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">营销判断</span>
             </h1>
 
             <p className="mb-8 text-base text-zinc-400 sm:text-lg lg:text-xl">
