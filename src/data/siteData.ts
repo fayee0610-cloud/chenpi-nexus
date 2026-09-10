@@ -63,8 +63,8 @@ export interface InsightItem {
 // ============================================================
 export const HARDCORE_TAGS_POOL: { group: string; groupIcon: string; tags: string[] }[] = [
   {
-    group: "跨境与出海",
-    groupIcon: "🌐",
+    group: "东南亚实局",
+    groupIcon: "🌏",
     tags: [
       "马来西亚/东盟GTM",
       "出海品牌公关",
@@ -73,7 +73,7 @@ export const HARDCORE_TAGS_POOL: { group: string; groupIcon: string; tags: strin
     ],
   },
   {
-    group: "硬科技与机器人",
+    group: "AI 营销杠杆",
     groupIcon: "🤖",
     tags: [
       "机器人/具身智能营销",
@@ -82,8 +82,8 @@ export const HARDCORE_TAGS_POOL: { group: string; groupIcon: string; tags: strin
     ],
   },
   {
-    group: "底层理论与心智",
-    groupIcon: "🧠",
+    group: "深度洞察",
+    groupIcon: "🎯",
     tags: [
       "消费者心理与行为学",
       "品牌叙事与定位",
@@ -91,8 +91,8 @@ export const HARDCORE_TAGS_POOL: { group: string; groupIcon: string; tags: strin
     ],
   },
   {
-    group: "前沿战术",
-    groupIcon: "🚀",
+    group: "战术拆解",
+    groupIcon: "📦",
     tags: [
       "GEO搜索引擎优化",
       "AI工作流/自动化",
@@ -148,7 +148,7 @@ export interface ResourceItem {
   date: string;
 }
 
-export type InsightHubCategory = "🤖 机器人/具身智能" | "⚡ AI技术/大厂策略" | "📈 品牌策略/GTM干货";
+export type InsightHubCategory = "🌏 东南亚实局" | "🤖 AI 营销杠杆" | "🎯 深度洞察" | "📦 战术拆解";
 
 export interface InsightHubItem {
   id: string;
@@ -616,7 +616,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-1",
     title: "智元远征A2量产，具身智能进入千台时代",
-    category: "🤖 机器人/具身智能",
+    category: "🤖 AI 营销杠杆",
     summary: "智元机器人宣布远征A2系列正式量产，年产能规划达千台级，标志着人形机器人从实验室走向规模化交付。商业价值在于其供应链整合能力与工业场景落地速度，直接对标特斯拉Optimus的降本路径，为投资人提供了具身智能商业化兑现的观察样本。",
     sourceName: "智元机器人官方",
     originalUrl: "https://www.zhiyuan-robot.com/news",
@@ -629,7 +629,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-2",
     title: "宇树科技发布通用机器人操作大模型",
-    category: "🤖 机器人/具身智能",
+    category: "🤖 AI 营销杠杆",
     summary: "宇树科技推出机器人操作大模型，实现跨场景的物体抓取与工具使用泛化能力。该模型采用端到端学习，大幅降低对特定任务编程的依赖，商业上瞄准物流分拣与家庭服务市场，其技术路线可能重塑机器人软件生态的竞争格局，值得关注其后续API开放策略。",
     sourceName: "宇树科技官方公众号",
     originalUrl: "https://www.unitree.com/cn/news",
@@ -642,7 +642,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-3",
     title: "逐际动力获顶级风投融资，主攻工业巡检",
-    category: "🤖 机器人/具身智能",
+    category: "🤖 AI 营销杠杆",
     summary: "逐际动力完成新一轮数亿元融资，资金将用于强化其在能源、石化等垂直领域的四足机器人巡检解决方案。其商业模式从卖硬件转向提供“硬件+AI检测+数据服务”的订阅制，客单价与客户粘性显著提升，为具身智能在B端的高毛利变现提供了新范本。",
     sourceName: "36Kr 深度报道",
     originalUrl: "https://36kr.com/newsflashes",
@@ -655,7 +655,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-4",
     title: "OpenAI发布GPT-5，推理成本骤降90%",
-    category: "⚡ AI技术/大厂策略",
+    category: "🎯 深度洞察",
     summary: "OpenAI正式推出GPT-5，采用混合专家架构与新的推理蒸馏技术，在同等任务下推理成本较GPT-4降低90%。这一杀手锏直接冲击ToB市场，使得AI原生应用的经济模型跑通。商业上，OpenAI正从卖API转向卖“结果”，其定价策略将倒逼Anthropic与谷歌跟进，引发企业级AI采用率的爆发。",
     sourceName: "OpenAI 官方博客",
     originalUrl: "https://openai.com/blog",
@@ -668,7 +668,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-5",
     title: "Anthropic发布Claude企业版，主打安全与合规",
-    category: "⚡ AI技术/大厂策略",
+    category: "🎯 深度洞察",
     summary: "Anthropic推出Claude Enterprise版本，重点强化SOC 2 Type II合规、细粒度权限管理及审计日志功能，直击金融、医疗等高监管行业痛点。其GTM策略放弃低价竞争，通过“安全即服务”的溢价定位，与微软Azure的深度绑定，正在撬动Palantir的存量政企客户，是ToB AI领域最值得研究的ABM案例。",
     sourceName: "Anthropic 官方新闻室",
     originalUrl: "https://www.anthropic.com/news",
@@ -681,7 +681,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-6",
     title: "华为发布盘古大模型5.0，深耕行业Agent",
-    category: "⚡ AI技术/大厂策略",
+    category: "🎯 深度洞察",
     summary: "华为在开发者大会发布盘古大模型5.0，不再强调参数规模，转而聚焦矿山、气象、铁路等行业的专用Agent解决方案。其策略是“AI+行业知识”深度绑定，通过昇腾算力底座形成软硬一体壁垒。商业价值在于，华为正以“被集成”模式赋能央国企数字化，其项目制交付的GTM打法对本土AI公司极具参考意义。",
     sourceName: "华为开发者大会2025",
     originalUrl: "https://developer.huawei.com/consumer/cn/",
@@ -694,7 +694,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-7",
     title: "Apple Vision Pro 2发布，转向生产力工具叙事",
-    category: "📈 品牌策略/GTM干货",
+    category: "📦 战术拆解",
     summary: "Apple在WWDC发布Vision Pro 2，重点转向多屏办公与3D设计协作，弱化娱乐属性。其营销叙事从“空间计算”转向“终极生产力外设”，并推出企业API接口。商业意图明显：通过绑定Mac生态与Final Cut Pro等专业软件，在B端设计、医疗、工程领域寻找第二增长曲线，对抗Meta的Quest Pro。",
     sourceName: "Apple WWDC 2025 主题演讲",
     originalUrl: "https://www.apple.com/apple-events/",
@@ -707,7 +707,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-8",
     title: "特斯拉Cybertruck交付，情绪价值驱动品牌溢价",
-    category: "📈 品牌策略/GTM干货",
+    category: "📦 战术拆解",
     summary: "特斯拉Cybertruck终于开启大规模交付，其颠覆性外观与“防弹”不锈钢车身成为社交货币。营销上，特斯拉放弃传统广告，通过马斯克个人IP与车主UGC内容制造持续热度。商业价值在于，Cybertruck并非走量车型，而是通过极致差异化强化特斯拉“科技先锋”的品牌心智，反哺Model 3/Y的销量，是情绪价值营销的教科书案例。",
     sourceName: "Tesla 官方新闻",
     originalUrl: "https://www.tesla.com/blog",
@@ -720,7 +720,7 @@ export const insightsHub: InsightHubItem[] = [
   {
     id: "hub-9",
     title: "HubSpot发布AI Agent，重构Inbound营销漏斗",
-    category: "📈 品牌策略/GTM干货",
+    category: "📦 战术拆解",
     summary: "HubSpot推出Breeze AI Agent，能自动完成线索打分、邮件触达与内容个性化。其GTM策略是“PLG+AI”，将AI能力嵌入免费版工具，以极低门槛吸引SMB用户，再通过付费墙解锁高级自动化。此举正在颠覆传统Demand Gen流程，其产品驱动增长的路径与定价模型，是SaaS公司应对AI浪潮的标杆。",
     sourceName: "HubSpot 官方产品博客",
     originalUrl: "https://www.hubspot.com/product/news",

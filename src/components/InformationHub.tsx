@@ -9,15 +9,17 @@ import LoadMoreButton from "@/components/LoadMoreButton";
 
 const CATEGORY_TABS = [
   { key: "all", label: "全部分类", icon: Radar },
-  { key: "🤖 机器人/具身智能", label: "机器人/具身智能", icon: Bot },
-  { key: "⚡ AI技术/大厂策略", label: "AI技术/大厂策略", icon: Sparkles },
-  { key: "📈 品牌策略/GTM干货", label: "品牌策略/GTM干货", icon: TrendingUp },
+  { key: "🌏 东南亚实局", label: "东南亚实局", icon: TrendingUp },
+  { key: "🤖 AI 营销杠杆", label: "AI 营销杠杆", icon: Sparkles },
+  { key: "🎯 深度洞察", label: "深度洞察", icon: Bot },
+  { key: "📦 战术拆解", label: "战术拆解", icon: Bot },
 ] as const;
 
 const CATEGORY_STYLES: Record<string, { border: string; bg: string; text: string; glow: string }> = {
-  "🤖 机器人/具身智能": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400", glow: "shadow-cyan-500/5" },
-  "⚡ AI技术/大厂策略": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
-  "📈 品牌策略/GTM干货": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
+  "🌏 东南亚实局": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400", glow: "shadow-emerald-500/5" },
+  "🤖 AI 营销杠杆": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
+  "🎯 深度洞察": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400", glow: "shadow-cyan-500/5" },
+  "📦 战术拆解": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
 };
 
 export default function InformationHub({ showLimit }: { showLimit?: number }) {
@@ -240,7 +242,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
               />
             ))
           : sortedItems.map((item, i) => {
-              const style = CATEGORY_STYLES[item.category] || CATEGORY_STYLES["⚡ AI技术/大厂策略"];
+              const style = CATEGORY_STYLES[item.category] || CATEGORY_STYLES["🎯 深度洞察"];
               return (
                 <motion.div
                   key={item.id}

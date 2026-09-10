@@ -13,11 +13,11 @@ interface HeaderProps {
 
 // 全部导航项 + 对应的显隐开关 key（config 中对应字段为 false 时隐藏）
 const ALL_NAV_ITEMS: { label: string; href: string; flag?: keyof SiteConfig }[] = [
-  { label: "作品集", href: "/portfolio", flag: "show_portfolio" },
-  { label: "情报站", href: "/hub", flag: "show_insights_hub" },
-  { label: "灵感点", href: "/insights", flag: "show_insights" },
-  { label: "资源包", href: "/resources", flag: "show_resources" },
-  { label: "庇护所", href: "/sanctuary", flag: "show_sanctuary" },
+  { label: "实战案例", href: "/portfolio", flag: "show_portfolio" },
+  { label: "东南亚实局", href: "/hub", flag: "show_insights_hub" },
+  { label: "深度洞察", href: "/insights", flag: "show_insights" },
+  { label: "策略工具包", href: "/resources", flag: "show_resources" },
+  { label: "脑洞画布", href: "/sanctuary", flag: "show_sanctuary" },
   { label: "联系我", href: "/#connect" },
 ];
 

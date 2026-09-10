@@ -837,7 +837,7 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
         .map((row: any) => ({
           id: row.id,
           title: row.title || "",
-          category: row.category || "⚡ AI技术/大厂策略",
+          category: row.category || "🎯 深度洞察",
           summary: row.summary || "",
           sourceName: row.source_name || "",
           originalUrl: row.original_url || "",
@@ -859,7 +859,7 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
       .map((row: any) => ({
         id: row.id,
         title: row.title || "",
-        category: row.category || "⚡ AI技术/大厂策略",
+        category: row.category || "🎯 深度洞察",
         summary: row.summary || "",
         sourceName: row.source_name || "",
         originalUrl: row.original_url || "",
@@ -944,16 +944,17 @@ export async function createInsightHubViaAPI(item: {
 
   // 允许的分类白名单
   const ALLOWED_CATEGORIES = [
-    "🤖 机器人/具身智能",
-    "⚡ AI技术/大厂策略",
-    "📈 品牌策略/GTM干货",
+    "🌏 东南亚实局",
+    "🤖 AI 营销杠杆",
+    "🎯 深度洞察",
+    "📦 战术拆解",
   ];
   if (!ALLOWED_CATEGORIES.includes(item.category)) {
     return { success: false, error: `分类不合法，仅允许：${ALLOWED_CATEGORIES.join(" / ")}` };
   }
 
   // 品牌策略分类的内容过滤：严禁跨境电商类泛资讯
-  if (item.category === "📈 品牌策略/GTM干货") {
+  if (item.category === "📦 战术拆解") {
     const blockedKeywords = ["跨境电商", "Shopee", "Shopee", "拉美", "东南亚电商", "代购", "铺货"];
     const text = `${item.title} ${item.summary} ${item.source_name}`;
     for (const kw of blockedKeywords) {

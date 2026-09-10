@@ -2722,7 +2722,7 @@ function LeadsManager() {
 function InsightHubEditor() {
   const [form, setForm] = useState({
     title: "",
-    category: "🤖 机器人/具身智能" as InsightHubCategory,
+    category: "🤖 AI 营销杠杆" as InsightHubCategory,
     sourceName: "",
     originalUrl: "",
     publishedAt: "",
@@ -2779,7 +2779,7 @@ function InsightHubEditor() {
       setStatus({ type: "success", msg: "情报站内容发布成功！" });
       setForm({
         title: "",
-        category: "🤖 机器人/具身智能",
+        category: "🤖 AI 营销杠杆",
         sourceName: "",
         originalUrl: "",
         publishedAt: "",
@@ -2877,7 +2877,7 @@ function InsightHubEditor() {
 
   // 编辑情报
   const [editingHub, setEditingHub] = useState<InsightHubItem | null>(null);
-  const [editForm, setEditForm] = useState<{ title: string; summary: string; category: InsightHubCategory; sourceName: string; originalUrl: string; publishedAt: string }>({ title: "", summary: "", category: "🤖 机器人/具身智能", sourceName: "", originalUrl: "", publishedAt: "" });
+  const [editForm, setEditForm] = useState<{ title: string; summary: string; category: InsightHubCategory; sourceName: string; originalUrl: string; publishedAt: string }>({ title: "", summary: "", category: "🤖 AI 营销杠杆", sourceName: "", originalUrl: "", publishedAt: "" });
 
   const handleEdit = (item: InsightHubItem) => {
     setEditingHub(item);
@@ -2981,9 +2981,10 @@ function InsightHubEditor() {
               onChange={(e) => updateField("category", e.target.value)}
               className="input-hub"
             >
-              <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
-              <option value="⚡ AI技术/大厂策略">⚡ AI技术/大厂策略</option>
-              <option value="📈 品牌策略/GTM干货">📈 品牌策略/GTM干货</option>
+              <option value="🌏 东南亚实局">🌏 东南亚实局</option>
+              <option value="🤖 AI 营销杠杆">🤖 AI 营销杠杆</option>
+              <option value="🎯 深度洞察">🎯 深度洞察</option>
+              <option value="📦 战术拆解">📦 战术拆解</option>
             </select>
           </FormField>
           <FormField label="来源名称">
@@ -3255,9 +3256,10 @@ function InsightHubEditor() {
                     onChange={(e) => setEditForm({ ...editForm, category: e.target.value as InsightHubCategory })}
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none"
                   >
-                    <option value="🤖 机器人/具身智能">🤖 机器人/具身智能</option>
-                    <option value="⚡ AI技术/大厂策略">⚡ AI技术/大厂策略</option>
-                    <option value="📈 品牌策略/GTM干货">📈 品牌策略/GTM干货</option>
+                    <option value="🌏 东南亚实局">🌏 东南亚实局</option>
+              <option value="🤖 AI 营销杠杆">🤖 AI 营销杠杆</option>
+                    <option value="🎯 深度洞察">🎯 深度洞察</option>
+                    <option value="📦 战术拆解">📦 战术拆解</option>
                   </select>
                 </div>
                 <div>

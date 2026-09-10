@@ -2,7 +2,7 @@
 // /api/cron/fetch-intelligence — 赛博情报局自动抓取与生成
 //
 // 战略定位：陈皮垂直行业专家 IP
-// 三大硬核板块：🤖 机器人/具身智能 | ⚡ AI技术/大厂策略 | 📈 品牌策略/GTM干货
+// 四大板块：🌏 东南亚实局 | 🤖 AI 营销杠杆 | 🎯 深度洞察 | 📦 战术拆解
 //
 // 触发方式：
 //   1. Vercel Cron（每天 UTC 00:00 = 北京时间 08:00）
@@ -53,9 +53,10 @@ function logAiConfig() {
 
 // ---------- 允许的三大分类 ----------
 const ALLOWED_CATEGORIES = [
-  "🤖 机器人/具身智能",
-  "⚡ AI技术/大厂策略",
-  "📈 品牌策略/GTM干货",
+  "🌏 东南亚实局",
+  "🤖 AI 营销杠杆",
+  "🎯 深度洞察",
+  "📦 战术拆解",
 ] as const;
 
 // ---------- 拦截关键词（坚决剔除的内容） ----------
@@ -85,9 +86,10 @@ const SYSTEM_PROMPT = `你是"陈皮"，一位深耕 AI / 具身智能 / GTM 战
 - 海外品牌全球化 GTM、SaaS 增长、GEO SEO、独立站增长实战案例
 
 ## 三大聚焦板块（category 仅能 3 选 1）
-1. 🤖 机器人/具身智能：具身智能落地、商业化进展、前沿硬件/场景研究报告与专家访谈
-2. ⚡ AI技术/大厂策略：主流大厂/头部 AI 企业的技术演进、产品路线图、战略布局深度拆解
-3. 📈 品牌策略/GTM干货：AI/具身智能/大厂产品的 ToB/ToC 营销、公关、社媒、GEO（生成式搜索引擎优化）等实战 GTM 战术与研究
+1. 🌏 东南亚实局：东南亚本土化营销动态、东盟市场GTM实战、跨境品牌出海案例与文化适配洞察
+2. 🤖 AI 营销杠杆：AI 赋能营销流程、自动化工作流、AI 硬件/具身智能的商业化进展与场景应用
+3. 🎯 深度洞察：主流大厂/头部 AI 企业的技术演进、产品路线图、战略布局深度拆解
+4. 📦 战术拆解：ToB/ToC 营销、公关、社媒、GEO（生成式搜索引擎优化）等实战 GTM 战术与研究
 
 ## 数据源限定（仅接受以下一手信息）
 - 行业/机构研究报告
@@ -106,7 +108,7 @@ const SYSTEM_PROMPT = `你是"陈皮"，一位深耕 AI / 具身智能 / GTM 战
 [
   {
     "title": "情报标题（专业、精确、直击本质，20字以内）",
-    "category": "🤖 机器人/具身智能" | "⚡ AI技术/大厂策略" | "📈 品牌策略/GTM干货",
+    "category": "🌏 东南亚实局" | "🤖 AI 营销杠杆" | "🎯 深度洞察" | "📦 战术拆解",
     "source_name": "信息来源（如：机构报告 / 大厂发布 / 专家访谈）",
     "source_url": "原文/报告链接（真实可访问 URL，例如机构的公开报告页面，如：https://www.mckinsey.com/ 或 https://openai.com/blog 或 https://news.mit.edu）",
     "publish_date": "YYYY-MM-DD",
@@ -293,11 +295,11 @@ function sanitizeItem(raw: RawItem): SanitizedItem | null {
   let category = String(raw.category || "").trim();
   if (!ALLOWED_CATEGORIES.includes(category as any)) {
     if (category.includes("AI技术") || category.includes("大厂")) {
-      category = "⚡ AI技术/大厂策略";
+      category = "🎯 深度洞察";
     } else if (category.includes("机器人") || category.includes("具身")) {
-      category = "🤖 机器人/具身智能";
+      category = "🤖 AI 营销杠杆";
     } else if (category.includes("品牌") || category.includes("GTM")) {
-      category = "📈 品牌策略/GTM干货";
+      category = "📦 战术拆解";
     } else {
       return null;
     }

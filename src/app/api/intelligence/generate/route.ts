@@ -20,15 +20,15 @@ const AI_CONFIG = {
 // ---------- 预设关键词主题 ----------
 const INTELLIGENCE_TOPICS = [
   {
-    category: "🤖 机器人/具身智能",
+    category: "🌏 东南亚实局",
     keywords: "人形机器人、具身智能、AI硬件、机器人商业化落地、特斯拉Optimus、宇树科技、智元机器人",
   },
   {
-    category: "⚡ AI技术/大厂策略",
+    category: "🎯 深度洞察",
     keywords: "大模型、AGI、OpenAI、DeepSeek、字节跳动AI、百度文心、AI Agent、MCP协议、RAG、多模态",
   },
   {
-    category: "📈 品牌策略/GTM干货",
+    category: "📦 战术拆解",
     keywords: "品牌出海、DTC品牌、GTM策略、私域运营、内容营销、GEO生成式搜索引擎优化、大湾区创业、人才生态",
   },
 ];
