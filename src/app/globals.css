@@ -83,7 +83,7 @@ body {
   100% { opacity: 0; transform: translateY(-60px) scale(1.8); }
 }
 
-/* 赛博激光扫描线：从顶部到底部无缝循环（2s/次） */
+/* 霓虹激光扫描线：从顶部到底部无缝循环（2s/次） */
 @keyframes laser-scanline {
   0% { transform: translateY(-100%); opacity: 0; }
   10% { opacity: 1; }

@@ -352,11 +352,11 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                   </div>
                 </div>
 
-                {/* 赛博视觉/架构图展示区 */}
+                {/* 视觉/架构图展示区 */}
                 <div className="mb-6">
                   <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
                     <Zap className="h-4 w-4 text-green-400" />
-                    赛博视觉 / 架构图
+                    视觉 / 架构图
                   </h3>
                   <div className="group relative overflow-hidden rounded-xl border border-zinc-800">
                     {selectedProject.image?.trim() ? (

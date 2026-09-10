@@ -255,19 +255,32 @@ export async function fetchSanctuaryPosts(): Promise<SanctuaryPost[]> {
     }
     if (!data || data.length === 0) return [];
 
-    return data
-      .filter((row: any) => row.is_published !== false)
-      .map((row: any) => ({
+    // 树状回复分组：parent_id 为 null 的是主帖，有 parent_id 的是回复
+    const allRows = data.filter((row: any) => row.is_published !== false);
+    const topLevel = allRows.filter((row: any) => !row.parent_id);
+    const replies = allRows.filter((row: any) => !!row.parent_id);
+
+    return topLevel.map((row: any) => {
+      // 将回复挂载到对应主帖的 comments 数组
+      const postReplies = replies
+        .filter((r: any) => r.parent_id === row.id)
+        .map((r: any) => ({
+          author: r.author || "出海玩家",
+          text: r.content || "",
+          time: r.created_at ? new Date(r.created_at).toLocaleString("zh-CN") : "",
+        }));
+      return {
         id: String(row.id),
         content: row.content || "",
         tag: row.tag || "",
         tagColor: "text-zinc-400 bg-zinc-800",
-        author: row.author || "赛博访客",
+        author: row.author || "出海玩家",
         time: row.created_at ? new Date(row.created_at).toLocaleString("zh-CN") : "",
         likes: row.likes || 0,
         reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
-        comments: [],
-      })) as SanctuaryPost[];
+        comments: postReplies,
+      } as SanctuaryPost;
+    });
   } catch (err) {
     logNetworkFallback("fetchSanctuaryPosts", err);
     return [];
@@ -286,6 +299,7 @@ export async function createSanctuaryPost(post: {
   tag?: string;
   author?: string;
   avatar?: string;
+  parentId?: string;
 }): Promise<(SanctuaryPost & { deleteToken?: string }) | null> {
   const res = await fetch("/api/sanctuary/posts", {
     method: "POST",
@@ -295,6 +309,7 @@ export async function createSanctuaryPost(post: {
       tag: post.tag,
       author: post.author,
       avatar: post.avatar,
+      parent_id: post.parentId,
     }),
   });
   const data = await res.json();
@@ -307,7 +322,7 @@ export async function createSanctuaryPost(post: {
     content: row.content || "",
     tag: row.tag || "",
     tagColor: "text-zinc-400 bg-zinc-800",
-    author: row.author || "赛博访客",
+    author: row.author || "出海玩家",
     time: row.time || "刚刚",
     likes: row.likes || 0,
     reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
@@ -1117,6 +1132,21 @@ export async function fetchAsylumStats(): Promise<AsylumStats> {
  * @param incenseId 可选，单柱持久化（sanctuary_incense 表）
  */
 export async function incrementIncense(incenseId?: string): Promise<number | null> {
+  // 优先直接调用 Supabase RPC（SECURITY DEFINER 绕过 RLS，并发安全原子递增）
+  if (supabase && incenseId) {
+    try {
+      const { data, error } = await (supabase as any).rpc("increment_incense", {
+        incense_id: incenseId,
+      });
+      if (!error && typeof data === "number") {
+        return data;
+      }
+    } catch (rpcErr) {
+      logNetworkFallback("incrementIncense(rpc)", rpcErr);
+      // 降级到 API 代理
+    }
+  }
+  // 降级：通过服务端 API 代理（service_role key）
   try {
     const res = await fetch("/api/asylum/incense", {
       method: "POST",

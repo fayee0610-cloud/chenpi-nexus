@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://myneuralhub.com";
 const ogImage = `${siteUrl}/og-image.png`;
 
-const siteTitle = "陈皮同学 | 创意、AI 与 市场的赛博数字中枢";
+const siteTitle = "陈皮同学 | 创意、AI 与 市场的数字中枢";
 const siteDescription =
   "聚焦品牌规划、海外市场策略、陶瓷外贸与 AI 自动化流程的超级个体数字空间。";
 
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
         url: ogImage,
         width: 1200,
         height: 630,
-        alt: "陈皮同学 · 创意、AI 与 市场的赛博数字中枢",
+        alt: "陈皮同学 · 创意、AI 与 市场的数字中枢",
       },
     ],
   },

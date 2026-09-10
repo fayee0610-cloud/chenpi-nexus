@@ -2404,7 +2404,7 @@ function SanctuaryManager() {
             content: r.content || "",
             tag: r.tag || "",
             tagColor: "text-zinc-400 bg-zinc-800",
-            author: r.author || "赛博访客",
+            author: r.author || "出海玩家",
             time: r.createdAt ? new Date(r.createdAt).toLocaleString("zh-CN") : "",
             likes: r.likes || 0,
             reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
@@ -2849,7 +2849,7 @@ function InsightHubEditor() {
       const m = String(today.getMonth() + 1).padStart(2, "0");
       const d = String(today.getDate()).padStart(2, "0");
       const dateStr = `${y}.${m}.${d}`;
-      const body = `## 情报溯源\n\n原分类：${hub.category}；来源：${hub.sourceName || "匿名"}；发布日期：${hub.publishedAt || ""}\n\n${hub.originalUrl ? `参考链接：${hub.originalUrl}\n\n` : ""}## 陈皮战术洞察\n\n${hub.summary || ""}\n\n> —— 从赛博情报站迁移为灵感素材`;
+      const body = `## 情报溯源\n\n原分类：${hub.category}；来源：${hub.sourceName || "匿名"}；发布日期：${hub.publishedAt || ""}\n\n${hub.originalUrl ? `参考链接：${hub.originalUrl}\n\n` : ""}## 陈皮战术洞察\n\n${hub.summary || ""}\n\n> —— 从东南亚实局迁移为灵感素材`;
       const contentBlocks = body
         .split("\n\n")
         .filter(Boolean)
@@ -3341,8 +3341,8 @@ const FEATURE_FLAGS: {
   { key: "show_insights_hub", label: "情报站模块", desc: "首页展示行业情报与自动化抓取内容", default: true },
   { key: "show_resources", label: "资源包模块", desc: "首页展示精选 PDF 资源下载", default: true },
   { key: "show_chenpi_ai", label: "陈皮 AI 助手", desc: "右下角浮动的智能对话助手", default: true },
-  { key: "show_sanctuary", label: "脑洞与吐槽画布", desc: "社区互动与赛博上香模块", default: true },
-  { key: "show_inspiration_sign", label: "今日灵感签文", desc: "每日赛博灵感便签海报", default: true },
+  { key: "show_sanctuary", label: "脑洞与吐槽画布", desc: "社区互动与诚心上香模块", default: true },
+  { key: "show_inspiration_sign", label: "今日灵感签文", desc: "每日策略灵感便签海报", default: true },
 ];
 
 function ConfigEditor() {

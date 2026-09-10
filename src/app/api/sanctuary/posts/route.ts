@@ -53,7 +53,7 @@ export async function GET() {
         id: r.id,
         content: r.content || "",
         tag: r.tag || "",
-        author: r.author || "赛博访客",
+        author: r.author || "出海玩家",
         avatar: r.avatar || null,
         likes: r.likes || 0,
         isPublished: r.is_published ?? true,
@@ -76,7 +76,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { content, tag, author, avatar } = body || {};
+    const { content, tag, author, avatar, parent_id } = body || {};
 
     if (!content || typeof content !== "string" || !content.trim()) {
       return NextResponse.json(
@@ -104,11 +104,12 @@ export async function POST(req: Request) {
           id: newId,
           content: content.trim(),
           tag: tag || null,
-          author: author || "赛博访客",
+          author: author || "出海玩家",
           avatar: avatar || null,
           likes: 0,
           is_published: true,
           delete_token: deleteToken,
+          parent_id: parent_id || null,
         },
       ])
       .select()
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
         id: String(row.id),
         content: row.content || "",
         tag: row.tag || "",
-        author: row.author || "赛博访客",
+        author: row.author || "出海玩家",
         avatar: row.avatar || null,
         likes: row.likes || 0,
         isPublished: row.is_published ?? true,

@@ -430,7 +430,7 @@ export const sanctuary = {
       themeColor: "neon-green",
       highlightColor: "#10B981",
       quotes: [
-        { id: "ins-1", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["AI 不是替代你的想象力，", "而是放大你灵感的", "赛博杠杆。"], highlightIndex: 2 },
+        { id: "ins-1", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["AI 不是替代你的想象力，", "而是放大你灵感的", "AI 杠杆。"], highlightIndex: 2 },
         { id: "ins-2", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["最大的商业机会，", "往往藏在旧行业与新工具的", "断层缝隙里。"], highlightIndex: 2 },
         { id: "ins-3", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["不要用战术上的勤奋，", "掩盖战略上的", "偷懒与恐惧。"], highlightIndex: 2 },
         { id: "ins-4", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["品牌不是一句空洞的口号，", "而是每一个交付细节中", "复利的信任。"], highlightIndex: 2 },
@@ -450,16 +450,16 @@ export const sanctuary = {
       ],
     },
     healing: {
-      label: "赛博疗愈",
+      label: "策略疗愈",
       icon: "🌿",
       color: "text-green-400 border-green-500/40 bg-green-500/10",
       themeColor: "electric-blue",
       highlightColor: "#3B82F6",
       quotes: [
-        { id: "hea-1", category: "🌿 赛博疗愈", themeColor: "electric-blue", lines: ["允许自己是个超级个体，", "但要像大军团一样", "思考与呼吸。"], highlightIndex: 0 },
-        { id: "hea-2", category: "🌿 赛博疗愈", themeColor: "electric-blue", lines: ["赛博时代的温度，", "来自于算法之外，", "你对人性的极致洞察。"], highlightIndex: 2 },
-        { id: "hea-3", category: "🌿 赛博疗愈", themeColor: "electric-blue", lines: ["深夜的每一个脑洞，", "都是你在赛博世界里", "安放灵魂的角落。"], highlightIndex: 2 },
-        { id: "hea-4", category: "🌿 赛博疗愈", themeColor: "electric-blue", lines: ["不必向所有人解释你的路线，", "赛博时代的轻舟，", "已过万重山。"], highlightIndex: 2 },
+        { id: "hea-1", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["允许自己是个超级个体，", "但要像大军团一样", "思考与呼吸。"], highlightIndex: 0 },
+        { id: "hea-2", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["AI 时代的温度，", "来自于算法之外，", "你对人性的极致洞察。"], highlightIndex: 2 },
+        { id: "hea-3", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["深夜的每一个脑洞，", "都是你在数字世界里", "安放灵魂的角落。"], highlightIndex: 2 },
+        { id: "hea-4", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["不必向所有人解释你的路线，", "AI 时代的轻舟，", "已过万重山。"], highlightIndex: 2 },
       ],
     },
   },
@@ -484,22 +484,22 @@ export const sanctuary = {
   initialPosts: [
     {
       id: "1",
-      content: "做一款只有墨水屏和 3 个物理按键的赛博灵感卡片，连着 Coze 接口，随时按一下就把声音转成结构化 Prompt 存回 Notion，大家觉得有戏吗？",
+      content: "做一款只有墨水屏和 3 个物理按键的策略灵感卡片，连着 Coze 接口，随时按一下就把声音转成结构化 Prompt 存回 Notion，大家觉得有戏吗？",
       tag: "💡 概念萌芽",
       tagColor: "text-blue-400 bg-blue-500/10",
-      author: "赛博农夫",
+      author: "出海农夫",
       time: "2小时前",
       likes: 42,
       reactions: { cool: 12, biz: 8, hard: 3, fake: 2 },
       comments: [
         { author: "硬件老兵", text: "墨水屏 + 物理按键的成本可以压到 80 块以内，有戏。", time: "1小时前" },
         { author: "产品经理阿May", text: "关键不是硬件，是后面的 Prompt 模板库做不做得好。", time: "30分钟前" },
-        { author: "赛博农夫", text: "对，所以我打算先做软件 MVP，再反推硬件。", time: "10分钟前" },
+        { author: "出海农夫", text: "对，所以我打算先做软件 MVP，再反推硬件。", time: "10分钟前" },
       ],
     },
     {
       id: "2",
-      content: "甲方说要「既有大厂的稳重，又有赛博朋克的叛逆，还要带一点新马东南亚本土风情」，我直接把上香页面发给了他。",
+      content: "甲方说要「既有大厂的稳重，又有新潮的叛逆，还要带一点新马东南亚本土风情」，我直接把上香页面发给了他。",
       tag: "🔥 职场发疯",
       tagColor: "text-red-400 bg-red-500/10",
       author: "策略打工人",
@@ -532,14 +532,14 @@ export const sanctuary = {
 
 export const mascot = {
   name: "陈皮 AI",
-  tagline: "陈皮同学的 24/7 赛博数字分身",
+  tagline: "陈皮同学的 24/7 数字分身",
   bubbles: [
     "今日方案过审率 99%，来上根香？",
     "又在发呆？灵感不会自己敲门。",
     "需要我帮你整理作品集思路吗？",
     "新的一周，新的甲方，新的修行。",
     "休息一下吧，你已经看了三小时屏幕了。",
-    "赛博功德 +1，今日运势：宜提案。",
+    "诚心功德 +1，今日运势：宜提案。",
   ],
 
   quickPrompts: [

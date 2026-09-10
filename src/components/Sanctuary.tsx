@@ -52,7 +52,7 @@ const reactionButtons = [
 // localStorage key：保存用户自己创建帖子的删除凭证 { postId: deleteToken }
 const DELETE_TOKENS_STORAGE_KEY = "cp_sanctuary_delete_tokens";
 
-// ========== 4 种赛博配色主题 ==========
+// ========== 4 种霓虹配色主题 ==========
 type FortuneTheme = {
   key: string;
   name: string;
@@ -75,7 +75,7 @@ type FortuneTheme = {
 const FORTUNE_THEMES: FortuneTheme[] = [
   {
     key: "neon-purple",
-    name: "赛博朋克紫",
+    name: "霓虹紫",
     primary: "#a855f7",
     secondary: "#22d3ee",
     glow: "rgba(168,85,247,0.35)",
@@ -259,6 +259,7 @@ function CommunityCard({
   canDelete,
   onDelete,
   isDeleting,
+  commentCooldown = 0,
 }: {
   fart: SanctuaryPost;
   onReaction: (id: string, key: keyof SanctuaryPost["reactions"]) => void;
@@ -267,6 +268,7 @@ function CommunityCard({
   canDelete: boolean;
   onDelete: (id: string) => void;
   isDeleting: boolean;
+  commentCooldown?: number;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -351,7 +353,7 @@ function CommunityCard({
       {/* 内容 */}
       <p className="mb-4 text-sm leading-relaxed text-zinc-200">{fart.content}</p>
 
-      {/* 作者（赛博 ID） */}
+      {/* 作者（访客 ID） */}
       <div className="mb-4 flex items-center gap-2">
         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-blue-600 text-[10px] font-bold text-white">
           {fart.author.charAt(0)}
@@ -453,9 +455,10 @@ function CommunityCard({
                   />
                   <button
                     onClick={handleComment}
-                    className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700"
+                    disabled={commentCooldown > 0}
+                    className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800"
                   >
-                    回复
+                    {commentCooldown > 0 ? `${commentCooldown}s` : "回复"}
                   </button>
                 </div>
               </div>
@@ -492,6 +495,10 @@ export default function Sanctuary({
   const [postContent, setPostContent] = useState("");
   const [postTag, setPostTag] = useState("💡 概念萌芽");
   const [posting, setPosting] = useState(false);
+  // 防刷冷却：发布后 5 秒倒计时
+  const [postCooldown, setPostCooldown] = useState(0);
+  // 回复冷却：{ [fartId]: remainingSeconds }
+  const [commentCooldowns, setCommentCooldowns] = useState<Record<string, number>>({});
   const [downloading, setDownloading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   // 用户自主删除凭证：{ postId: deleteToken }，从 localStorage 加载
@@ -615,47 +622,29 @@ export default function Sanctuary({
     setCurrentQuote(pickRandomQuote(cat, rand));
   }, [pickRandomQuote]);
 
-  // -------- 每日上香防刷：每个香柱每天最多上香 1 次 --------
-  const INCENSE_DAILY_KEY = "cp_incense_daily";
-  // 每个香柱每天最多上香次数
+  // -------- 每日上香防刷：每个板块每天最多上香 1 次 --------
+  // localStorage key 格式：incense_${blockId}_${YYYY-MM-DD}
   const INCENSE_DAILY_LIMIT = 1;
 
   function getTodayKey(): string {
     return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   }
 
-  function getIncenseDailyMap(): Record<string, number> {
-    if (typeof window === "undefined") return {};
-    try {
-      const raw = window.localStorage.getItem(INCENSE_DAILY_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      // 自动清理过期日期记录
-      const today = getTodayKey();
-      const filtered: Record<string, any> = {};
-      for (const [date, map] of Object.entries(parsed || {})) {
-        if (date === today) filtered[date] = map;
-      }
-      return filtered[today] || {};
-    } catch {
-      return {};
-    }
-  }
-
   function getIncenseTodayCount(incenseId: string): number {
-    const map = getIncenseDailyMap();
-    return Number(map[incenseId] || 0);
+    if (typeof window === "undefined") return 0;
+    try {
+      const key = `incense_${incenseId}_${getTodayKey()}`;
+      return window.localStorage.getItem(key) ? 1 : 0;
+    } catch {
+      return 0;
+    }
   }
 
   function recordIncenseToday(incenseId: string) {
     if (typeof window === "undefined") return;
     try {
-      const raw = window.localStorage.getItem(INCENSE_DAILY_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      const today = getTodayKey();
-      if (!parsed[today]) parsed[today] = {};
-      parsed[today][incenseId] = (parsed[today][incenseId] || 0) + 1;
-      window.localStorage.setItem(INCENSE_DAILY_KEY, JSON.stringify(parsed));
+      const key = `incense_${incenseId}_${getTodayKey()}`;
+      window.localStorage.setItem(key, "1");
     } catch {
       // 静默忽略
     }
@@ -678,7 +667,7 @@ export default function Sanctuary({
     // 2) 每日防刷：每个香柱每天最多上香 INCENSE_DAILY_LIMIT 次
     const todayCount = getIncenseTodayCount(id);
     if (todayCount >= INCENSE_DAILY_LIMIT) {
-      showIncenseToast("今日诚心已至，明日再来上香吧！");
+      showIncenseToast("今天已为此板块祈福，明天再来吧！");
       // 仍触发一次微弱视觉反馈（不增加计数）
       setActiveIncense(id);
       setTimeout(() => setActiveIncense(null), 800);
@@ -688,7 +677,7 @@ export default function Sanctuary({
     // 记录今日上香次数
     recordIncenseToday(id);
 
-    // 触发赛博上香视觉特效：发光烟雾、Buff 飘字、功德计数 +1
+    // 触发诚心上香视觉特效：发光烟雾、Buff 飘字、功德计数 +1
     setActiveIncense(id);
     const randomBuff = buffs[Math.floor(Math.random() * buffs.length)];
     setBuffText(randomBuff);
@@ -754,7 +743,12 @@ export default function Sanctuary({
 
   // 评论
   const handleComment = useCallback((fartId: string, text: string) => {
+    // 冷却检查
+    if ((commentCooldowns[fartId] || 0) > 0) return;
+    // 自动生成作者名（若未填昵称）
     const cyberAuthor = getOrCreateCyberId();
+    const tempId = `local-${Date.now()}`;
+    // 乐观更新：先写入本地 State
     setFarts((prev) =>
       prev.map((f) =>
         f.id === fartId
@@ -768,7 +762,44 @@ export default function Sanctuary({
           : f
       )
     );
-  }, []);
+    // 启动 5 秒冷却
+    setCommentCooldowns((prev) => ({ ...prev, [fartId]: 5 }));
+    const cdTimer = setInterval(() => {
+      setCommentCooldowns((prev) => {
+        const cur = prev[fartId] || 0;
+        if (cur <= 1) {
+          clearInterval(cdTimer);
+          const { [fartId]: _, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [fartId]: cur - 1 };
+      });
+    }, 1000);
+    // 异步持久化：写入 sanctuary_posts（parent_id 指向主帖）
+    createSanctuaryPost({
+      content: text,
+      author: cyberAuthor,
+      parentId: fartId,
+    })
+      .then(() => {
+        // 持久化成功 — 静默处理
+      })
+      .catch((err) => {
+        // 失败回滚：移除最后一条乐观写入的评论 + Toast 提示
+        setFarts((prev) =>
+          prev.map((f) =>
+            f.id === fartId
+              ? {
+                  ...f,
+                  comments: f.comments.slice(0, -1),
+                }
+              : f
+          )
+        );
+        console.warn("[Sanctuary] 回复持久化失败:", err instanceof Error ? err.message : err);
+        showIncenseToast("回复失败，请稍后重试");
+      });
+  }, [commentCooldowns, showIncenseToast]);
 
   // 用户自主删除自己的帖子（凭 localStorage 中保存的 delete_token）
   const handleDeletePost = useCallback(async (fartId: string) => {
@@ -805,57 +836,67 @@ export default function Sanctuary({
     }
   }, [deleteTokens]);
 
-  // 发布脑洞 — 写入 Supabase 持久化
+  // 发布脑洞 — 乐观更新 + 异步持久化 + 5 秒冷却
   const handlePost = async () => {
-    if (!postContent.trim() || posting) return;
-    setPosting(true);
+    if (!postContent.trim() || posting || postCooldown > 0) return;
     const tagColor = postTagOptions.find((t) => t.label === postTag)?.color || "text-blue-400 bg-blue-500/10";
-    // 生成赛博 ID（未登录用户），已登录用户可传入固定昵称
+    // 自动生成作者名（若未填昵称）：出海同行#随机4位数
     const cyberAuthor = getOrCreateCyberId();
+    const tempId = `local-${Date.now()}`;
+    const optimisticPost: SanctuaryPost = {
+      id: tempId,
+      content: postContent.trim(),
+      tag: postTag,
+      tagColor,
+      author: cyberAuthor,
+      time: "刚刚",
+      likes: 0,
+      reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
+      comments: [],
+      isNew: true,
+    };
+    // 乐观更新：先写入本地 State 渲染
+    setFarts((prev) => [optimisticPost, ...prev]);
+    const postedContent = postContent.trim();
+    const postedTag = postTag;
+    setPostContent("");
+    setPosting(true);
+    // 启动 5 秒冷却倒计时
+    setPostCooldown(5);
+    const cdTimer = setInterval(() => {
+      setPostCooldown((cur) => {
+        if (cur <= 1) {
+          clearInterval(cdTimer);
+          return 0;
+        }
+        return cur - 1;
+      });
+    }, 1000);
+    // 异步持久化：写入 Supabase
     try {
       const newPost = await createSanctuaryPost({
-        content: postContent.trim(),
-        tag: postTag,
+        content: postedContent,
+        tag: postedTag,
         author: cyberAuthor,
       });
-      const finalPost: SanctuaryPost = newPost
-        ? { ...newPost, tagColor }
-        : {
-            id: String(fartIdRef.current++),
-            content: postContent.trim(),
-            tag: postTag,
-            tagColor,
-            author: cyberAuthor,
-            time: "刚刚",
-            likes: 0,
-            reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
-            comments: [],
-            isNew: true,
-          };
-      setFarts((prev) => [finalPost, ...prev]);
-      setPostContent("");
-      // 保存删除凭证到 localStorage + state（仅 Supabase 写入成功时）
-      if (newPost?.deleteToken) {
-        saveDeleteToken(finalPost.id, newPost.deleteToken);
-        setDeleteTokens((prev) => ({ ...prev, [finalPost.id]: newPost.deleteToken! }));
+      if (newPost) {
+        // 用真实数据替换乐观写入的临时帖
+        setFarts((prev) =>
+          prev.map((f) => (f.id === tempId ? { ...newPost, tagColor } : f))
+        );
+        // 保存删除凭证
+        if (newPost.deleteToken) {
+          saveDeleteToken(newPost.id, newPost.deleteToken);
+          setDeleteTokens((prev) => ({ ...prev, [newPost.id]: newPost.deleteToken! }));
+        }
       }
     } catch (err) {
-      // Supabase 写入失败 — 打印详细错误便于排查，仍在前端临时显示
-      console.warn("[Sanctuary] 发帖写入 Supabase 失败:", err instanceof Error ? err.message : err);
-      const fallback: SanctuaryPost = {
-        id: String(fartIdRef.current++),
-        content: postContent.trim(),
-        tag: postTag,
-        tagColor,
-        author: cyberAuthor,
-        time: "刚刚",
-        likes: 0,
-        reactions: { cool: 0, biz: 0, hard: 0, fake: 0 },
-        comments: [],
-        isNew: true,
-      };
-      setFarts((prev) => [fallback, ...prev]);
-      setPostContent("");
+      // 持久化失败 — 回滚乐观写入 + Toast 提示
+      setFarts((prev) => prev.filter((f) => f.id !== tempId));
+      console.warn("[Sanctuary] 发帖持久化失败:", err instanceof Error ? err.message : err);
+      showIncenseToast("发布失败，请稍后重试");
+      // 恢复输入框内容
+      setPostContent(postedContent);
     } finally {
       setPosting(false);
     }
@@ -1038,7 +1079,7 @@ export default function Sanctuary({
             <div className="mt-6 rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-950/10 to-zinc-950/40 p-5">
               <div className="mb-3 flex items-center gap-2">
                 <Scroll className="h-4 w-4 text-purple-400" />
-                <span className="text-sm font-semibold text-zinc-200">今日赛博灵感签文</span>
+                <span className="text-sm font-semibold text-zinc-200">今日策略灵感</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {(Object.keys(fortuneCategories) as Array<keyof typeof fortuneCategories>).map((key) => {
@@ -1101,17 +1142,19 @@ export default function Sanctuary({
                 type="text"
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !posting && handlePost()}
+                onKeyDown={(e) => e.key === "Enter" && !posting && postCooldown === 0 && handlePost()}
                 placeholder="写下一个不成熟的脑洞或吐槽..."
                 className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
               />
               <button
                 onClick={handlePost}
-                disabled={posting}
+                disabled={posting || postCooldown > 0}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:scale-105 hover:brightness-110 disabled:opacity-50 disabled:hover:scale-100"
               >
                 {posting ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> 发布中...</>
+                ) : postCooldown > 0 ? (
+                  <><Loader2 className="h-4 w-4" /> {postCooldown}s</>
                 ) : (
                   <><Send className="h-4 w-4" /> 发布</>
                 )}
@@ -1145,6 +1188,7 @@ export default function Sanctuary({
                     canDelete={!!deleteTokens[String(fart.id)]}
                     onDelete={handleDeletePost}
                     isDeleting={deletingIds.has(fart.id)}
+                    commentCooldown={commentCooldowns[String(fart.id)] || 0}
                   />
                 ))}
               </AnimatePresence>
@@ -1185,7 +1229,7 @@ export default function Sanctuary({
                 <X className="h-4 w-4" />
               </button>
 
-              {/* 9:16 赛博便签海报（设计师级极简 + 3D Tilt） */}
+              {/* 9:16 策略便签海报（设计师级极简 + 3D Tilt） */}
               <div
                 onMouseMove={handleTiltMove}
                 onMouseLeave={handleTiltLeave}
@@ -1202,7 +1246,7 @@ export default function Sanctuary({
                   boxShadow: `0 0 45px ${fortuneTheme.glow}, 0 0 0 1px ${fortuneTheme.border} inset`,
                 }}
               >
-                {/* 背景层：赛博网格 + 几何水印 + 光晕（降透明度去油） */}
+                {/* 背景层：霓虹网格 + 几何水印 + 光晕（降透明度去油） */}
                 <div className="absolute inset-0">
                   <div
                     className="absolute inset-0 opacity-[0.15]"
@@ -1439,7 +1483,7 @@ export default function Sanctuary({
               </button>
               <img
                 src={previewImage}
-                alt="赛博灵感便签预览"
+                alt="策略灵感便签预览"
                 className="w-full rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/10"
                 // 确保图片可被微信识别并长按保存
               />

@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
         id: r.id,
         content: r.content || "",
         tag: r.tag || "",
-        author: r.author || "赛博访客",
+        author: r.author || "出海玩家",
         avatar: r.avatar || null,
         likes: r.likes || 0,
         isPublished: r.is_published ?? true,
