@@ -102,7 +102,39 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      const result = await res.json();
+
+      // 防御：Vercel 超时/异常会返回非 JSON 文本页（如 "An error occurred..."），
+      // 这里先校验 content-type，避免 res.json() 在首字母处崩溃。
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok || !ct.includes("application/json")) {
+        // 非 JSON 响应（通常是 Serverless 超时或运行时错误页），尝试读文本用于诊断
+        let detail = "";
+        try {
+          detail = (await res.text()).slice(0, 120);
+        } catch { /* 忽略 */ }
+        setAiMessage(
+          res.status === 504 || res.status === 502
+            ? "⏳ 感知超时：RSS+AI 流水线耗时过长，请稍后重试（数据仍可在下方查看历史）"
+            : `⚠ 感知服务异常${detail ? `：${detail}` : ""}`
+        );
+        setAiRefreshing(false);
+        return;
+      }
+
+      let result: any;
+      try {
+        result = await res.json();
+      } catch {
+        setAiMessage("⚠ 响应解析失败，请稍后重试");
+        setAiRefreshing(false);
+        return;
+      }
+
+      if (!result || result.success === false) {
+        setAiMessage(result?.error ? `⚠ ${result.error}` : "⚠ 感知失败，请稍后重试");
+        setAiRefreshing(false);
+        return;
+      }
 
       // 冷却中：距离上次更新 <3 分钟，直接提示不重复消耗 Token
       if (result.cooldown === true) {

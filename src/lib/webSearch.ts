@@ -93,7 +93,7 @@ async function searchWithTavily(apiKey: string, query: string): Promise<WebSearc
         max_results: 5,
         include_answer: false,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       console.warn(`[webSearch] Tavily HTTP ${res.status}`);
@@ -121,7 +121,7 @@ async function searchWithSerper(apiKey: string, query: string): Promise<WebSearc
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
       body: JSON.stringify({ q: query, num: 5 }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       console.warn(`[webSearch] Serper HTTP ${res.status}`);

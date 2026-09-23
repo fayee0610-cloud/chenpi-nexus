@@ -543,11 +543,27 @@ function isAuthorized(req: NextRequest): boolean {
 
 // ---------- 主路由 ----------
 export async function GET(req: NextRequest) {
-  return handleCron(req);
+  try {
+    return await handleCron(req);
+  } catch (err: any) {
+    console.error("[cron] GET 未捕获异常:", err);
+    return NextResponse.json(
+      { success: false, error: "感知服务异常", detail: String(err?.message || err).slice(0, 300) },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
-  return handleCron(req);
+  try {
+    return await handleCron(req);
+  } catch (err: any) {
+    console.error("[cron] POST 未捕获异常:", err);
+    return NextResponse.json(
+      { success: false, error: "感知服务异常", detail: String(err?.message || err).slice(0, 300) },
+      { status: 500 }
+    );
+  }
 }
 
 async function handleCron(req: NextRequest) {
@@ -586,7 +602,7 @@ async function handleCron(req: NextRequest) {
   // 1.5 Web Search 补充（Tavily/Serper，未配置 Key 时静默跳过）
   // 用 50/30/20 权重矩阵抽取 query，检索全网品牌营销/展会/政策动态
   try {
-    const queries = pickQueriesByWeight(6);
+    const queries = pickQueriesByWeight(4);
     const webResults = await searchWeb(queries);
     if (webResults.length > 0) {
       // WebSearchResult 与 RawFeedItem 结构兼容，直接合并
