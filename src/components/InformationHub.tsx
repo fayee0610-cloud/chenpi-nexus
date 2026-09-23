@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ExternalLink,
@@ -14,6 +15,9 @@ import {
   Lightbulb,
   ChevronDown,
   CalendarClock,
+  X,
+  Maximize2,
+  Tag,
 } from "lucide-react";
 import { fetchMalaysiaIntelligence } from "@/lib/dataApi";
 import { type MalaysiaIntelligence } from "@/data/siteData";
@@ -62,6 +66,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false); // 展开更多历史情报
+  const [selectedItem, setSelectedItem] = useState<MalaysiaIntelligence | null>(null); // 详情弹窗
 
   const loadData = async (): Promise<MalaysiaIntelligence[]> => {
     try {
@@ -93,6 +98,20 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     })();
     return () => { mounted = false; };
   }, []);
+
+  // 详情弹窗：ESC 关闭 + 禁用背景滚动
+  useEffect(() => {
+    if (!selectedItem) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedItem(null);
+    };
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [selectedItem]);
 
   // ⚡ 实时感知：触发 RSS 抓取 → AI 摘要 → upsert malaysia_intelligence
   // 携带 cooldown=1 参数，后端检查 3 分钟冷却防护
@@ -333,6 +352,18 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          setSelectedItem(item);
+                        }}
+                        title="打开完整详情弹窗"
+                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 px-2 py-1 text-[10px] font-medium text-zinc-300 transition-all hover:border-purple-500/40 hover:bg-zinc-800 hover:text-purple-300"
+                      >
+                        <Maximize2 className="h-3 w-3" />
+                        详情
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleCopy(item);
                         }}
                         title="一键复制（摘要 + 商业启示）"
@@ -423,6 +454,132 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
       {/* 首页模式：跳转完整列表 */}
       {isHomeMode && !loading && displayItems.length > 0 && (
         <LoadMoreButton href="/hub" label="进入东南亚实局完整列表" />
+      )}
+
+      {/* ===== 完整情报详情弹窗（React Portal 挂载 document.body）===== */}
+      {selectedItem && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedItem(null)}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: 12 }}
+              transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl"
+            >
+              {/* 关闭按钮 */}
+              <button
+                onClick={() => setSelectedItem(null)}
+                className="absolute right-4 top-4 z-10 rounded-lg border border-zinc-800 bg-zinc-900/80 p-1.5 text-zinc-400 transition-all hover:border-zinc-700 hover:text-zinc-100"
+                aria-label="关闭"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              {/* 来源 + 时间 + 分类 */}
+              <div className="mb-4 flex flex-wrap items-center gap-2 pr-10">
+                {(() => {
+                  const st = SOURCE_STYLES[selectedItem.sourceName] || DEFAULT_SOURCE_STYLE;
+                  return (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${st.border} ${st.bg} ${st.text}`}>
+                      <Newspaper className="h-3 w-3" />
+                      {selectedItem.sourceName}
+                    </span>
+                  );
+                })()}
+                {selectedItem.category && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-medium text-purple-300">
+                    <Tag className="h-3 w-3" />
+                    {selectedItem.category}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Clock className="h-3 w-3" />
+                  {formatDate(selectedItem.publishedAt)}
+                </span>
+              </div>
+
+              {/* 中文标题 */}
+              <h2 className="mb-4 text-xl font-bold leading-snug text-zinc-50">
+                {selectedItem.titleZh}
+              </h2>
+
+              {/* 原始英文标题 */}
+              {selectedItem.titleEn && selectedItem.titleEn !== selectedItem.titleZh && (
+                <p className="mb-5 text-xs leading-relaxed text-zinc-500">{selectedItem.titleEn}</p>
+              )}
+
+              {/* AI 摘要 */}
+              <div className="mb-5">
+                <span className="mb-2 inline-block rounded bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-400">
+                  AI 摘要
+                </span>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-300">
+                  {selectedItem.summaryZh}
+                </p>
+              </div>
+
+              {/* 商业启示 */}
+              {selectedItem.keyTakeaway && (
+                <div className="mb-5 rounded-xl border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 via-zinc-900/40 to-transparent p-4">
+                  <span className="mb-2 inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                    <Lightbulb className="h-3 w-3" />
+                    商业启示 / 营销落地建议
+                  </span>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-200">
+                    {selectedItem.keyTakeaway}
+                  </p>
+                </div>
+              )}
+
+              {/* 标签 */}
+              {selectedItem.tags && selectedItem.tags.length > 0 && (
+                <div className="mb-6 flex flex-wrap gap-1.5">
+                  {selectedItem.tags.map((t, i) => (
+                    <span key={i} className="rounded-md border border-zinc-800 bg-zinc-800/40 px-2 py-0.5 text-[11px] text-zinc-400">
+                      #{t}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 底部操作 */}
+              <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
+                <button
+                  type="button"
+                  onClick={() => handleCopy(selectedItem)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
+                    copiedId === selectedItem.id
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                      : "border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-purple-500/40 hover:bg-zinc-800 hover:text-purple-300"
+                  }`}
+                >
+                  {copiedId === selectedItem.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedId === selectedItem.id ? "已复制" : "复制情报"}
+                </button>
+                {selectedItem.sourceUrl && (
+                  <a
+                    href={/^https?:\/\//.test(selectedItem.sourceUrl) ? selectedItem.sourceUrl : `https://${selectedItem.sourceUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-xs font-medium text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-800"
+                  >
+                    查看原文
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
       )}
     </section>
   );
