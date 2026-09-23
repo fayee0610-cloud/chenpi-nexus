@@ -455,13 +455,19 @@ async function writeIntelligence(
       if (!error) {
         inserted++;
       } else {
-        const msg = `${item.title}: ${error.message}`;
-        errors.push(msg);
-        console.warn(`[cron] upsert 失败：${msg}`);
+        // 显式打印完整 Supabase 错误，定位 RLS / 列缺失 / 类型不匹配等根因
+        console.error("[cron] Supabase write error:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          sourceUrl: item.link,
+        });
+        errors.push(`${item.title}: ${error.message}`);
       }
     } catch (e: any) {
-      const msg = `${item.title}: ${e?.message || "写入异常"}`;
-      errors.push(msg);
+      console.error("[cron] writeIntelligence 异常:", e);
+      errors.push(`${item.title}: ${e?.message || "写入异常"}`);
     }
   }
 
@@ -745,6 +751,7 @@ async function handleCron(req: NextRequest) {
   if (inserted > 0) {
     return NextResponse.json({
       success: true,
+      persisted: true,
       message: `⚡ 抓取 ${rawItems.length} 条 → AI 摘要 ${summarized.length} 条 → 写入 ${inserted} 条大马商业情报`,
       stats: {
         fetched: rawItems.length,
@@ -759,9 +766,10 @@ async function handleCron(req: NextRequest) {
   }
 
   // DB 写入失败时优雅降级：返回 success + 内存数据，前台直接渲染
-  console.warn("[cron] DB 写入失败，返回内存数据供前台直接渲染");
+  console.warn("[cron] DB 写入失败，返回内存数据供前台直接渲染。写入错误样本:", errors.slice(0, 3));
   return NextResponse.json({
     success: true,
+    persisted: false,
     message: `⚡ 成功抓取 ${summarized.length} 条大马商业情报（内存模式，DB 未持久化）`,
     stats: {
       fetched: rawItems.length,

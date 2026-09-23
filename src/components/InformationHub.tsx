@@ -63,14 +63,16 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false); // 展开更多历史情报
 
-  const loadData = async () => {
+  const loadData = async (): Promise<MalaysiaIntelligence[]> => {
     try {
       setLoading(true);
       const data = await fetchMalaysiaIntelligence(EXPANDED_LIMIT);
       setItems(data);
+      return data;
     } catch (err: any) {
       console.warn("[InformationHub] loadData 失败:", err?.message || err);
       setItems([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -143,10 +145,19 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         return;
       }
 
-      // 感知完成：强制回读数据库渲染，确保只展示已持久化的数据。
-      // 不再使用接口返回的内存 result.data，避免 DB 写入静默失败时会话级数据"刷新即丢失"。
+      // 感知完成：优先回读数据库渲染已持久化的数据。
       setAiMessage(result.message || "⚡ 已更新最新大马商业情报");
-      await loadData();
+      const dbData = await loadData();
+
+      // 兜底：DB 回读为空（写入失败退回内存模式 / Supabase 暂时不可读）时，
+      // 必须用 API 返回的 result.data 渲染，绝不让用户看到空白页。
+      if ((!dbData || dbData.length === 0) && Array.isArray(result.data) && result.data.length > 0) {
+        setItems(result.data as MalaysiaIntelligence[]);
+        setShowAll(false);
+        if (result.persisted === false) {
+          setAiMessage("⚡ 已加载最新情报（本次 DB 未持久化，刷新后需重新感知）");
+        }
+      }
     } catch (err: any) {
       setAiMessage(`❌ 网络错误：${err?.message || "请求失败"}`);
     } finally {
