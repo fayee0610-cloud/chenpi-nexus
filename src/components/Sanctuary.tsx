@@ -351,7 +351,7 @@ function CommunityCard({
       </div>
 
       {/* 内容 */}
-      <p className="mb-4 text-sm leading-relaxed text-zinc-200">{fart.content}</p>
+      <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200">{fart.content}</p>
 
       {/* 作者（访客 ID） */}
       <div className="mb-4 flex items-center gap-2">
@@ -439,19 +439,24 @@ function CommunityCard({
                         <span className="text-[11px] font-medium text-zinc-300">{cmt.author}</span>
                         <span className="text-[10px] text-zinc-600">{cmt.time}</span>
                       </div>
-                      <p className="text-xs leading-relaxed text-zinc-400">{cmt.text}</p>
+                      <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-zinc-400">{cmt.text}</p>
                     </div>
                   </div>
                 ))}
                 {/* 快捷评论输入 */}
                 <div className="flex gap-2 border-t border-zinc-800/60 pt-3">
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleComment()}
-                    placeholder="说点什么..."
-                    className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        handleComment();
+                      }
+                    }}
+                    placeholder="说点什么...（Enter 换行，Ctrl+Enter 发送）"
+                    className="flex-1 resize-y rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
                   />
                   <button
                     onClick={handleComment}
@@ -970,17 +975,17 @@ export default function Sanctuary({
 
   return (
     <section
-      id="sanctuary"
+      id="canvas"
       className="mx-4 rounded-3xl bg-gradient-to-b from-zinc-950 via-purple-950/20 to-zinc-950 px-6 py-24 sm:mx-6"
     >
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
-            庇护所
+            脑洞画布
           </h2>
           <p className="mx-auto max-w-xl text-zinc-400">
-            一个轻量的精神避风港，为创意人补充能量
+            出海同行与大马本土商业探索者的互动交流与脑洞碰撞
           </p>
           <Link
             href="/sanctuary"
@@ -1147,13 +1152,18 @@ export default function Sanctuary({
               ))}
             </div>
             <div className="flex gap-3">
-              <input
-                type="text"
+              <textarea
+                rows={3}
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !posting && postCooldown === 0 && handlePost()}
-                placeholder="写下一个不成熟的脑洞或吐槽..."
-                className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    if (!posting && postCooldown === 0) handlePost();
+                  }
+                }}
+                placeholder="写下一个不成熟的脑洞或吐槽...（Enter 换行，Ctrl+Enter 发布）"
+                className="flex-1 resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-purple-500/50 focus:outline-none"
               />
               <button
                 onClick={handlePost}
@@ -1173,7 +1183,7 @@ export default function Sanctuary({
 
           {/* 卡片列表 */}
           {loadingFarts ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-48 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
               ))}
@@ -1185,7 +1195,7 @@ export default function Sanctuary({
             </div>
           ) : (
           <>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence>
                 {displayedFarts.map((fart) => (
                   <CommunityCard

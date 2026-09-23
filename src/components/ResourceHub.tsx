@@ -106,20 +106,20 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
   })();
 
   return (
-    <section id="resources" className="relative mx-auto max-w-7xl px-6 py-20">
+    <section id="toolkit" className="relative mx-auto max-w-7xl px-6 py-20">
       {/* 标题 */}
       <div className="mb-12 text-center">
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
-          精选资源包
+          策略工具包
         </h2>
         <p className="mt-3 text-sm text-zinc-500">
-          深度行业指南 · 实战运营手册 · 品牌策略报告
+          实战 SOP · 东南亚渠道指南 · AI 营销 Prompt 库 · 品牌策略模板
         </p>
       </div>
 
       {/* 资源卡片列表 */}
       {loading ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -134,7 +134,7 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
         </div>
       ) : (
         <>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
             {displayedResources.map((resource, i) => (
               <motion.div
                 key={resource.id}
@@ -142,18 +142,34 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 transition-all hover:border-zinc-700 hover:bg-zinc-900/60"
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:border-zinc-700 hover:bg-zinc-900/60"
               >
-                {/* 顶部图标 + 分类 */}
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15">
-                    <FileText className="h-5 w-5 text-blue-400" />
+                {/* 16:9 封面图 */}
+                <div className="relative aspect-video w-full overflow-hidden">
+                  {resource.coverUrl?.trim() ? (
+                    <img
+                      src={resource.coverUrl}
+                      alt={resource.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
+                  {/* 顶部图标 + 分类 */}
+                  <div className="absolute left-3 top-3 flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-950/80 backdrop-blur-sm">
+                      <FileText className="h-4 w-4 text-blue-400" />
+                    </div>
                   </div>
-                  <span className="rounded-full border border-zinc-700 bg-zinc-800/50 px-2.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                  <span className="absolute right-3 top-3 rounded-full border border-zinc-700 bg-zinc-950/80 px-2.5 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
                     {resource.category}
                   </span>
                 </div>
 
+                {/* 卡片正文 */}
+                <div className="flex flex-1 flex-col p-5">
                 {/* 标题 */}
                 <h3 className="mb-2 text-base font-bold text-zinc-100">
                   {resource.title}
@@ -211,13 +227,25 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
                     )}
                   </button>
                 </div>
+
+                {/* 预约获取完整 SOP 文件 */}
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("contact");
+                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="mt-3 w-full rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-xs font-medium text-purple-300 transition-all hover:border-purple-500/40 hover:bg-purple-500/10"
+                >
+                  [ 预约获取完整 SOP 文件 ]
+                </button>
+                </div>
               </motion.div>
             ))}
           </div>
 
           {/* 首页模式：跳转量子页面 */}
           {typeof showLimit === "number" && displayedResources.length > 0 && (
-            <LoadMoreButton href="/resources" label="进入资源包完整列表" />
+            <LoadMoreButton href="/resources" label="进入策略工具包完整列表" />
           )}
         </>
       )}

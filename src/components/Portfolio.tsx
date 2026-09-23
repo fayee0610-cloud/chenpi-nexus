@@ -15,6 +15,10 @@ import {
   Zap,
   ArrowUpRight,
   Loader2,
+  Building2,
+  MapPin,
+  ShieldCheck,
+  Package,
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
@@ -71,12 +75,12 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
   const handleCloseAndScrollToConnect = useCallback(() => {
     setSelectedProject(null);
     setTimeout(() => {
-      document.getElementById("connect")?.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
     }, 200);
   }, []);
 
   return (
-    <section id="portfolio" className="px-6 py-24">
+    <section id="cases" className="px-6 py-24">
       <div className="mx-auto max-w-7xl">
         {/* Section Header */}
         <div className="mb-12 text-center">
@@ -84,7 +88,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
             实战案例
           </h2>
           <p className="mx-auto max-w-xl text-zinc-400">
-            从东南亚品牌出海到 AI 营销落地，持续交付可量化的商业增长价值
+            大马本土化渠道重构与商业交付落地案例
           </p>
           <Link
             href="/portfolio"
@@ -121,7 +125,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
 
         {/* Projects Grid */}
         {loading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-64 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
             ))}
@@ -139,7 +143,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.35 }}
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+            className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3"
           >
             {filtered.map((project) => (
               <div
@@ -189,6 +193,15 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                       <ArrowUpRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
+                  {/* 客户行业徽标 */}
+                  {project.clientIndustry && (
+                    <div className="mb-3">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                        <Building2 className="h-3 w-3" />
+                        {project.clientIndustry}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {project.tags.map((tag) => (
                       <span
@@ -237,7 +250,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
               exit={{ scale: 0.92, opacity: 0, y: 20 }}
               transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative my-8 w-full max-w-3xl rounded-2xl border border-purple-500/30 bg-zinc-900 shadow-[0_0_60px_rgba(168,85,247,0.15)]"
+              className="relative my-8 w-full max-w-2xl rounded-2xl border border-purple-500/30 bg-zinc-900 shadow-[0_0_60px_rgba(168,85,247,0.15)]"
             >
               {/* 顶部 Bar */}
               <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-zinc-800 bg-zinc-900/95 px-6 py-4 backdrop-blur-md">
@@ -312,6 +325,71 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                     </span>
                   ))}
                 </div>
+
+                {/* ========== 商业交付指标（Client Success Stories） ========== */}
+                {(selectedProject.clientIndustry || selectedProject.malaysiaChannels || selectedProject.halalCertificationCycle || (selectedProject.deliverables && selectedProject.deliverables.length > 0)) && (
+                  <div className="mb-6 rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-500/5 to-transparent p-5">
+                    <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                      <TrendingUp className="h-4 w-4" />
+                      商业交付指标
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {selectedProject.clientIndustry && (
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                            <Building2 className="h-4 w-4 text-emerald-400" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">客户行业</div>
+                            <div className="mt-0.5 text-sm font-medium text-zinc-200">{selectedProject.clientIndustry}</div>
+                          </div>
+                        </div>
+                      )}
+                      {selectedProject.halalCertificationCycle && (
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+                            <ShieldCheck className="h-4 w-4 text-amber-400" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">清真认证落地周期</div>
+                            <div className="mt-0.5 text-sm font-medium text-zinc-200">{selectedProject.halalCertificationCycle}</div>
+                          </div>
+                        </div>
+                      )}
+                      {selectedProject.malaysiaChannels && (
+                        <div className="flex items-start gap-3 sm:col-span-2">
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                            <MapPin className="h-4 w-4 text-blue-400" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">大马本土化渠道搭建成果</div>
+                            <div className="mt-0.5 text-sm leading-relaxed text-zinc-200">{selectedProject.malaysiaChannels}</div>
+                          </div>
+                        </div>
+                      )}
+                      {selectedProject.deliverables && selectedProject.deliverables.length > 0 && (
+                        <div className="flex items-start gap-3 sm:col-span-2">
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
+                            <Package className="h-4 w-4 text-purple-400" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">核心交付物</div>
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {selectedProject.deliverables.map((d, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-[11px] text-zinc-300"
+                                >
+                                  {d}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* 项目挑战与背景 */}
                 <div className="mb-6">

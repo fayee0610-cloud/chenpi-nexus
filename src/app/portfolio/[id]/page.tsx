@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, TrendingUp, Copy, Check, Target, Lightbulb } from "lucide-react";
+import { ArrowLeft, TrendingUp, Copy, Check, Target, Lightbulb, Building2, MapPin, ShieldCheck, Package } from "lucide-react";
 import { fetchProjectById } from "@/lib/dataApi";
 import Header from "@/components/Header";
 import { notFound } from "next/navigation";
@@ -116,6 +116,71 @@ export default async function PortfolioDetailPage({
                   <div className="mt-1 text-xs text-zinc-500">{m.label}</div>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* 商业交付指标 */}
+        {(project.clientIndustry || project.malaysiaChannels || project.halalCertificationCycle || (project.deliverables && project.deliverables.length > 0)) && (
+          <section className="mt-8 rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-500/5 to-transparent p-5 sm:p-6">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-emerald-300">
+              <TrendingUp className="h-5 w-5" />
+              商业交付指标
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {project.clientIndustry && (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                    <Building2 className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">客户行业</div>
+                    <div className="mt-0.5 text-sm font-medium text-zinc-200">{project.clientIndustry}</div>
+                  </div>
+                </div>
+              )}
+              {project.halalCertificationCycle && (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+                    <ShieldCheck className="h-4 w-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">清真认证落地周期</div>
+                    <div className="mt-0.5 text-sm font-medium text-zinc-200">{project.halalCertificationCycle}</div>
+                  </div>
+                </div>
+              )}
+              {project.malaysiaChannels && (
+                <div className="flex items-start gap-3 sm:col-span-2">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <MapPin className="h-4 w-4 text-blue-400" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">大马本土化渠道搭建成果</div>
+                    <div className="mt-0.5 text-sm leading-relaxed text-zinc-200">{project.malaysiaChannels}</div>
+                  </div>
+                </div>
+              )}
+              {project.deliverables && project.deliverables.length > 0 && (
+                <div className="flex items-start gap-3 sm:col-span-2">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
+                    <Package className="h-4 w-4 text-purple-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">核心交付物</div>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {project.deliverables.map((d, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-[11px] text-zinc-300"
+                        >
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}

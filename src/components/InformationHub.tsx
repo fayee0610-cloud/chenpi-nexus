@@ -1,48 +1,127 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Radar, Sparkles, TrendingUp, Bot, Loader2, Copy, CheckCheck, RefreshCw } from "lucide-react";
-import { fetchInsightsHub } from "@/lib/dataApi";
-import { type InsightHubItem, type InsightHubCategory } from "@/data/siteData";
+import {
+  ExternalLink,
+  Radar,
+  Sparkles,
+  Loader2,
+  Copy,
+  CheckCheck,
+  Newspaper,
+  Clock,
+  Lightbulb,
+  ChevronDown,
+} from "lucide-react";
+import { fetchMalaysiaIntelligence } from "@/lib/dataApi";
+import { type MalaysiaIntelligence } from "@/data/siteData";
 import LoadMoreButton from "@/components/LoadMoreButton";
 
-const CATEGORY_TABS = [
-  { key: "all", label: "全部分类", icon: Radar },
-  { key: "🌏 东南亚实局", label: "东南亚实局", icon: TrendingUp },
-  { key: "🤖 AI 营销杠杆", label: "AI 营销杠杆", icon: Sparkles },
-  { key: "🎯 深度洞察", label: "深度洞察", icon: Bot },
-  { key: "📦 战术拆解", label: "战术拆解", icon: Bot },
-] as const;
-
-const CATEGORY_STYLES: Record<string, { border: string; bg: string; text: string; glow: string }> = {
-  "🌏 东南亚实局": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400", glow: "shadow-emerald-500/5" },
-  "🤖 AI 营销杠杆": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400", glow: "shadow-purple-500/5" },
-  "🎯 深度洞察": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400", glow: "shadow-cyan-500/5" },
-  "📦 战术拆解": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400", glow: "shadow-amber-500/5" },
+// 来源媒体对应的主题色
+const SOURCE_STYLES: Record<string, { border: string; bg: string; text: string }> = {
+  "The Edge Malaysia": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "The Star Business": { border: "border-blue-500/30", bg: "bg-blue-500/10", text: "text-blue-400" },
+  "Malay Mail Money": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
+  "Bernama Business": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400" },
+  "New Straits Times": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400" },
 };
 
+const DEFAULT_SOURCE_STYLE = { border: "border-zinc-700", bg: "bg-zinc-800/50", text: "text-zinc-400" };
+
+function formatDate(iso: string): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${day} ${hh}:${mm}`;
+  } catch {
+    return iso;
+  }
+}
+
 export default function InformationHub({ showLimit }: { showLimit?: number }) {
-  const [items, setItems] = useState<InsightHubItem[]>([]);
+  const [items, setItems] = useState<MalaysiaIntelligence[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [aiRefreshing, setAiRefreshing] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // 一键复制情报文本（带落款链接）
-  const handleCopyInsight = async (item: InsightHubItem) => {
-    const tagLine = `—— 摘自【陈皮同学 · 东南亚实局】| ${
-      typeof window !== "undefined" ? `${window.location.origin}/hub` : "https://chenpi.dev/hub"
-    }`;
-    const payload = `${item.title}\n[${item.category}] ${item.sourceName || "匿名来源"} | ${item.publishedAt || ""}\n\n${
-      item.summary || ""
-    }\n${tagLine}`;
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchMalaysiaIntelligence(12);
+      setItems(data);
+    } catch (err: any) {
+      console.warn("[InformationHub] loadData 失败:", err?.message || err);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await fetchMalaysiaIntelligence(12);
+        if (mounted) setItems(data);
+      } catch (err) {
+        console.warn("[InformationHub] 首次加载失败:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // ⚡ 实时感知：触发 RSS 抓取 → AI 摘要 → 写入 malaysia_intelligence
+  const handleAiRefresh = async () => {
+    setAiRefreshing(true);
+    setAiMessage(null);
+    try {
+      const res = await fetch("/api/cron/fetch-intelligence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = await res.json();
+      const stats = result.stats || {};
+      const inserted = stats.inserted ?? 0;
+
+      if (inserted > 0) {
+        setAiMessage(`⚡ 成功抓取并写入 ${inserted} 条马来西亚商业情报`);
+        await new Promise((r) => setTimeout(r, 400));
+        await loadData();
+      } else {
+        if (!result.success) {
+          const realErr = result.error || (result.errors && result.errors[0]) || result.message || "未知错误";
+          setAiMessage(`❌ ${realErr}`);
+        } else {
+          setAiMessage(result.message || "暂无新情报");
+        }
+        await loadData();
+      }
+    } catch (err: any) {
+      setAiMessage(`❌ 网络错误：${err?.message || "请求失败"}`);
+    } finally {
+      setAiRefreshing(false);
+    }
+  };
+
+  const handleCopy = async (item: MalaysiaIntelligence) => {
+    const tagLine = `—— 摘自【陈皮同学 · 东南亚实局】`;
+    const payload = `${item.titleZh}\n[${item.sourceName}] ${formatDate(item.publishedAt)}\n\n${item.summaryZh}\n\n💡 商业启示：${item.keyTakeaway}\n${tagLine}`;
     try {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(payload);
       } else {
-        // 降级方案：textarea + execCommand
         const ta = document.createElement("textarea");
         ta.value = payload;
         ta.style.position = "fixed";
@@ -59,122 +138,28 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     }
   };
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchInsightsHub();
-      // 过滤 isPublished = true，未发布的前台不可见
-      const published = data.filter((i) => i.isPublished);
-      setItems(published);
-    } catch (err: any) {
-      console.warn("[InformationHub] loadData 失败:", err?.message || err);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
+  const toggleExpand = (id: string) => {
+    setExpandedId((cur) => (cur === id ? null : id));
   };
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await fetchInsightsHub();
-        if (mounted) {
-          const published = data.filter((i) => i.isPublished);
-          setItems(published);
-        }
-      } catch (err) {
-        console.warn("[InformationHub] 首次加载失败:", err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  // ⚡ 实时感知：调用 Cron 接口一键完成 生成 → 清洗 → 去重 → 写入
-  const handleAiRefresh = async () => {
-    setAiRefreshing(true);
-    setAiMessage(null);
-    try {
-      const res = await fetch("/api/cron/fetch-intelligence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const result = await res.json();
-      const stats = result.stats || {};
-      const inserted = stats.inserted ?? 0;
-      const duplicatesRemoved = stats.duplicatesRemoved ?? 0;
-
-      if (inserted > 0) {
-        // 写入成功：立即刷新数据
-        setAiMessage(`⚡ 写入 ${inserted}/${stats.afterDedup ?? stats.totalItems ?? stats.sanitized ?? "?"} 条（24h跳过 ${duplicatesRemoved} 条重复）`);
-        // 小延迟后刷新，确保 Supabase 写入落盘（避免读取时还在 RLS/复制延迟）
-        await new Promise((r) => setTimeout(r, 400));
-        await loadData();
-      } else {
-        // 写入为 0 时，分三种情况提示：重复 / 清洗拦截 / 写入失败
-        if (duplicatesRemoved > 0) {
-          setAiMessage(`⚠️ 24h 内已有重复情报（跳过 ${duplicatesRemoved} 条），稍后再试或换个时间`);
-        } else if (!result.success) {
-          // 优先展示真实错误 + errorType 诊断
-          const realErr = result.error || (result.errors && result.errors[0]) || result.message || "未知错误";
-          // 根据 errorType 给出更精准的修复建议
-          let fixHint = "";
-          if (result.errorType === "no_key") {
-            fixHint = " → 请在 .env.local 配置 AI_API_KEY";
-          } else if (result.errorType === "http_error") {
-            fixHint = " → 请检查 API Key 有效性 / 账户余额";
-          } else if (result.errorType === "parse_fail" || result.errorType === "no_json") {
-            fixHint = " → AI 输出格式异常，请重试或检查 Prompt";
-          } else if (result.errorType === "timeout") {
-            fixHint = " → AI 响应超时，请稍后重试";
-          } else if (result.hint) {
-            fixHint = ` | 修复：${result.hint.slice(0, 80)}...`;
-          }
-          setAiMessage(`❌ ${realErr}${fixHint}`);
-        } else {
-          setAiMessage(result.message || "暂无新情报，稍后再试");
-        }
-        // 即使本次没写入新数据，也刷新一次（可能数据库里之前有没读取到的）
-        await loadData();
-      }
-    } catch (err: any) {
-      setAiMessage(`❌ 网络错误：${err?.message || "AI 感知请求失败"}`);
-    } finally {
-      setAiRefreshing(false);
-    }
-  };
-
-  const filteredItems = useMemo(() => {
-    if (activeCategory === "all") return items;
-    return items.filter((i) => i.category === activeCategory);
-  }, [items, activeCategory]);
-
-  // 置顶卡片排前
-  const sortedItems = useMemo(() => {
-    const sorted = [...filteredItems].sort((a, b) => {
-      if (a.isFeatured && !b.isFeatured) return -1;
-      if (!a.isFeatured && b.isFeatured) return 1;
-      return 0;
-    });
-    // 首页模式：限制展示条数
-    if (typeof showLimit === "number" && showLimit > 0) {
-      return sorted.slice(0, showLimit);
-    }
-    return sorted;
-  }, [filteredItems, showLimit]);
+  const displayItems = typeof showLimit === "number" && showLimit > 0
+    ? items.slice(0, showLimit)
+    : items;
 
   return (
-    <section id="hub" className="relative mx-auto max-w-7xl px-6 py-20">
+    <section id="intelligence" className="relative mx-auto max-w-7xl px-6 py-20">
       {/* 标题 */}
       <div className="mb-10 text-center">
+        <div className="mb-3 flex items-center justify-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+            ⚡ 以马来西亚/东盟市场为绝对核心
+          </span>
+        </div>
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
           东南亚实局
         </h2>
-        <p className="mt-3 text-sm text-zinc-500">
-          东南亚核心市场洞察 · 本土化渠道 · AI 营销杠杆 · 第一线出海实局
+        <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-500">
+          全自动聚合大马核心财经媒体，AI 实时提炼中文摘要与商业启示
         </p>
 
         {/* ⚡ 实时感知按钮 */}
@@ -198,11 +183,9 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
           </button>
           {aiMessage && (
             <span className={`text-xs whitespace-nowrap ${
-              aiMessage.startsWith("❌") || aiMessage.includes("失败") || aiMessage.startsWith("写入失败")
-                ? "text-rose-400"
-                : aiMessage.startsWith("⚠️")
-                ? "text-amber-400"
-                : "text-emerald-400"
+              aiMessage.startsWith("❌") ? "text-rose-400"
+              : aiMessage.startsWith("⚠️") ? "text-amber-400"
+              : "text-emerald-400"
             }`}>
               {aiMessage}
             </span>
@@ -210,39 +193,18 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         </div>
       </div>
 
-      {/* 分类 Tab */}
-      <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
-        {CATEGORY_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeCategory === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveCategory(tab.key)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-medium transition-all ${
-                isActive
-                  ? "border-zinc-600 bg-zinc-800 text-zinc-100"
-                  : "border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 瀑布流卡片 */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* 卡片网格 */}
+      <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading
           ? [1, 2, 3, 4, 5, 6].map((i) => (
               <div
                 key={i}
-                className="h-48 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40"
+                className="h-56 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40"
               />
             ))
-          : sortedItems.map((item, i) => {
-              const style = CATEGORY_STYLES[item.category] || CATEGORY_STYLES["🎯 深度洞察"];
+          : displayItems.map((item, i) => {
+              const style = SOURCE_STYLES[item.sourceName] || DEFAULT_SOURCE_STYLE;
+              const isExpanded = expandedId === item.id;
               return (
                 <motion.div
                   key={item.id}
@@ -252,105 +214,75 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                   transition={{ delay: (i % 3) * 0.08 }}
                   className={`break-inside-avoid rounded-2xl border bg-zinc-900/40 p-5 backdrop-blur-sm transition-all hover:bg-zinc-900/60 ${
                     item.isFeatured
-                      ? `${style.border} ${style.bg} shadow-lg ${style.glow}`
+                      ? `${style.border} ${style.bg} shadow-lg`
                       : "border-zinc-800"
                   }`}
                 >
-                  {/* 顶部：分类标签 + 置顶标记 */}
+                  {/* 顶部：来源标签 + 时间 */}
                   <div className="mb-3 flex items-center justify-between">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${style.border} ${style.bg} ${style.text}`}>
-                      {item.category}
+                      <Newspaper className="h-3 w-3" />
+                      {item.sourceName}
                     </span>
-                    {item.isFeatured && (
-                      <span className="text-[10px] font-bold text-amber-400">★ 置顶</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
+                      <Clock className="h-3 w-3" />
+                      {formatDate(item.publishedAt)}
+                    </span>
+                  </div>
+
+                  {/* 中文标题 */}
+                  <h3
+                    className="mb-2 cursor-pointer text-sm font-bold leading-snug text-zinc-100 hover:text-emerald-300"
+                    onClick={() => toggleExpand(item.id)}
+                  >
+                    {item.titleZh}
+                  </h3>
+
+                  {/* AI 中文摘要 */}
+                  <div className="mb-3">
+                    <span className="mb-1.5 inline-block rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-bold text-blue-400">
+                      AI 摘要
+                    </span>
+                    <p className={`text-xs leading-relaxed text-zinc-400 ${isExpanded ? "" : "line-clamp-3"}`}>
+                      {item.summaryZh}
+                    </p>
+                    {item.summaryZh.length > 80 && (
+                      <button
+                        onClick={() => toggleExpand(item.id)}
+                        className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-zinc-500 hover:text-zinc-300"
+                      >
+                        {isExpanded ? "收起" : "展开"}
+                        <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      </button>
                     )}
                   </div>
 
-                  {/* 标题 */}
-                  <h3 className="mb-2 line-clamp-2 text-sm font-bold leading-snug text-zinc-100">
-                    {item.title}
-                  </h3>
-
-                  {/* 陈皮提炼标签 + 看点（分区块渲染） */}
-                  <div className="mb-3">
-                    {(() => {
-                      const raw = item.summary || "";
-                      // 兼容新旧格式：尝试按【...】分段
-                      const factMatch = raw.match(/【一手核心事实[^】]*】([\s\S]*?)(?=【陈皮战术洞察|$)/);
-                      const insightMatch = raw.match(/【陈皮战术洞察[^】]*】([\s\S]*?)$/);
-                      const hasSections = factMatch || insightMatch;
-
-                      if (!hasSections) {
-                        // 旧数据：整体展示，开启 whitespace-pre-line 兼容换行
-                        return (
-                          <>
-                            <span className="mb-1.5 inline-block rounded bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400">
-                              【陈皮提炼】
-                            </span>
-                            <p className="line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-zinc-400">
-                              {raw}
-                            </p>
-                          </>
-                        );
-                      }
-
-                      return (
-                        <div className="space-y-2">
-                          {/* 一手核心事实 */}
-                          {factMatch && (
-                            <div>
-                              <span className="mb-1 inline-block rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-bold text-blue-400">
-                                【一手核心事实】
-                              </span>
-                              <p className="line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-zinc-400">
-                                {factMatch[1].trim()}
-                              </p>
-                            </div>
-                          )}
-                          {/* 陈皮战术洞察 — 专属渐变底色 + 左侧加粗 Border */}
-                          {insightMatch && (
-                            <div className="rounded-lg border-l-[3px] border-purple-500/60 bg-gradient-to-br from-purple-500/10 via-zinc-900/40 to-blue-500/5 p-2.5">
-                              <span className="mb-1 inline-block rounded bg-gradient-to-r from-purple-500/20 to-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-300">
-                                【陈皮战术洞察】
-                              </span>
-                              <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-300">
-                                {insightMatch[1].trim()}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* 标签 */}
-                  {item.tags && item.tags.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-1">
-                      {item.tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-[9px] text-zinc-500"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
+                  {/* 商业启示卡片 */}
+                  {item.keyTakeaway && (
+                    <div className="mb-3 rounded-lg border-l-[3px] border-emerald-500/60 bg-gradient-to-br from-emerald-500/10 via-zinc-900/40 to-transparent p-2.5">
+                      <span className="mb-1 inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                        <Lightbulb className="h-2.5 w-2.5" />
+                        商业启示
+                      </span>
+                      <p className="text-xs leading-relaxed text-zinc-300">
+                        {item.keyTakeaway}
+                      </p>
                     </div>
                   )}
 
-                  {/* 底部：来源 + 日期 + 分享通道 + 查看原文 */}
+                  {/* 底部：复制 + 查看原文 */}
                   <div className="flex items-center justify-between border-t border-zinc-800/60 pt-3">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-zinc-500">{item.sourceName}</span>
-                      <span className="text-[10px] text-zinc-600">{item.publishedAt}</span>
-                    </div>
+                    <span className="text-[10px] text-zinc-600 line-clamp-1 max-w-[40%]">
+                      {item.titleEn}
+                    </span>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleCopyInsight(item);
+                          handleCopy(item);
                         }}
-                        title="一键复制（精髓 + 陈皮洞察 + 站点落款）"
+                        title="一键复制（摘要 + 商业启示）"
                         className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-medium transition-all ${
                           copiedId === item.id
                             ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
@@ -365,18 +297,18 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                         ) : (
                           <>
                             <Copy className="h-3 w-3" />
-                            分享/复制
+                            复制
                           </>
                         )}
                       </button>
                       <a
-                        href={/^https?:\/\//.test(item.originalUrl) ? item.originalUrl : `https://${item.originalUrl}`}
+                        href={/^https?:\/\//.test(item.sourceUrl) ? item.sourceUrl : `https://${item.sourceUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-800"
                       >
-                        查看原文
+                        原文
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
@@ -388,7 +320,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
 
       {/* 空状态 */}
       <AnimatePresence>
-        {!loading && sortedItems.length === 0 && (
+        {!loading && displayItems.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -396,13 +328,14 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
             className="py-20 text-center"
           >
             <Radar className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
-            <p className="text-sm text-zinc-500">该分类暂无情报</p>
+            <p className="mb-2 text-sm text-zinc-500">暂无马来西亚商业情报</p>
+            <p className="text-xs text-zinc-600">点击上方「⚡ 实时感知」按钮，自动抓取大马财经媒体并 AI 提炼</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 首页模式：跳转量子页面 */}
-      {typeof showLimit === "number" && !loading && sortedItems.length > 0 && (
+      {/* 首页模式：跳转完整列表 */}
+      {typeof showLimit === "number" && !loading && displayItems.length > 0 && (
         <LoadMoreButton href="/hub" label="进入东南亚实局完整列表" />
       )}
     </section>

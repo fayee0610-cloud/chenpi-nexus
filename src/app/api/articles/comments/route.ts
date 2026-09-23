@@ -1,5 +1,5 @@
 /*
- * 灵感文章评论 API
+ * 深度洞察评论 API
  *
  * GET    /api/articles/comments?article_id=xxx          → 读取某文章已批准的评论
  * GET    /api/articles/comments?article_id=xxx&all=true → Admin 读取全部评论（含待审核）

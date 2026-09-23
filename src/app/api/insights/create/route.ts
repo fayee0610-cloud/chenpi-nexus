@@ -110,7 +110,7 @@ export async function GET() {
   return NextResponse.json({
     endpoint: "/api/insights/create",
     method: "POST",
-    description: "情报站自动化写入 API（供 Coze/n8n 等工具调用）",
+    description: "东南亚实局自动化写入 API（供 Coze/n8n 等工具调用）",
     auth: "Bearer Token (CR_API_SECRET)",
     fields: {
       title: "string (必填) - 资讯标题",

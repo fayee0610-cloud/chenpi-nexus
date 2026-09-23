@@ -27,6 +27,19 @@ import { fetchInsights, fetchInsightLikes, incrementInsightLikes } from "@/lib/d
 import { isInspired, markInspired, unmarkInspired, getInspiredIds } from "@/lib/inspireState";
 import ArticleComments from "@/app/insights/[id]/ArticleComments";
 import LoadMoreButton from "@/components/LoadMoreButton";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
+
+// 将 ContentBlock[] 转换为 Markdown 文本（供 MarkdownRenderer 渲染）
+function blocksToMarkdown(blocks: any[]): string {
+  if (!Array.isArray(blocks)) return "";
+  return blocks.map((b) => {
+    if (b.type === "heading") return "## " + (b.text || "");
+    if (b.type === "blockquote") return "> " + (b.text || "");
+    if (b.type === "code") return "```" + (b.lang || "") + "\n" + (b.text || "") + "\n```";
+    if (b.type === "list" && b.items) return b.items.map((i: string) => "- " + i).join("\n");
+    return b.text || "";
+  }).join("\n\n");
+}
 
 type FilterKey = "all" | "featured" | "article" | "short" | "podcast";
 
@@ -302,10 +315,10 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
         {/* Header */}
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
-            灵感点
+            深度洞察
           </h2>
           <p className="mx-auto max-w-xl text-zinc-400">
-            关于品牌、AI 与创意的深度思考与碎片灵感
+            关于大马 GTM、清真 Halal 认证与品牌策略的硬核思考
           </p>
           <Link
             href="/insights"
@@ -334,7 +347,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
         </div>
 
         {loading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-56 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40" />
             ))}
@@ -348,19 +361,20 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
         <>
         {/* Featured Focus Area */}
         {(filter === "all" || filter === "featured") && heroFeatured && (
-          <div className="mb-10 grid gap-6 lg:grid-cols-3">
+          <div className="mb-10 grid gap-4 md:gap-6 lg:grid-cols-3">
             {/* Hero Featured */}
             <div
               onClick={() => setSelectedInsight(heroFeatured)}
               className="group relative cursor-pointer overflow-hidden rounded-2xl border border-blue-500/30 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-blue-500/50 lg:col-span-2"
             >
               <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-blue-500/20" />
-              <div className="relative h-64 overflow-hidden sm:h-80">
+              <div className="relative aspect-video w-full overflow-hidden">
                 {heroFeatured.image?.trim() ? (
                   <img
                     src={heroFeatured.image}
                     alt={heroFeatured.title}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                   />
                 ) : (
                   <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-blue-950/30 to-zinc-900" />
@@ -395,12 +409,13 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   onClick={() => setSelectedInsight(item)}
                   className="group relative flex-1 cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
                 >
-                  <div className="relative h-32 overflow-hidden">
+                  <div className="relative aspect-video w-full overflow-hidden">
                     {item.image?.trim() ? (
                       <img
                         src={item.image}
                         alt={item.title}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
                       <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
@@ -444,7 +459,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+            className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3"
           >
             {regular.map((item) => (
               <div
@@ -452,12 +467,13 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                 onClick={() => setSelectedInsight(item)}
                 className="group cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 transition-all hover:-translate-y-1 hover:border-zinc-700"
               >
-                <div className="relative h-44 overflow-hidden">
+                <div className="relative aspect-video w-full overflow-hidden">
                   {item.image?.trim() ? (
                     <img
                       src={item.image}
                       alt={item.title}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                     />
                   ) : (
                     <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
@@ -522,7 +538,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
 
         {/* 首页模式：跳转量子页面 */}
         {typeof showLimit === "number" && !loading && (hasMoreToShow || insightsData.length > 0) && (
-          <LoadMoreButton href="/insights" label="进入灵感点完整列表" />
+          <LoadMoreButton href="/insights" label="进入深度洞察完整列表" />
         )}
       </div>
 
@@ -543,7 +559,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
               exit={{ scale: 0.95, opacity: 0, y: 30 }}
               transition={{ type: "spring", bounce: 0.12, duration: 0.5 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative my-8 w-full max-w-3xl overflow-hidden rounded-3xl border border-purple-500/30 bg-zinc-950/95 shadow-[0_0_50px_rgba(168,85,247,0.15)]"
+              className="relative my-8 w-full max-w-2xl overflow-hidden rounded-3xl border border-purple-500/30 bg-zinc-950/95 shadow-[0_0_50px_rgba(168,85,247,0.15)]"
             >
               {/* 顶部阅读工具栏 */}
               <div className="sticky top-0 z-20 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur-xl">
@@ -663,95 +679,21 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   </div>
                 </div>
 
-                {/* 封面图 */}
-                <div className="mb-8 overflow-hidden rounded-xl border border-zinc-800">
-                  {selectedInsight.image?.trim() ? (
+                {/* 封面图（无图时不渲染任何占位方块） */}
+                {selectedInsight.image && selectedInsight.image.trim() !== "" && (
+                  <div className="relative mb-8 aspect-video w-full overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
                     <img
                       src={selectedInsight.image}
                       alt={selectedInsight.title}
-                      className="h-48 w-full object-cover brightness-90 contrast-110 sm:h-64"
+                      className="h-full w-full object-cover"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                     />
-                  ) : (
-                    <div className="h-48 w-full bg-gradient-to-br from-zinc-900 via-purple-950/30 to-zinc-900 sm:h-64" />
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* 正文排版 */}
-                <article className="space-y-5">
-                  {selectedInsight.content.map((block, i) => {
-                    if (block.type === "heading") {
-                      return (
-                        <h2
-                          key={i}
-                          className="pt-2 text-lg font-bold text-zinc-100 sm:text-xl"
-                        >
-                          {block.text}
-                        </h2>
-                      );
-                    }
-                    if (block.type === "paragraph") {
-                      return (
-                        <p
-                          key={i}
-                          className="text-base leading-relaxed text-zinc-300 md:text-lg"
-                        >
-                          {block.text}
-                        </p>
-                      );
-                    }
-                    if (block.type === "blockquote") {
-                      return (
-                        <blockquote
-                          key={i}
-                          className="rounded-r-xl border-l-4 border-purple-500 bg-purple-950/20 p-4 italic text-purple-200"
-                        >
-                          {block.text}
-                        </blockquote>
-                      );
-                    }
-                    if (block.type === "code") {
-                      return (
-                        <div
-                          key={i}
-                          className="relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
-                        >
-                          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-                            <span className="text-xs text-zinc-500">
-                              {block.lang || "code"}
-                            </span>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard?.writeText(block.text || "");
-                              }}
-                              className="flex items-center gap-1 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-                            >
-                              <Copy className="h-3 w-3" />
-                              复制
-                            </button>
-                          </div>
-                          <pre className="overflow-x-auto p-4 text-sm leading-relaxed text-green-400">
-                            <code>{block.text}</code>
-                          </pre>
-                        </div>
-                      );
-                    }
-                    if (block.type === "list") {
-                      return (
-                        <ul key={i} className="space-y-2">
-                          {block.items?.map((item, j) => (
-                            <li
-                              key={j}
-                              className="flex items-start gap-2 text-base leading-relaxed text-zinc-300 md:text-lg"
-                            >
-                              <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-400" />
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      );
-                    }
-                    return null;
-                  })}
+                {/* 正文排版（Markdown 引擎渲染） */}
+                <article>
+                  <MarkdownRenderer content={blocksToMarkdown(selectedInsight.content)} />
                 </article>
 
                 {/* 底部互动区 */}
@@ -806,18 +748,18 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   {/* 引导转化区 */}
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                     <p className="mb-4 text-sm text-zinc-400">
-                      对这个观点有同感？去庇护所交流脑洞，或联系我深入探讨。
+                      对这个观点有同感？去脑洞画布交流，或联系我深入探讨。
                     </p>
                     <div className="flex flex-col gap-3 sm:flex-row">
                       <button
-                        onClick={() => handleScrollTo("sanctuary")}
+                        onClick={() => handleScrollTo("canvas")}
                         className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2.5 text-sm text-purple-300 transition-all hover:bg-purple-500/20"
                       >
-                        去庇护所交流
+                        去脑洞画布交流
                         <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => handleScrollTo("connect")}
+                        onClick={() => handleScrollTo("contact")}
                         className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:from-purple-500 hover:to-blue-500"
                       >
                         联系我深入探讨

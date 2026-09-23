@@ -24,41 +24,45 @@ export default function Hero() {
           transition={{ duration: 0.6 }}
           className="lg:col-span-7 min-w-0 flex flex-col items-start space-y-6"
         >
-          {/* 动态状态 */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/60 px-4 py-1.5 text-sm text-zinc-400">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-            </span>
-            {profile.status}
+          {/* 单个微光 Badge */}
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-500/5 px-3 py-1 text-[11px] font-medium text-purple-300">
+            ⚡ 聚焦马来西亚 GTM · 清真 Halal 准入 · AI 策略杠杆
           </div>
 
           {/* 大标题：两行结构，允许自然折行，紫蓝渐变高亮关键词 */}
           <h1 className="text-2xl font-extrabold leading-[1.15] tracking-tight text-zinc-50 break-words sm:text-4xl lg:text-4xl xl:text-5xl 2xl:text-6xl">
             <span className="block">
-              以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">人</span>为本，
+              以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">大马</span>为核心，
               <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">AI</span> 为杠杆
             </span>
             <span className="block">
               提供真实的<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">东南亚</span>
-              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">营销判断</span>
+              <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">出海判断</span>
             </span>
           </h1>
 
           <p className="text-base text-zinc-400 sm:text-lg lg:text-xl">
-            {profile.subTitle}
+            大马 GTM 策略人 / B2B 品牌出海实践者 / 商业情报洞察
           </p>
 
           <div className="flex flex-col items-start gap-4 sm:flex-row">
             <a
-              href="#portfolio"
+              href="#intelligence"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("intelligence")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:shadow-blue-500/30 hover:brightness-110"
             >
-              浏览作品
+              探索大马实局 ↓
               <ArrowDown className="h-4 w-4" />
             </a>
             <a
-              href="#connect"
+              href="#contact"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/60 px-8 py-3.5 text-sm font-semibold text-zinc-200 transition-all hover:border-zinc-600 hover:bg-zinc-900"
             >
               联系我

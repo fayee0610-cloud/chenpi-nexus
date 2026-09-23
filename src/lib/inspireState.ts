@@ -6,7 +6,7 @@
 // 确保跨页面「已点赞」状态与点赞数同步一致。
 // ============================================================
 
-// 规范 key：以 article_id 数组形式存储已激发灵感文章
+// 规范 key：以 article_id 数组形式存储已激发深度洞察
 const INSPIRED_KEY = "inspired_articles";
 // 历史 key（迁移用，迁移后清空避免双写）
 const LEGACY_KEYS = ["cp_inspired_insights", "cp_liked_insights"];

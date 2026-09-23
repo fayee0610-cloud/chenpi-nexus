@@ -12,6 +12,7 @@ import {
   type ContentBlock,
   type ResourceItem,
   type InsightHubItem,
+  type MalaysiaIntelligence,
 } from "@/data/siteData";
 
 // 生成 TEXT 主键
@@ -161,6 +162,11 @@ function mapProjectRow(row: any): PortfolioProject {
     challenge: row.challenge || "",
     solutions: row.strategy || [],
     demoUrl: row.demo_url || undefined,
+    // 商业交付指标（兼容旧数据：字段缺失时降级为空）
+    clientIndustry: row.client_industry || undefined,
+    malaysiaChannels: row.malaysia_channels || undefined,
+    halalCertificationCycle: row.halal_certification_cycle || undefined,
+    deliverables: row.deliverables || undefined,
   } as PortfolioProject;
 }
 
@@ -223,7 +229,7 @@ function mapInsightRow(row: any): InsightItem {
     id: row.id,
     title: row.title || "",
     excerpt: row.summary || "",
-    image: "",
+    image: row.cover_url || "",
     type,
     category: row.category || "",
     tags,
@@ -339,7 +345,7 @@ export async function deleteProject(id: string | number) {
   if (error) throw error;
 }
 
-// ---------- 删除：灵感文章 ----------
+// ---------- 删除：深度洞察 ----------
 export async function deleteInsight(id: string | number) {
   if (!supabase) throw new Error("Supabase not configured");
   const { error } = await supabase.from("insights").delete().eq("id", String(id));
@@ -374,7 +380,7 @@ export async function fetchInsightById(id: string): Promise<InsightItem | null> 
       id: row.id,
       title: row.title || "",
       excerpt: row.summary || "",
-      image: "",
+      image: row.cover_url || "",
       type,
       category: row.category || "",
       readTime: row.read_time || undefined,
@@ -453,6 +459,11 @@ export async function createProject(project: Partial<PortfolioProject>) {
         challenge: project.challenge,
         strategy: project.solutions || [], // DB 列名为 strategy
         image_url: project.image,
+        // 商业交付指标
+        client_industry: project.clientIndustry,
+        malaysia_channels: project.malaysiaChannels,
+        halal_certification_cycle: project.halalCertificationCycle,
+        deliverables: project.deliverables,
       },
     ])
     .select();
@@ -473,6 +484,11 @@ export async function updateProject(id: string, project: Partial<PortfolioProjec
   if (project.challenge !== undefined) updateData.challenge = project.challenge;
   if (project.metrics !== undefined) updateData.metrics = project.metrics;
   if (project.solutions !== undefined) updateData.strategy = project.solutions;
+  // 商业交付指标
+  if (project.clientIndustry !== undefined) updateData.client_industry = project.clientIndustry;
+  if (project.malaysiaChannels !== undefined) updateData.malaysia_channels = project.malaysiaChannels;
+  if (project.halalCertificationCycle !== undefined) updateData.halal_certification_cycle = project.halalCertificationCycle;
+  if (project.deliverables !== undefined) updateData.deliverables = project.deliverables;
 
   const { data, error } = await supabase
     .from("projects")
@@ -517,7 +533,7 @@ export async function uploadPortfolioCover(file: File): Promise<{ url: string } 
   return { url: urlData.publicUrl };
 }
 
-// ---------- 写入：创建灵感文章 ----------
+// ---------- 写入：创建深度洞察 ----------
 export async function createInsight(insight: Partial<InsightItem>) {
   if (!supabase) throw new Error("Supabase not configured");
   const { data, error } = await supabase
@@ -536,6 +552,7 @@ export async function createInsight(insight: Partial<InsightItem>) {
           ? serializeContent(insight.content as ContentBlock[])
           : "",
         audio_url: insight.listenTime ? insight.listenTime : null,
+        cover_url: insight.image || null,
         is_published: true,
       },
     ])
@@ -544,7 +561,7 @@ export async function createInsight(insight: Partial<InsightItem>) {
   return data;
 }
 
-// ---------- 更新灵感文章 ----------
+// ---------- 更新深度洞察 ----------
 export async function updateInsight(
   id: string | number,
   patch: Partial<{
@@ -557,6 +574,7 @@ export async function updateInsight(
     author: string;
     content: ContentBlock[];
     listenTime: string;
+    coverUrl: string;
   }>
 ) {
   if (!supabase) throw new Error("Supabase not configured");
@@ -570,6 +588,7 @@ export async function updateInsight(
   if (patch.author !== undefined) payload.author = patch.author;
   if (patch.content !== undefined) payload.content = serializeContent(patch.content);
   if (patch.listenTime !== undefined) payload.audio_url = patch.listenTime;
+  if (patch.coverUrl !== undefined) payload.cover_url = patch.coverUrl || null;
   const { error } = await supabase
     .from("insights")
     .update(payload)
@@ -630,6 +649,7 @@ export async function fetchResources(): Promise<ResourceItem[]> {
         outline: row.outline ? (typeof row.outline === "string" ? JSON.parse(row.outline) : row.outline) : [],
         fileUrl: row.file_url || "",
         fileSize: row.file_size || "",
+        coverUrl: row.cover_url || "",
         category: row.category || "指南",
         requireLogin: row.require_login ?? false,
         isPublished: true,
@@ -654,6 +674,7 @@ export async function createResource(resource: Partial<ResourceItem>) {
         outline: resource.outline || [],
         file_url: resource.fileUrl || null,
         file_size: resource.fileSize || null,
+        cover_url: resource.coverUrl || null,
         category: resource.category || "指南",
         require_login: resource.requireLogin ?? false,
         is_published: resource.isPublished ?? true,
@@ -688,6 +709,20 @@ export async function incrementResourceDownload(id: string) {
       logNetworkFallback("incrementResourceDownload(fallback)", err2);
     }
   }
+}
+
+// ---------- Supabase Storage 封面图上传（insights & resources 共用 bucket） ----------
+export async function uploadCoverImage(file: File): Promise<{ url: string } | null> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const ext = file.name.split(".").pop() || "jpg";
+  const fileName = `covers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("portfolio-covers").upload(fileName, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage.from("portfolio-covers").getPublicUrl(fileName);
+  return { url: urlData.publicUrl };
 }
 
 // ---------- Supabase Storage 文件上传 ----------
@@ -829,7 +864,7 @@ export async function deleteLead(id: string) {
   if (error) throw error;
 }
 
-// ---------- Insights Hub (情报站) CRUD ----------
+// ---------- Insights Hub (东南亚实局) CRUD ----------
 export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
   if (!supabase) return [];
   try {
@@ -899,6 +934,79 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
     logNetworkFallback("fetchInsightsHub", err);
     return [];
   }
+}
+
+// ---------- Malaysia Intelligence（马来西亚商业情报）CRUD ----------
+// 表：malaysia_intelligence
+// 字段：id, title_en, title_zh, source_name, source_url, summary_zh, key_takeaway, published_at, created_at, is_published, is_featured
+
+/**
+ * 拉取最新 N 条马来西亚商业情报（按 published_at DESC）
+ * 兼容表不存在/列缺失：返回空数组，前端展示空状态
+ */
+export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaIntelligence[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("malaysia_intelligence")
+      .select("*")
+      .eq("is_published", true)
+      .order("published_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      // 表不存在或列缺失时静默降级
+      console.warn("[dataApi] fetchMalaysiaIntelligence 查询失败（表可能尚未创建）:", error.message);
+      return [];
+    }
+    if (!data || data.length === 0) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      titleEn: row.title_en || "",
+      titleZh: row.title_zh || row.title_en || "",
+      sourceName: row.source_name || "",
+      sourceUrl: row.source_url || "",
+      summaryZh: row.summary_zh || "",
+      keyTakeaway: row.key_takeaway || "",
+      publishedAt: row.published_at || row.created_at || "",
+      createdAt: row.created_at || "",
+      isPublished: row.is_published !== false,
+      isFeatured: row.is_featured ?? false,
+    })) as MalaysiaIntelligence[];
+  } catch (err) {
+    logNetworkFallback("fetchMalaysiaIntelligence", err);
+    return [];
+  }
+}
+
+/**
+ * 创建马来西亚商业情报记录
+ * 列缺失时自动降级（逐列移除重试）
+ */
+export async function createMalaysiaIntelligence(item: Partial<MalaysiaIntelligence>) {
+  if (!supabase) throw new Error("Supabase not configured");
+
+  const payload: Record<string, any> = {
+    id: item.id || genId(),
+    title_en: item.titleEn || "",
+    title_zh: item.titleZh || "",
+    source_name: item.sourceName || "",
+    source_url: item.sourceUrl || "",
+    summary_zh: item.summaryZh || "",
+    key_takeaway: item.keyTakeaway || "",
+    published_at: item.publishedAt || new Date().toISOString(),
+    is_published: item.isPublished ?? true,
+    is_featured: item.isFeatured ?? false,
+  };
+
+  const { data, error } = await supabase
+    .from("malaysia_intelligence")
+    .insert([payload])
+    .select();
+
+  if (error) throw error;
+  return data;
 }
 
 const DATAAPI_MISSING_COLS_CACHE = new Set<string>();
@@ -1041,7 +1149,7 @@ export async function toggleInsightHubFeature(id: string, isFeatured: boolean) {
   if (error) throw error;
 }
 
-// ---------- 编辑情报站内容 ----------
+// ---------- 编辑东南亚实局内容 ----------
 export async function updateInsightHub(id: string, updates: Partial<InsightHubItem>) {
   if (!supabase) throw new Error("Supabase not configured");
   const updateData: Record<string, any> = {};
@@ -1076,6 +1184,7 @@ export async function updateResource(id: string, updates: Partial<ResourceItem>)
   if (updates.isPublished !== undefined) updateData.is_published = updates.isPublished;
   if (updates.fileUrl !== undefined) updateData.file_url = updates.fileUrl;
   if (updates.fileSize !== undefined) updateData.file_size = updates.fileSize;
+  if (updates.coverUrl !== undefined) updateData.cover_url = updates.coverUrl || null;
 
   const { data, error } = await supabase
     .from("resources")

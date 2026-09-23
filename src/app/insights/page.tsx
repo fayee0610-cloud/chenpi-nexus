@@ -94,10 +94,10 @@ export default function InsightsListPage() {
         {/* 页面标题 */}
         <div className="mt-8 mb-12 text-center">
           <h1 className="mb-4 text-4xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
-            灵感点
+            深度洞察
           </h1>
           <p className="mx-auto max-w-xl text-zinc-400">
-            关于品牌、AI 与创意的深度思考与碎片灵感
+            关于东南亚出海、AI 营销杠杆与品牌策略的深度思考
           </p>
         </div>
 

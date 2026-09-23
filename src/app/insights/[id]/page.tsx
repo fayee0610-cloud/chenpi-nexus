@@ -17,6 +17,7 @@ import InspireButton from "./InspireButton";
 import ArticleComments from "./ArticleComments";
 import type { ContentBlock } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export async function generateMetadata({
     return { title: "文章未找到" };
   }
   const title = insight.title;
-  const description = insight.excerpt || "陈皮同学灵感点深度思考";
+  const description = insight.excerpt || "陈皮同学深度洞察深度思考";
   const tagsFlat = Array.isArray(insight.tags) ? insight.tags : [];
   return {
     title,
@@ -40,7 +41,7 @@ export async function generateMetadata({
     keywords: tagsFlat.length ? tagsFlat.join(",") : undefined,
     openGraph: {
       type: "article",
-      title: `${title} | 陈皮同学灵感点`,
+      title: `${title} | 陈皮同学深度洞察`,
       description,
       tags: tagsFlat.length ? tagsFlat : undefined,
       images: insight.image ? [{ url: insight.image, width: 1200, height: 630 }] : undefined,
@@ -49,7 +50,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} | 陈皮同学灵感点`,
+      title: `${title} | 陈皮同学深度洞察`,
       description,
       images: insight.image ? [insight.image] : undefined,
     },
@@ -161,6 +162,17 @@ function extractFAQ(contentBlocks: ContentBlock[]): { question: string; answer: 
   return faqs;
 }
 
+// 将 ContentBlock[] 转换回 Markdown 文本（供 MarkdownRenderer 渲染）
+function blocksToMarkdown(blocks: ContentBlock[]): string {
+  return blocks.map((b) => {
+    if (b.type === "heading") return "## " + (b.text || "");
+    if (b.type === "blockquote") return "> " + (b.text || "");
+    if (b.type === "code") return "```" + (b.lang || "") + "\n" + (b.text || "") + "\n```";
+    if (b.type === "list" && b.items) return b.items.map((i) => "- " + i).join("\n");
+    return b.text || "";
+  }).join("\n\n");
+}
+
 export default async function InsightDetailPage({
   params,
 }: {
@@ -268,7 +280,7 @@ export default async function InsightDetailPage({
           className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          返回灵感点
+          返回深度洞察
         </Link>
 
         {/* 文章 Header */}
@@ -350,6 +362,18 @@ export default async function InsightDetailPage({
           )}
         </header>
 
+        {/* 高清大尺寸封面图（无图时不渲染任何占位） */}
+        {insight.image && insight.image.trim() !== "" && (
+          <div className="relative mb-8 aspect-video w-full overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+            <img
+              src={insight.image}
+              alt={insight.title}
+              className="h-full w-full object-cover"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          </div>
+        )}
+
         {/* 摘要 */}
         {insight.excerpt && (
           <p className="mb-8 text-lg leading-relaxed text-zinc-400">
@@ -357,11 +381,31 @@ export default async function InsightDetailPage({
           </p>
         )}
 
-        {/* 正文排版（首段 blockquote 高亮为 TL;DR） */}
-        <article className="space-y-5">
-          {insight.content.map((block, i) =>
-            renderBlock(block, i, { isFirstBlockquote: firstBlockquoteIndex === i })
+        {/* 正文排版（Markdown 引擎渲染） */}
+        <article className="space-y-2">
+          {/* 首段 blockquote 高亮为 TL;DR */}
+          {firstBlockquoteIndex !== null && insight.content[firstBlockquoteIndex] && (
+            <section
+              aria-label="TL;DR 核心战术摘要"
+              className="relative mb-8 overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-zinc-900/40 to-blue-500/10 p-5"
+            >
+              <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-zinc-950/60 px-2 py-0.5 text-[11px] font-semibold text-purple-200">
+                <Sparkles className="h-3 w-3" />
+                TL;DR · 核心战术摘要
+              </div>
+              <blockquote className="mt-5 pr-1 text-base font-medium leading-relaxed text-zinc-100 md:text-lg md:leading-loose">
+                {insight.content[firstBlockquoteIndex].text}
+              </blockquote>
+            </section>
           )}
+          {/* 其余正文用 MarkdownRenderer 渲染 */}
+          <MarkdownRenderer
+            content={blocksToMarkdown(
+              firstBlockquoteIndex !== null
+                ? insight.content.filter((_, i) => i !== firstBlockquoteIndex)
+                : insight.content
+            )}
+          />
         </article>
 
         {/* 底部分享区 */}

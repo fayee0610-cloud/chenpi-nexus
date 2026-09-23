@@ -6,7 +6,7 @@ import Sanctuary from "@/components/Sanctuary";
 export const dynamic = "force-dynamic";
 
 export default function SanctuaryPage() {
-  // 二级页始终展示完整庇护所（不受首页 site_config 显隐开关影响）
+  // 二级页始终展示完整脑洞画布（不受首页 site_config 显隐开关影响）
   return (
     <>
       <Header />

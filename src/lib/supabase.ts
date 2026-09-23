@@ -25,7 +25,7 @@
  * -- 若表已存在，补加 is_published 列：
  * -- ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  *
- * -- 2. 灵感文章表
+ * -- 2. 深度洞察表
  * CREATE TABLE IF NOT EXISTS public.insights (
  *   id TEXT PRIMARY KEY,
  *   title TEXT NOT NULL,
@@ -44,7 +44,7 @@
  * -- ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS tags TEXT;
  * -- ALTER TABLE public.insights ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;
  *
- * -- 8. 灵感文章评论表（读者战术讨论区，带防垃圾策略）
+ * -- 8. 深度洞察评论表（读者战术讨论区，带防垃圾策略）
  * -- 注意：id 使用 UUID 类型，由 Supabase 自动生成（gen_random_uuid()），前端不传 id
  * -- 平铺引用流：彻底移除 parent_id 楼中楼外键，改用 reply_to_nickname 纯文本引用
  * CREATE TABLE IF NOT EXISTS public.article_comments (
@@ -131,7 +131,7 @@
  * CREATE POLICY "anyone can delete leads" ON public.leads
  *   FOR DELETE USING (true);
  *
- * -- 7. 情报站 (Information Hub) 表
+ * -- 7. 东南亚实局 (Information Hub) 表
  * CREATE TABLE IF NOT EXISTS public.insights_hub (
  *   id TEXT PRIMARY KEY,
  *   title TEXT NOT NULL,
@@ -152,7 +152,7 @@
  * ALTER TABLE public.insights_hub ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "insights_hub are readable by everyone" ON public.insights_hub
  *   FOR SELECT USING (true);
- * -- 允许 Admin 后台（anon key）写入/修改/删除情报站内容
+ * -- 允许 Admin 后台（anon key）写入/修改/删除东南亚实局内容
  * CREATE POLICY "anyone can insert insights_hub" ON public.insights_hub
  *   FOR INSERT WITH CHECK (true);
  * CREATE POLICY "anyone can update insights_hub" ON public.insights_hub
@@ -160,7 +160,7 @@
  * CREATE POLICY "anyone can delete insights_hub" ON public.insights_hub
  *   FOR DELETE USING (true);
  *
- * -- 3. 庇护所互动帖子表
+ * -- 3. 脑洞画布帖子表
  * CREATE TABLE IF NOT EXISTS public.sanctuary_posts (
  *   id TEXT PRIMARY KEY,
  *   author TEXT NOT NULL,
@@ -197,7 +197,7 @@
  * CREATE POLICY "anyone can delete projects" ON public.projects
  *   FOR DELETE USING (true);
  *
- * -- 允许 Admin 后台（anon key）写入/修改/删除灵感文章
+ * -- 允许 Admin 后台（anon key）写入/修改/删除深度洞察
  * CREATE POLICY "anyone can insert insights" ON public.insights
  *   FOR INSERT WITH CHECK (true);
  * CREATE POLICY "anyone can update insights" ON public.insights

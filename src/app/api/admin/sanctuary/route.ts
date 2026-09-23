@@ -1,5 +1,5 @@
 // ============================================================
-// /api/admin/sanctuary — 后台庇护所互动管理（服务端代理）
+// /api/admin/sanctuary — 后台脑洞画布管理（服务端代理）
 //
 // GET    /api/admin/sanctuary              → 读取全量 sanctuary_posts（含未发布）
 // DELETE /api/admin/sanctuary?id=xxx       → Admin 强制删除（需 Admin Session）

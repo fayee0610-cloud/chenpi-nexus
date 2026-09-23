@@ -61,9 +61,10 @@ import {
   toggleInsightHubPublish,
   toggleInsightHubFeature,
   uploadPortfolioCover,
+  uploadCoverImage,
 } from "@/lib/dataApi";
 import type { SiteConfig, Lead } from "@/lib/dataApi";
-import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory } from "@/data/siteData";
+import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory, ContentBlock } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL as HARDCORE_TAGS_POOL_CONST, FLAT_HARDCORE_TAGS as FLAT_HARDCORE_TAGS_CONST } from "@/data/siteData";
 
 type AdminTab = "portfolio" | "insights" | "comments" | "sanctuary" | "resources" | "leads" | "hub" | "config";
@@ -159,13 +160,13 @@ export default function AdminPage() {
         {/* Tab 切换 */}
         <div className="mx-auto flex max-w-7xl items-center gap-1 px-6 pb-3">
           {[
-            { key: "portfolio" as const, label: "作品案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
-            { key: "insights" as const, label: "灵感文章", icon: <Sparkles className="h-3.5 w-3.5" /> },
+            { key: "portfolio" as const, label: "实战案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
+            { key: "insights" as const, label: "深度洞察", icon: <Sparkles className="h-3.5 w-3.5" /> },
             { key: "comments" as const, label: "文章评论", icon: <MessageCircle className="h-3.5 w-3.5" /> },
-            { key: "sanctuary" as const, label: "庇护所互动", icon: <MessageCircle className="h-3.5 w-3.5" /> },
-            { key: "resources" as const, label: "资源包", icon: <Package className="h-3.5 w-3.5" /> },
+            { key: "sanctuary" as const, label: "脑洞画布", icon: <MessageCircle className="h-3.5 w-3.5" /> },
+            { key: "resources" as const, label: "策略工具包", icon: <Package className="h-3.5 w-3.5" /> },
             { key: "leads" as const, label: "线索", icon: <Mail className="h-3.5 w-3.5" /> },
-            { key: "hub" as const, label: "情报站", icon: <Radar className="h-3.5 w-3.5" /> },
+            { key: "hub" as const, label: "东南亚实局", icon: <Radar className="h-3.5 w-3.5" /> },
             { key: "config" as const, label: "站点配置", icon: <Settings className="h-3.5 w-3.5" /> },
           ].map((tab) => (
             <button
@@ -1068,7 +1069,7 @@ function PortfolioEditor() {
   );
 }
 
-// ========== Tab 2: 灵感文章编辑器 ==========
+// ========== Tab 2: 深度洞察编辑器 ==========
 // 东八区当前日期 YYYY.MM.DD（如 2026.08.04）
 function getUTC8DateStr(): string {
   const now = new Date();
@@ -1108,12 +1109,14 @@ function InsightsEditor() {
     category: "✦ 深度长文",
     readTime: "",
     audioUrl: "",
+    coverUrl: "",
     date: getUTC8DateStr(), // 默认东八区当前日期
     author: "陈皮",         // 默认锁定作者
     summary: "",
     contentText: "",
     tags: [] as string[],
   });
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [insightList, setInsightList] = useState<AdminInsight[]>([]);
@@ -1122,11 +1125,35 @@ function InsightsEditor() {
 
   // AI 一键润色状态
   const [aiFormatting, setAiFormatting] = useState(false);
+  // AI GEO 摘要生成状态
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   // 标签编辑（单篇文章）
   const [editingInsightId, setEditingInsightId] = useState<string | number | null>(null);
   const [editingTags, setEditingTags] = useState<string[]>([]);
   const [tagSavingId, setTagSavingId] = useState<string | number | null>(null);
+
+  // ===== 完整编辑 Modal 状态 =====
+  const [editingFullId, setEditingFullId] = useState<string | number | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    category: "",
+    readTime: "",
+    audioUrl: "",
+    date: "",
+    author: "陈皮",
+    summary: "",
+    contentText: "",
+    coverUrl: "",
+    tags: [] as string[],
+  });
+  // ===== Toast 浮动提示 =====
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const showToast = (type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const toggleTagInForm = (tag: string) => {
     setForm((prev) => {
@@ -1160,6 +1187,111 @@ function InsightsEditor() {
       setStatus({ type: "error", msg: "保存标签失败：" + (err?.message || err) });
     } finally {
       setTagSavingId(null);
+    }
+  };
+
+  // ===== 完整编辑：ContentBlock[] → Markdown 文本 =====
+  const contentBlocksToMarkdown = (blocks: ContentBlock[] | undefined): string => {
+    if (!Array.isArray(blocks) || blocks.length === 0) return "";
+    return blocks.map((b) => {
+      if (b.type === "heading") return "## " + (b.text || "");
+      if (b.type === "blockquote") return "> " + (b.text || "");
+      if (b.type === "code") return "```" + (b.lang || "") + "\n" + (b.text || "") + "\n```";
+      if (b.type === "list") return (b.items || []).map((i) => "- " + i).join("\n");
+      return b.text || "";
+    }).join("\n\n");
+  };
+
+  // ===== 打开完整编辑 Modal =====
+  const openFullEditor = (item: AdminInsight) => {
+    setEditingFullId(item.id);
+    setEditForm({
+      title: item.title || "",
+      category: item.category || "",
+      readTime: item.readTime || "",
+      audioUrl: item.listenTime || "",
+      date: item.date || "",
+      author: item.author || "陈皮",
+      summary: item.excerpt || "",
+      contentText: contentBlocksToMarkdown(item.content),
+      coverUrl: item.image || "",
+      tags: Array.isArray(item.tags) ? [...item.tags] : [],
+    });
+  };
+
+  // ===== 编辑表单标签切换 =====
+  const toggleTagInEditForm = (tag: string) => {
+    setEditForm((prev) => {
+      const exists = prev.tags.includes(tag);
+      return { ...prev, tags: exists ? prev.tags.filter((t) => t !== tag) : [...prev.tags, tag] };
+    });
+  };
+
+  // ===== 编辑表单字段更新 =====
+  const updateEditField = (field: string, value: any) => {
+    setEditForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === "contentText") {
+        next.readTime = calcReadTime(value);
+      }
+      return next;
+    });
+  };
+
+  // ===== 保存编辑 =====
+  const handleSaveEdit = async () => {
+    if (editingFullId == null) return;
+    if (!editForm.title.trim()) {
+      showToast("error", "请填写文章标题");
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const content = editForm.contentText
+        .split("\n\n")
+        .filter(Boolean)
+        .map((para) => {
+          if (para.startsWith("> ")) {
+            return { type: "blockquote" as const, text: para.slice(2) };
+          }
+          if (para.startsWith("## ")) {
+            return { type: "heading" as const, text: para.slice(3) };
+          }
+          if (para.startsWith("```")) {
+            const lines = para.split("\n");
+            const lang = lines[0].slice(3).trim();
+            const text = lines.slice(1, lines.length - 1).join("\n");
+            return { type: "code" as const, lang, text };
+          }
+          if (para.startsWith("- ")) {
+            return {
+              type: "list" as const,
+              items: para.split("\n").map((l) => l.replace(/^- /, "")),
+            };
+          }
+          return { type: "paragraph" as const, text: para };
+        });
+
+      await updateInsight(editingFullId, {
+        title: editForm.title,
+        category: editForm.category,
+        tags: editForm.tags,
+        excerpt: editForm.summary,
+        content,
+        readTime: editForm.readTime,
+        date: editForm.date,
+        author: editForm.author,
+        listenTime: editForm.audioUrl,
+        coverUrl: editForm.coverUrl,
+      });
+
+      setEditingFullId(null);
+      showToast("success", "✅ 文章更新成功，列表已刷新");
+      loadInsights();
+    } catch (err: any) {
+      showToast("error", "更新失败：" + (err?.message || err));
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -1200,12 +1332,12 @@ function InsightsEditor() {
   };
 
   const handleDeleteInsight = async (id: string | number) => {
-    if (!window.confirm("确定要彻底删除此项灵感文章吗？此操作不可撤销。")) return;
+    if (!window.confirm("确定要彻底删除此项深度洞察吗？此操作不可撤销。")) return;
     setDeletingId(id);
     try {
       await deleteInsight(id);
       setInsightList((prev) => prev.filter((i) => i.id !== id));
-      setStatus({ type: "success", msg: "灵感文章已删除" });
+      setStatus({ type: "success", msg: "深度洞察已删除" });
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message || "删除失败" });
     } finally {
@@ -1266,6 +1398,54 @@ function InsightsEditor() {
     }
   }, [form.contentText, form.title, form.tags]);
 
+  // 封面图本地上传（新建表单）
+  const handleCoverUpload = async (file: File) => {
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const result = await uploadCoverImage(file);
+      if (result?.url) {
+        setForm((prev) => ({ ...prev, coverUrl: result.url }));
+        setStatus({ type: "success", msg: "封面图上传成功" });
+      }
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "封面图上传失败" });
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  // ===== AI 一键提炼 GEO 摘要 =====
+  const handleGenerateSummary = useCallback(async () => {
+    if (!form.contentText.trim()) {
+      setStatus({ type: "error", msg: "请先填写正文内容，再提炼摘要" });
+      return;
+    }
+    setGeneratingSummary(true);
+    setStatus(null);
+    try {
+      const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+      const res = await fetch("/api/admin/generate-summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
+        },
+        body: JSON.stringify({ title: form.title, content: form.contentText }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "AI 摘要生成失败");
+      }
+      setForm((prev) => ({ ...prev, summary: json.summary || prev.summary }));
+      setStatus({ type: "success", msg: "✨ GEO 摘要已自动填充" });
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err?.message || "AI 摘要生成失败，请稍后再试" });
+    } finally {
+      setGeneratingSummary(false);
+    }
+  }, [form.contentText, form.title]);
+
   const handleSubmit = async () => {
     if (!form.title.trim()) {
       setStatus({ type: "error", msg: "请填写文章标题" });
@@ -1309,12 +1489,13 @@ function InsightsEditor() {
         author: form.author,
         excerpt: form.summary,
         content,
+        image: form.coverUrl || undefined,
       };
       await createInsight(insight);
-      setStatus({ type: "success", msg: "灵感文章发布成功！" });
+      setStatus({ type: "success", msg: "深度洞察发布成功！" });
       setForm({
         title: "", category: "✦ 深度长文",
-        readTime: "", audioUrl: "",
+        readTime: "", audioUrl: "", coverUrl: "",
         date: getUTC8DateStr(), author: "陈皮", summary: "", contentText: "",
         tags: [],
       });
@@ -1329,7 +1510,7 @@ function InsightsEditor() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-zinc-50">发布灵感文章</h2>
+        <h2 className="text-xl font-bold text-zinc-50">发布深度洞察</h2>
         <p className="mt-1 text-sm text-zinc-500">新增一篇深度思考内容，支持简易 Markdown 语法（标题 / 引用 / 列表 / 代码块）与全套硬核结构化标签</p>
       </div>
 
@@ -1360,6 +1541,35 @@ function InsightsEditor() {
           </FormField>
           <FormField label="音频 URL（播客用）">
             <input value={form.audioUrl} onChange={(e) => updateField("audioUrl", e.target.value)} placeholder="https://..." className="input-insight" />
+          </FormField>
+        </div>
+
+        {/* 封面图 URL + 本地上传 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="封面图 URL">
+            <input value={form.coverUrl} onChange={(e) => updateField("coverUrl", e.target.value)} placeholder="https://... (封面图链接)" className="input-insight" />
+          </FormField>
+          <FormField label="封面图本地上传">
+            <div className="flex items-center gap-3">
+              <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-xs font-medium text-zinc-300 transition-all hover:border-purple-500/40 hover:text-purple-300 ${uploadingCover ? "pointer-events-none opacity-60" : ""}`}>
+                {uploadingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                {uploadingCover ? "上传中..." : "选择图片"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleCoverUpload(f);
+                  }}
+                />
+              </label>
+              {form.coverUrl && (
+                <div className="relative h-10 w-16 overflow-hidden rounded-md border border-zinc-800">
+                  <img src={form.coverUrl} alt="cover" className="h-full w-full object-cover" />
+                </div>
+              )}
+            </div>
           </FormField>
         </div>
 
@@ -1406,6 +1616,30 @@ function InsightsEditor() {
 
         {/* 摘要 */}
         <FormField label="摘要">
+          {/* AI 一键提炼 GEO 摘要按钮 */}
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleGenerateSummary}
+              disabled={generatingSummary}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingSummary ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  AI 提炼中...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" />
+                  🤖 AI 一键提炼 GEO 摘要
+                </>
+              )}
+            </button>
+            <span className="text-[11px] text-zinc-500">
+              基于正文自动生成 100-150 字 GEO 摘要（JSON-LD description）
+            </span>
+          </div>
           <textarea
             value={form.summary}
             onChange={(e) => updateField("summary", e.target.value)}
@@ -1470,7 +1704,7 @@ function InsightsEditor() {
           {submitting ? (
             <><Loader2 className="h-4 w-4 animate-spin" /> 发布中...</>
           ) : (
-            <><Send className="h-4 w-4" /> 发布灵感文章</>
+            <><Send className="h-4 w-4" /> 发布深度洞察</>
           )}
         </button>
       </div>
@@ -1545,6 +1779,13 @@ function InsightsEditor() {
                 </div>
                 {/* 操作按钮组 */}
                 <div className="flex flex-shrink-0 items-center gap-2 pt-1">
+                  <button
+                    onClick={() => openFullEditor(i)}
+                    title="编辑文章"
+                    className="rounded-lg border border-zinc-800 p-2 text-zinc-500 transition-all hover:border-blue-500/50 hover:bg-blue-500/10 hover:text-blue-400"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </button>
                   <button
                     onClick={() => openTagsEditor(i)}
                     title="编辑标签"
@@ -1658,6 +1899,202 @@ function InsightsEditor() {
                 </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===== 完整编辑文章 Modal ===== */}
+      <AnimatePresence>
+        {editingFullId != null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            onClick={() => setEditingFullId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="mx-4 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            >
+              {/* Modal Header */}
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-base font-bold text-zinc-100">
+                    <Edit3 className="h-4 w-4 text-blue-400" />
+                    编辑文章
+                  </h3>
+                  <p className="mt-1 text-xs text-zinc-500">修改文章内容后点击保存，列表将自动刷新</p>
+                </div>
+                <button
+                  onClick={() => setEditingFullId(null)}
+                  className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Form Fields */}
+              <div className="space-y-4">
+                {/* 基础信息 */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="文章标题 *">
+                    <input
+                      value={editForm.title}
+                      onChange={(e) => updateEditField("title", e.target.value)}
+                      placeholder="文章标题"
+                      className="input-insight"
+                    />
+                  </FormField>
+                  <FormField label="分类 *">
+                    <input
+                      value={editForm.category}
+                      onChange={(e) => updateEditField("category", e.target.value)}
+                      placeholder="如：深度长文 / 短观点 / 音频思考"
+                      className="input-insight"
+                    />
+                  </FormField>
+                  <FormField label="阅读时长">
+                    <input
+                      value={editForm.readTime}
+                      onChange={(e) => updateEditField("readTime", e.target.value)}
+                      placeholder="如：5 min"
+                      className="input-insight"
+                    />
+                  </FormField>
+                  <FormField label="封面图 URL">
+                    <input
+                      value={editForm.coverUrl}
+                      onChange={(e) => updateEditField("coverUrl", e.target.value)}
+                      placeholder="https://... (封面图链接)"
+                      className="input-insight"
+                    />
+                  </FormField>
+                  <FormField label="发布日期">
+                    <input
+                      value={editForm.date}
+                      onChange={(e) => updateEditField("date", e.target.value)}
+                      placeholder="如：2024.07.15"
+                      className="input-insight"
+                    />
+                  </FormField>
+                  <FormField label="作者">
+                    <input
+                      value={editForm.author}
+                      onChange={(e) => updateEditField("author", e.target.value)}
+                      placeholder="陈皮"
+                      className="input-insight"
+                    />
+                  </FormField>
+                </div>
+
+                {/* 硬核结构化标签 */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-zinc-100">硬核结构化标签（多选）</h4>
+                      <p className="mt-0.5 text-xs text-zinc-500">覆盖出海、硬科技、品牌心智、前沿战术</p>
+                    </div>
+                    <span className="text-[11px] text-zinc-500">已选 {editForm.tags.length}</span>
+                  </div>
+                  <div className="max-h-40 space-y-3 overflow-y-auto pr-1">
+                    {HARDCORE_TAGS_POOL_CONST.map((group) => (
+                      <div key={group.group}>
+                        <div className="mb-1.5 flex items-center gap-1.5">
+                          <span className="text-sm">{group.groupIcon}</span>
+                          <span className="text-[11px] font-medium text-zinc-400">{group.group}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.tags.map((tag) => {
+                            const selected = editForm.tags.includes(tag);
+                            return (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => toggleTagInEditForm(tag)}
+                                className={`rounded-md border px-2.5 py-1 text-[11px] transition-all ${
+                                  selected
+                                    ? "border-purple-500/60 bg-purple-500/15 text-purple-200"
+                                    : "border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                                }`}
+                              >
+                                {selected && <span className="mr-1">✓</span>}
+                                {tag}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 摘要 */}
+                <FormField label="摘要">
+                  <textarea
+                    value={editForm.summary}
+                    onChange={(e) => updateEditField("summary", e.target.value)}
+                    rows={2}
+                    placeholder="一句话概括文章核心观点"
+                    className="input-insight resize-none"
+                  />
+                </FormField>
+
+                {/* 正文 Markdown */}
+                <FormField label="正文内容（简易 Markdown）">
+                  <textarea
+                    value={editForm.contentText}
+                    onChange={(e) => updateEditField("contentText", e.target.value)}
+                    rows={10}
+                    placeholder="支持语法：## 标题 / > 引用 / - 列表 / 代码块"
+                    className="input-insight resize-y font-mono text-xs leading-relaxed"
+                  />
+                </FormField>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-5 flex items-center justify-end gap-2 border-t border-zinc-800 pt-4">
+                <button
+                  onClick={() => setEditingFullId(null)}
+                  className="rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={editSubmitting}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-5 py-2 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                >
+                  {editSubmitting ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> 保存中...</>
+                  ) : (
+                    <><Save className="h-4 w-4" /> 保存更新</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===== 浮动 Toast 提示 ===== */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className={`fixed bottom-6 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium shadow-2xl backdrop-blur-md ${
+              toast.type === "success"
+                ? "border border-green-500/30 bg-green-500/15 text-green-300"
+                : "border border-red-500/30 bg-red-500/15 text-red-300"
+            }`}
+          >
+            {toast.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {toast.msg}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1786,7 +2223,7 @@ function CommentManagement() {
           <MessageCircle className="h-5 w-5 text-purple-400" />
           <div>
             <h2 className="text-xl font-bold text-zinc-50">评论管理</h2>
-            <p className="mt-0.5 text-sm text-zinc-500">审核、隐藏或删除全站灵感文章评论（共 {comments.length} 条）</p>
+            <p className="mt-0.5 text-sm text-zinc-500">审核、隐藏或删除全站深度洞察评论（共 {comments.length} 条）</p>
           </div>
         </div>
         <button
@@ -1819,7 +2256,7 @@ function CommentManagement() {
           <div className="py-16 text-center">
             <MessageCircle className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
             <p className="text-sm text-zinc-500">暂无评论数据</p>
-            <p className="mt-1 text-xs text-zinc-600">访客在灵感文章下的评论将显示在这里</p>
+            <p className="mt-1 text-xs text-zinc-600">访客在深度洞察下的评论将显示在这里</p>
           </div>
         ) : (
           <div className="divide-y divide-zinc-800">
@@ -1932,7 +2369,9 @@ function ResourceEditor() {
     outline: ["", ""] as string[],
     category: "指南",
     requireLogin: false,
+    coverUrl: "",
   });
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [fileInfo, setFileInfo] = useState<{ url: string; size: string; name: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -2010,6 +2449,23 @@ function ResourceEditor() {
     if (file) handleFileUpload(file);
   };
 
+  // 封面图本地上传
+  const handleCoverUpload = async (file: File) => {
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const result = await uploadCoverImage(file);
+      if (result?.url) {
+        setForm((prev) => ({ ...prev, coverUrl: result.url }));
+        setStatus({ type: "success", msg: "封面图上传成功" });
+      }
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "封面图上传失败" });
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!form.title.trim()) {
       setStatus({ type: "error", msg: "请填写资源标题" });
@@ -2027,6 +2483,7 @@ function ResourceEditor() {
         isPublished: true,
         fileUrl: fileInfo?.url,
         fileSize: fileInfo?.size,
+        coverUrl: form.coverUrl || undefined,
       };
       await createResource(resource);
       setStatus({ type: "success", msg: "资源包发布成功！" });
@@ -2036,6 +2493,7 @@ function ResourceEditor() {
         outline: ["", ""],
         category: "指南",
         requireLogin: false,
+        coverUrl: "",
       });
       setFileInfo(null);
       loadResources();
@@ -2097,7 +2555,7 @@ function ResourceEditor() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-zinc-50">发布资源包</h2>
+        <h2 className="text-xl font-bold text-zinc-50">发布策略工具包</h2>
         <p className="mt-1 text-sm text-zinc-500">新增一个资源包（指南 / 手册 / 报告），支持 PDF 上传至 Supabase Storage</p>
       </div>
 
@@ -2122,6 +2580,40 @@ function ResourceEditor() {
               <option value="手册">手册</option>
               <option value="报告">报告</option>
             </select>
+          </FormField>
+        </div>
+
+        {/* 封面图 URL + 本地上传 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="封面图 URL">
+            <input
+              value={form.coverUrl}
+              onChange={(e) => updateField("coverUrl", e.target.value)}
+              placeholder="https://... (封面图链接)"
+              className="input-resource"
+            />
+          </FormField>
+          <FormField label="封面图本地上传">
+            <div className="flex items-center gap-3">
+              <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-xs font-medium text-zinc-300 transition-all hover:border-purple-500/40 hover:text-purple-300 ${uploadingCover ? "pointer-events-none opacity-60" : ""}`}>
+                {uploadingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                {uploadingCover ? "上传中..." : "选择图片"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleCoverUpload(f);
+                  }}
+                />
+              </label>
+              {form.coverUrl && (
+                <div className="relative h-10 w-16 overflow-hidden rounded-md border border-zinc-800">
+                  <img src={form.coverUrl} alt="cover" className="h-full w-full object-cover" />
+                </div>
+              )}
+            </div>
           </FormField>
         </div>
 
@@ -2378,7 +2870,7 @@ function ResourceEditor() {
   );
 }
 
-// ========== Tab 3: 庇护所互动管理 ==========
+// ========== Tab 3: 脑洞画布管理 ==========
 function SanctuaryManager() {
   const [posts, setPosts] = useState<SanctuaryPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2430,7 +2922,7 @@ function SanctuaryManager() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("确定要彻底删除这条庇护所留言吗？此操作不可撤销。")) return;
+    if (!window.confirm("确定要彻底删除这条脑洞画布留言吗？此操作不可撤销。")) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/admin/sanctuary?id=${encodeURIComponent(id)}`, {
@@ -2453,8 +2945,8 @@ function SanctuaryManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-zinc-50">庇护所互动管理</h2>
-          <p className="mt-1 text-sm text-zinc-500">管理访客在「庇护所」发布的脑洞与吐槽卡片</p>
+          <h2 className="text-xl font-bold text-zinc-50">脑洞画布管理</h2>
+          <p className="mt-1 text-sm text-zinc-500">管理访客在「脑洞画布」发布的脑洞与交流卡片</p>
         </div>
         <button
           onClick={() => loadPosts(true)}
@@ -2718,7 +3210,7 @@ function LeadsManager() {
   );
 }
 
-// ========== Tab: 情报站编辑器 (Insight Hub) ==========
+// ========== Tab: 东南亚实局编辑器 (Insight Hub) ==========
 function InsightHubEditor() {
   const [form, setForm] = useState({
     title: "",
@@ -2776,7 +3268,7 @@ function InsightHubEditor() {
         isFeatured: form.isFeatured,
       };
       await createInsightHub(item);
-      setStatus({ type: "success", msg: "情报站内容发布成功！" });
+      setStatus({ type: "success", msg: "东南亚实局内容发布成功！" });
       setForm({
         title: "",
         category: "🤖 AI 营销杠杆",
@@ -2960,7 +3452,7 @@ function InsightHubEditor() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-zinc-50">情报站管理</h2>
+        <h2 className="text-xl font-bold text-zinc-50">东南亚实局管理</h2>
         <p className="mt-1 text-sm text-zinc-500">新增、编辑、置顶、删除行业情报，支持 AI 一键生成</p>
       </div>
 
@@ -3028,7 +3520,7 @@ function InsightHubEditor() {
         <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/40 px-5 py-4">
           <div className="flex-1 pr-4">
             <h4 className="text-sm font-semibold text-zinc-100">置顶</h4>
-            <p className="mt-1 text-xs text-zinc-500">开启后，该情报将在情报站顶部展示</p>
+            <p className="mt-1 text-xs text-zinc-500">开启后，该情报将在东南亚实局顶部展示</p>
           </div>
           <button
             onClick={() => updateField("isFeatured", !form.isFeatured)}
@@ -3336,10 +3828,10 @@ const FEATURE_FLAGS: {
   desc: string;
   default: boolean;
 }[] = [
-  { key: "show_portfolio", label: "作品集模块", desc: "首页展示作品案例与战术拆解", default: true },
-  { key: "show_insights", label: "深度文章模块", desc: "首页展示灵感点与深度思考", default: true },
-  { key: "show_insights_hub", label: "情报站模块", desc: "首页展示行业情报与自动化抓取内容", default: true },
-  { key: "show_resources", label: "资源包模块", desc: "首页展示精选 PDF 资源下载", default: true },
+  { key: "show_portfolio", label: "实战案例模块", desc: "首页展示实战案例与战术拆解", default: true },
+  { key: "show_insights", label: "深度洞察模块", desc: "首页展示深度洞察与深度思考", default: true },
+  { key: "show_insights_hub", label: "东南亚实局模块", desc: "首页展示行业情报与自动化抓取内容", default: true },
+  { key: "show_resources", label: "策略工具包模块", desc: "首页展示实战 SOP 与策略模板下载", default: true },
   { key: "show_chenpi_ai", label: "陈皮 AI 助手", desc: "右下角浮动的智能对话助手", default: true },
   { key: "show_sanctuary", label: "脑洞与吐槽画布", desc: "社区互动与诚心上香模块", default: true },
   { key: "show_inspiration_sign", label: "今日灵感签文", desc: "每日策略灵感便签海报", default: true },

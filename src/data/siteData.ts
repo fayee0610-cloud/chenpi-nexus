@@ -1,6 +1,6 @@
 // ============================================================
 // siteData.ts — 全站统一配置与 Mock 数据中心
-// 所有静态文本、作品、灵感文章、庇护所初始数据集中于此
+// 所有静态文本、作品、深度洞察、庇护所初始数据集中于此
 // ============================================================
 
 // ========== 类型定义 ==========
@@ -36,6 +36,12 @@ export interface PortfolioProject {
   challenge: string;
   solutions: Solution[];
   demoUrl?: string;
+  // ===== 商业交付指标（Client Success Stories）=====
+  clientIndustry?: string; // 客户所属行业
+  malaysiaChannels?: string; // 大马本土化渠道搭建成果
+  halalCertificationCycle?: string; // 清真认证落地周期
+  // ===== 项目成果指标 =====
+  deliverables?: string[]; // 核心交付物清单
 }
 
 export interface InsightItem {
@@ -67,35 +73,42 @@ export const HARDCORE_TAGS_POOL: { group: string; groupIcon: string; tags: strin
     groupIcon: "🌏",
     tags: [
       "马来西亚/东盟GTM",
-      "出海品牌公关",
-      "跨境实战SOP",
+      "B2B出海实战SOP",
       "独立站运营/SEO",
+      "本土化渠道与合规",
+      "陶瓷/传统制造出海",
     ],
   },
   {
     group: "AI 营销杠杆",
     groupIcon: "🤖",
     tags: [
-      "机器人/具身智能营销",
+      "GEO搜索引擎优化",
+      "AI工作流/自动化",
+      "Coze/AI Agent实战",
+      "多语种内容AI生成",
       "ToB/ToC硬科技策略",
-      "技术参数转场景叙事",
     ],
   },
   {
     group: "深度洞察",
     groupIcon: "🎯",
     tags: [
-      "消费者心理与行为学",
-      "品牌叙事与定位",
+      "品牌故事与定位",
+      "出海品牌公关",
+      "消费者心理与行为",
       "商业模式拆解",
+      "传统工厂自主品牌转型",
     ],
   },
   {
     group: "战术拆解",
     groupIcon: "📦",
     tags: [
-      "GEO搜索引擎优化",
-      "AI工作流/自动化",
+      "展会与线下资源对接",
+      "技术参数转场景叙事",
+      "社媒精准获客",
+      "海外 KOL/KOC 合作",
     ],
   },
 ];
@@ -141,6 +154,7 @@ export interface ResourceItem {
   outline: string[];
   fileUrl?: string;
   fileSize?: string;
+  coverUrl?: string;
   category: string;
   requireLogin: boolean;
   isPublished: boolean;
@@ -164,17 +178,33 @@ export interface InsightHubItem {
   tags?: string[]; // 标签数组，如 ['ToB营销', 'GTM策略', '品牌定位']
 }
 
+// ========== 马来西亚商业情报（malaysia_intelligence 表）==========
+// 全自动 RSS 抓取 + AI 中文摘要 + 商业启示
+export interface MalaysiaIntelligence {
+  id: string;
+  titleEn: string;       // 原始英文标题
+  titleZh: string;       // AI 翻译后的中文标题
+  sourceName: string;    // 来源媒体（如 The Edge Malaysia）
+  sourceUrl: string;     // 原文链接（去重依据）
+  summaryZh: string;     // AI 100字中文高密度摘要
+  keyTakeaway: string;   // 一句话商业启示
+  publishedAt: string;   // 原文发布时间
+  createdAt: string;     // 入库时间
+  isPublished: boolean;
+  isFeatured?: boolean;
+}
+
 // ========== 1. 个人简介与 Hero 区 ==========
 
 export const profile = {
   name: "陈皮同学",
   nameEn: "My Neural Hub",
-  title: "这里，连接创意、AI 与市场",
+  title: "聚焦马来西亚 GTM · 清真 Halal 市场突破 · B2B 品牌重构 · AI 营销杠杆",
   subTitle: "东南亚营销策略人 / 当代 AI 营销实践者 / 出海商业洞察者",
-  status: "正在探索：东南亚本土化营销 / 以 AI 赋能市场策略",
+  status: "正在深耕：马来西亚出海 GTM · 清真 Halal 认证 · AI 营销杠杆",
   avatarUrl: "/avatar.png",
-  tags: ["新马 / 香港 / 深圳", "品牌战术", "超级个体"],
-  quote: "就探索点什么，从一件小事开始。",
+  tags: ["大马 GTM", "清真 Halal 认证", "B2B 品牌重构", "AI 营销杠杆"],
+  quote: "谋于策略，成于闭环，对结果负责。",
 };
 
 // ========== 2. 联系方式 ==========
@@ -185,7 +215,7 @@ export const contact = {
   copyright: "© 2025 陈皮同学 My Neural Hub",
 };
 
-// ========== 3. 作品集 ==========
+// ========== 3. 实战案例 ==========
 
 export const portfolio = {
   categories: [
@@ -216,6 +246,11 @@ export const portfolio = {
         { title: "数据驱动的用户留存策略", detail: "部署 GA4 + Mixpanel 事件追踪，构建用户分层 RFM 模型，通过 EDM 与再营销广告将复购率提升至 42%。" },
       ],
       demoUrl: "https://example.com/demo-brand",
+      // 商业交付指标
+      clientIndustry: "消费电子 / 跨境出海",
+      malaysiaChannels: "搭建 Shopee 马来西亚旗舰店 + Lazada 官方店，接入本土物流（Pos Laju / J&T），完成 3 家本地经销商签约",
+      halalCertificationCycle: "45 天完成马来西亚 JAKIM 清真认证全流程（含产品送检、资料审核、现场审核）",
+      deliverables: ["品牌定位策略文档", "Shopify 独立站（中英双语）", "Shopee/Lazada 店铺装修", "Google/Meta 投放策略", "GA4 数据看板"],
     },
     {
       id: 2,
@@ -239,6 +274,11 @@ export const portfolio = {
         { title: "硬件选型知识图谱", detail: "构建设备参数知识图谱与供应商评分模型，结合 AI 推荐引擎，将选型决策准确率提升至 92%。" },
       ],
       demoUrl: "https://example.com/demo-ai",
+      // 商业交付指标
+      clientIndustry: "智能硬件 / B2B 供应链",
+      malaysiaChannels: "对接马来西亚槟城电子制造集群，建立 5 家本地供应商直采通道，采购成本降低 18%",
+      halalCertificationCycle: "N/A（B2B 硬件品类，暂不涉及清真认证）",
+      deliverables: ["多 Agent 协作系统源码", "供应商知识图谱数据库", "10+ 自动化 Workflow 配置", "市场情报日报/周报系统", "选型决策推荐引擎"],
     },
     {
       id: 3,
@@ -261,11 +301,16 @@ export const portfolio = {
         { title: "热点话题雷达与快速创作", detail: "搭建基于 RSS + AI 摘要的话题监控系统，从热点发现到内容发布平均周期 < 4 小时，抢占了多个行业话题首发窗口。" },
         { title: "读者社群与反馈飞轮", detail: "通过「内容 → 评论区互动 → 社群沉淀 → 下期选题」的闭环，将读者互动率稳定在 12%，远超行业 3% 均值。" },
       ],
+      // 商业交付指标
+      clientIndustry: "内容营销 / 个人品牌",
+      malaysiaChannels: "同步运营小红书马来西亚区 + 马来西亚中文论坛，积累大马本地读者 800+，建立出海话题内容测试场",
+      halalCertificationCycle: "N/A（内容类项目，不涉及产品认证）",
+      deliverables: ["4 平台内容矩阵 SOP", "热点话题雷达系统", "读者社群运营手册", "内容复用率 300% 切片模板"],
     },
   ] as PortfolioProject[],
 };
 
-// ========== 4. 灵感点文章 ==========
+// ========== 4. 深度洞察文章 ==========
 
 export const insights: InsightItem[] = [
   {
@@ -402,23 +447,23 @@ export const sanctuary = {
 
   incenseBuffs: [
     "功德 +1",
-    "运势 +100",
-    "甲方沟通顺畅度 +50%",
-    "Bug 自动消失 +1",
-    "发量 +1",
-    "脑洞清晰度 +200%",
-    "✨ 欧气爆棚：方案一次过审！",
-    "灵感涌入速度 +300%",
-    "下班准时率 +99%",
+    "大马询盘运势 +100",
+    "Halal 认证顺遂度 +50%",
+    "本土代理签约率 +1",
+    "品牌溢价 +200%",
+    "渠道拓展开阔度 +200%",
+    "✨ 欧气爆棚：大马询盘暴涨！",
+    "出海灵感涌入速度 +300%",
+    "B2B 合作达成率 +99%",
   ],
 
   fortunes: [
-    "今日宜：开始一件小事，去写下一个不成熟的脑洞",
-    "今日宜：大胆提案，甲方今天心情不错",
-    "今日宜：和 AI 聊聊，它会给你意想不到的灵感",
-    "今日宜：整理旧作品，会有新的发现",
-    "今日宜：休息一下，最好的创意往往在放松时降临",
-    "今日宜：把那个疯狂的念头说出来，也许有人懂",
+    "今日宜：复盘大马渠道进展，找出下一个增量突破口",
+    "今日宜：推进 Halal 认证流程，今天适合对接 JAKIM",
+    "今日宜：和 AI 聊聊营销策略，它会给你意想不到的杠杆",
+    "今日宜：整理出海 SOP，会有新的商业发现",
+    "今日宜：休息一下，最好的策略往往在放松时降临",
+    "今日宜：把那个出海脑洞说出来，也许有人懂",
   ],
 
   // 分类金句库：基于情绪分类，每条为固定 3 行语意数组
@@ -465,20 +510,20 @@ export const sanctuary = {
   },
 
   incenses: [
-    { id: "1", emoji: "🕯️", name: "方案一次过", color: "text-blue-400", glowClass: "shadow-blue-500/40", borderClass: "hover:border-blue-500/50", count: 128 },
-    { id: "2", emoji: "💰", name: "甲方即刻回款", color: "text-amber-400", glowClass: "shadow-amber-500/40", borderClass: "hover:border-amber-500/50", count: 96 },
-    { id: "3", emoji: "💡", name: "灵感瞬间爆发", color: "text-purple-400", glowClass: "shadow-purple-500/40", borderClass: "hover:border-purple-500/50", count: 234 },
-    { id: "4", emoji: "🕊️", name: "沟通极其顺畅", color: "text-green-400", glowClass: "shadow-green-500/40", borderClass: "hover:border-green-500/50", count: 167 },
-    { id: "5", emoji: "💥", name: "品牌防塌房", color: "text-red-400", glowClass: "shadow-red-500/40", borderClass: "hover:border-red-500/50", count: 88 },
-    { id: "6", emoji: "🚀", name: "准点无痛下班", color: "text-orange-400", glowClass: "shadow-orange-500/40", borderClass: "hover:border-orange-500/50", count: 312 },
+    { id: "1", emoji: "📈", name: "大马询盘暴涨", color: "text-emerald-400", glowClass: "shadow-emerald-500/40", borderClass: "hover:border-emerald-500/50", count: 128 },
+    { id: "2", emoji: "🕌", name: "Halal 认证速通", color: "text-amber-400", glowClass: "shadow-amber-500/40", borderClass: "hover:border-amber-500/50", count: 96 },
+    { id: "3", emoji: "🤝", name: "本土代理签约", color: "text-blue-400", glowClass: "shadow-blue-500/40", borderClass: "hover:border-blue-500/50", count: 234 },
+    { id: "4", emoji: "💰", name: "品牌溢价翻倍", color: "text-purple-400", glowClass: "shadow-purple-500/40", borderClass: "hover:border-purple-500/50", count: 167 },
+    { id: "5", emoji: "🌟", name: "出海渠道拓张", color: "text-cyan-400", glowClass: "shadow-cyan-500/40", borderClass: "hover:border-cyan-500/50", count: 88 },
+    { id: "6", emoji: "🚀", name: "B2B 合作达成", color: "text-orange-400", glowClass: "shadow-orange-500/40", borderClass: "hover:border-orange-500/50", count: 312 },
   ] as Incense[],
 
   postTagOptions: [
-    { label: "💡 概念萌芽", color: "text-blue-400 bg-blue-500/10" },
-    { label: "🧠 营销脑洞", color: "text-amber-400 bg-amber-500/10" },
-    { label: "🚀 出海进行中", color: "text-emerald-400 bg-emerald-500/10" },
-    { label: "🔥 职场发疯/吐槽", color: "text-red-400 bg-red-500/10" },
-    { label: "🤖 AI 硬件想法", color: "text-purple-400 bg-purple-500/10" },
+    { label: "🌏 大马地推实战", color: "text-emerald-400 bg-emerald-500/10" },
+    { label: "🕌 清真认证避坑", color: "text-amber-400 bg-amber-500/10" },
+    { label: "🤝 B2B 渠道重构", color: "text-blue-400 bg-blue-500/10" },
+    { label: "🤖 AI 营销杠杆", color: "text-purple-400 bg-purple-500/10" },
+    { label: "🔥 出海痛点", color: "text-red-400 bg-red-500/10" },
   ],
 
   initialPosts: [
@@ -534,19 +579,19 @@ export const mascot = {
   name: "陈皮 AI",
   tagline: "陈皮同学的 24/7 数字分身",
   bubbles: [
-    "今日方案过审率 99%，来上根香？",
-    "又在发呆？灵感不会自己敲门。",
-    "需要我帮你整理作品集思路吗？",
-    "新的一周，新的甲方，新的修行。",
-    "休息一下吧，你已经看了三小时屏幕了。",
-    "诚心功德 +1，今日运势：宜提案。",
+    "正在规划大马市场出海？点击预约 1v1 策略咨询",
+    "查看今日最新大马商业情报 →",
+    "获取 2026 马来西亚清真 (Halal) 品牌准入指南",
+    "大马本土渠道怎么搭？聊聊看",
+    "B2B 品牌出海，从哪里切入最快？",
+    "Halal 认证全流程需要多久？问我就对了",
   ],
 
   quickPrompts: [
-    "💡 陈皮的主要背景与实战项目经历",
-    "🧠 如何看待 AI 对 B2B / B2C 营销流程的重塑？",
-    "🤖 陈皮对出海机器人与具身 AI 市场策略的思考",
-    "🚀 品牌出海时，如何做到战术级的市场穿透？",
+    "🌏 马来西亚出海 GTM 策略怎么定？",
+    "🕌 清真 Halal 认证全流程与避坑指南",
+    "🤝 B2B 渠道重构与大马本土代理怎么找？",
+    "🚀 AI 营销杠杆如何赋能品牌出海？",
   ],
 };
 
@@ -609,7 +654,7 @@ export const resources: ResourceItem[] = [
   },
 ];
 
-// ========== 8. 情报站 (Information Hub) 数据 ==========
+// ========== 8. 东南亚实局 (Information Hub) 数据 ==========
 // 由 AI (DeepSeek) 自动生成，基于最新科技商业动态
 
 export const insightsHub: InsightHubItem[] = [
