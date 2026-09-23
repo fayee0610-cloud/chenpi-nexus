@@ -436,6 +436,9 @@ async function writeIntelligence(
       // 不传 id：malaysia_intelligence.id 是 uuid 类型（Supabase 默认 gen_random_uuid()），
       // 由数据库自动生成。upsert 冲突目标是 source_url 唯一索引，无需 id 参与。
       // 之前传 genId()（base36 文本）会触发 22P02: invalid input syntax for type uuid。
+      // title：线上表有 NOT NULL 的 title 列（迁移文件未体现，属表结构漂移），
+      // 用中文标题填充，避免 23502 null violation。
+      title: item.titleZh || item.title,
       title_en: item.title,
       title_zh: item.titleZh,
       source_name: item.sourceName,
