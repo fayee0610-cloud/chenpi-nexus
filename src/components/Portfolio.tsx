@@ -19,6 +19,7 @@ import {
   MapPin,
   ShieldCheck,
   Package,
+  Images,
 } from "lucide-react";
 import { siteData } from "@/data/siteData";
 import type { PortfolioProject } from "@/data/siteData";
@@ -397,7 +398,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                     <Target className="h-4 w-4 text-blue-400" />
                     项目挑战与背景
                   </h3>
-                  <p className="text-sm leading-relaxed text-zinc-400">
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-400">
                     {selectedProject.challenge}
                   </p>
                 </div>
@@ -422,13 +423,46 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                             {s.title}
                           </span>
                         </div>
-                        <p className="pl-7 text-sm leading-relaxed text-zinc-400">
+                        <p className="whitespace-pre-line pl-7 text-sm leading-relaxed text-zinc-400">
                           {s.detail}
                         </p>
+                        {s.imageUrl && (
+                          <img
+                            src={s.imageUrl}
+                            alt={s.title}
+                            className="mt-3 ml-7 w-full max-h-72 rounded-lg border border-zinc-800 object-cover"
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
+
+                {/* 实证图集 / 渠道落地图集 */}
+                {selectedProject.gallery && selectedProject.gallery.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                      <Images className="h-4 w-4 text-green-400" />
+                      现场实证 / 渠道落地图集
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {selectedProject.gallery.map((g, i) => (
+                        <div key={i} className="relative group overflow-hidden rounded-xl border border-zinc-800">
+                          <img
+                            src={g.url}
+                            alt={g.caption || ""}
+                            className="aspect-[4/3] w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                          {g.caption && (
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 py-2 text-[11px] text-zinc-300">
+                              {g.caption}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 视觉/架构图展示区 */}
                 <div className="mb-6">
@@ -462,7 +496,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-5 py-3 text-sm font-medium text-white transition-all hover:from-purple-500 hover:to-blue-500 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]"
                   >
                     <MessageCircle className="h-4 w-4" />
-                    关于此项目聊聊
+                    {selectedProject.ctaText || "关于此类项目 1v1 深度咨询"}
                   </button>
                   <Link
                     href={`/portfolio/${selectedProject.id}`}

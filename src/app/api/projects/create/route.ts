@@ -47,7 +47,16 @@ export async function POST(req: NextRequest) {
       image: body.image || "",
       challenge: body.challenge || "",
       metrics: Array.isArray(body.metrics) ? body.metrics : [],
+      tags: Array.isArray(body.tags) ? body.tags : [],
       solutions: Array.isArray(body.solutions) ? body.solutions : [],
+      gallery: Array.isArray(body.gallery) ? body.gallery : [],
+      ctaText: typeof body.ctaText === "string" ? body.ctaText : undefined,
+      ctaLink: typeof body.ctaLink === "string" ? body.ctaLink : undefined,
+      // 商业交付指标
+      clientIndustry: typeof body.clientIndustry === "string" ? body.clientIndustry : undefined,
+      malaysiaChannels: typeof body.malaysiaChannels === "string" ? body.malaysiaChannels : undefined,
+      halalCertificationCycle: typeof body.halalCertificationCycle === "string" ? body.halalCertificationCycle : undefined,
+      deliverables: Array.isArray(body.deliverables) ? body.deliverables : undefined,
     });
 
     // 4. 触发前台缓存刷新（零延迟同步）

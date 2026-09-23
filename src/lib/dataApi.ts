@@ -148,20 +148,58 @@ function mapProjectRow(row: any): PortfolioProject {
     if (cat.includes("AI") || cat.includes("硬件")) tab = "ai";
     else if (cat.includes("创意") || cat.includes("实验")) tab = "experiment";
   }
+  // 标签：兼容 jsonb 数组 / 逗号分隔字符串 / 旧数据无 tags 列
+  let tags: string[] = [];
+  if (row.tags) {
+    if (typeof row.tags === "string") {
+      try {
+        const parsed = JSON.parse(row.tags);
+        tags = Array.isArray(parsed) ? parsed : row.tags.split(",").map((s: string) => s.trim()).filter(Boolean);
+      } catch {
+        tags = row.tags.split(",").map((s: string) => s.trim()).filter(Boolean);
+      }
+    } else if (Array.isArray(row.tags)) {
+      tags = row.tags;
+    }
+  }
+  // 实证图集：兼容 jsonb 数组 / 旧数据无 gallery 列
+  let gallery: { url: string; caption?: string }[] | undefined = undefined;
+  if (row.gallery) {
+    if (Array.isArray(row.gallery)) {
+      gallery = row.gallery.filter((g: any) => g && g.url);
+    } else if (typeof row.gallery === "string") {
+      try {
+        const parsed = JSON.parse(row.gallery);
+        if (Array.isArray(parsed)) gallery = parsed.filter((g: any) => g && g.url);
+      } catch { /* 忽略损坏的 JSON */ }
+    }
+  }
+  // 破局战术：兼容旧字段名 strategy 与新字段名 solutions
+  const rawSolutions = row.solutions || row.strategy || [];
+  const solutions: { title: string; detail: string; imageUrl?: string }[] = Array.isArray(rawSolutions)
+    ? rawSolutions.map((s: any) => ({
+        title: s.title || s.detail_title || "",
+        detail: s.detail || s.description || s.detail_text || "",
+        imageUrl: s.imageUrl || s.image_url || undefined,
+      }))
+    : [];
   return {
     id: row.id,
     title: row.title || "",
-    subTitle: row.sub_title || "",
-    image: row.image_url || "",
-    date: row.date || "",
+    subTitle: row.sub_title || row.subtitle || "",
+    image: row.image_url || row.cover_image || row.image || "",
+    date: row.date || row.execution_time || "",
     role: row.role || "",
     metrics: row.metrics || [],
-    tags: [],
+    tags,
     tab,
     category: cat,
     challenge: row.challenge || "",
-    solutions: row.strategy || [],
+    solutions,
+    gallery,
     demoUrl: row.demo_url || undefined,
+    ctaText: row.cta_text || undefined,
+    ctaLink: row.cta_link || undefined,
     // 商业交付指标（兼容旧数据：字段缺失时降级为空）
     clientIndustry: row.client_industry || undefined,
     malaysiaChannels: row.malaysia_channels || undefined,
@@ -456,14 +494,19 @@ export async function createProject(project: Partial<PortfolioProject>) {
         role: project.role,
         date: project.date,
         metrics: project.metrics || [],
+        tags: project.tags || [],
         challenge: project.challenge,
-        strategy: project.solutions || [], // DB 列名为 strategy
+        // DB 列名为 strategy，但兼容新列 solutions；优先写 strategy
+        strategy: project.solutions || [],
+        gallery: project.gallery || [],
         image_url: project.image,
+        cta_text: project.ctaText || null,
+        cta_link: project.ctaLink || null,
         // 商业交付指标
-        client_industry: project.clientIndustry,
-        malaysia_channels: project.malaysiaChannels,
-        halal_certification_cycle: project.halalCertificationCycle,
-        deliverables: project.deliverables,
+        client_industry: project.clientIndustry || null,
+        malaysia_channels: project.malaysiaChannels || null,
+        halal_certification_cycle: project.halalCertificationCycle || null,
+        deliverables: project.deliverables || null,
       },
     ])
     .select();
@@ -483,7 +526,15 @@ export async function updateProject(id: string, project: Partial<PortfolioProjec
   if (project.image !== undefined) updateData.image_url = project.image;
   if (project.challenge !== undefined) updateData.challenge = project.challenge;
   if (project.metrics !== undefined) updateData.metrics = project.metrics;
-  if (project.solutions !== undefined) updateData.strategy = project.solutions;
+  if (project.tags !== undefined) updateData.tags = project.tags;
+  if (project.solutions !== undefined) {
+    // 同步写入 strategy 与 solutions 两列，兼容新旧 schema
+    updateData.strategy = project.solutions;
+    updateData.solutions = project.solutions;
+  }
+  if (project.gallery !== undefined) updateData.gallery = project.gallery;
+  if (project.ctaText !== undefined) updateData.cta_text = project.ctaText;
+  if (project.ctaLink !== undefined) updateData.cta_link = project.ctaLink;
   // 商业交付指标
   if (project.clientIndustry !== undefined) updateData.client_industry = project.clientIndustry;
   if (project.malaysiaChannels !== undefined) updateData.malaysia_channels = project.malaysiaChannels;

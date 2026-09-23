@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, TrendingUp, Copy, Check, Target, Lightbulb, Building2, MapPin, ShieldCheck, Package } from "lucide-react";
+import { ArrowLeft, TrendingUp, Copy, Check, Target, Lightbulb, Building2, MapPin, ShieldCheck, Package, Images, Tag, MessageCircle } from "lucide-react";
 import { fetchProjectById } from "@/lib/dataApi";
 import Header from "@/components/Header";
 import { notFound } from "next/navigation";
@@ -79,6 +79,19 @@ export default async function PortfolioDetailPage({
           </h1>
           {project.subTitle && (
             <p className="mt-2 text-lg text-zinc-400">{project.subTitle}</p>
+          )}
+          {project.tags && project.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {project.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-400"
+                >
+                  <Tag className="h-3 w-3" />
+                  {tag}
+                </span>
+              ))}
+            </div>
           )}
         </header>
 
@@ -192,7 +205,7 @@ export default async function PortfolioDetailPage({
               <Target className="h-5 w-5 text-red-400" />
               挑战背景
             </h2>
-            <p className="leading-relaxed text-zinc-300">{project.challenge}</p>
+            <p className="whitespace-pre-line leading-relaxed text-zinc-300">{project.challenge}</p>
           </section>
         )}
 
@@ -215,9 +228,16 @@ export default async function PortfolioDetailPage({
                     </span>
                     <div>
                       <h3 className="font-semibold text-zinc-100">{s.title}</h3>
-                      <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                      <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-zinc-400">
                         {s.detail}
                       </p>
+                      {s.imageUrl && (
+                        <img
+                          src={s.imageUrl}
+                          alt={s.title}
+                          className="mt-3 ml-10 w-full max-h-80 rounded-lg border border-zinc-800 object-cover"
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -225,6 +245,41 @@ export default async function PortfolioDetailPage({
             </div>
           </section>
         )}
+
+        {/* 实证图集 / 渠道落地图集 */}
+        {project.gallery && project.gallery.length > 0 && (
+          <section className="mt-10">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-zinc-200">
+              <Images className="h-5 w-5 text-green-500" />
+              现场实证 / 渠道落地图集
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {project.gallery.map((g, i) => (
+                <div key={i} className="relative group overflow-hidden rounded-xl border border-zinc-800">
+                  <img
+                    src={g.url}
+                    alt={g.caption || ""}
+                    className="aspect-[4/3] w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                  {g.caption && (
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 py-2 text-[11px] text-zinc-300">
+                      {g.caption}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 自定义 CTA */}
+        <a
+          href={project.ctaLink && project.ctaLink.startsWith("http") ? project.ctaLink : "#contact"}
+          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 text-sm font-medium text-white transition-all hover:from-purple-500 hover:to-blue-500"
+        >
+          <MessageCircle className="h-4 w-4" />
+          {project.ctaText || "关于此类项目 1v1 深度咨询"}
+        </a>
 
         {/* 底部分享区 */}
         <section className="mt-12 border-t border-zinc-800 pt-6">

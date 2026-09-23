@@ -20,6 +20,12 @@ export interface Metric {
 export interface Solution {
   title: string;
   detail: string;
+  imageUrl?: string; // 破局步骤佐证图（可选）
+}
+
+export interface GalleryImage {
+  url: string; // 实证/现场图片 URL
+  caption?: string; // 图片说明（如：KLCC 展会现场）
 }
 
 export interface PortfolioProject {
@@ -27,15 +33,18 @@ export interface PortfolioProject {
   title: string;
   subTitle: string;
   image: string;
-  date: string;
+  date: string; // 执行周期（如 2024.03 - 2024.09）
   role: string;
   metrics: Metric[];
-  tags: string[];
+  tags: string[]; // 案例标签（JAKIM清真 / FMCG / 达人营销 / 线下渠道 / TikTok Shop）
   tab: "brand" | "ai" | "experiment";
   category: string;
-  challenge: string;
-  solutions: Solution[];
+  challenge: string; // 痛点与出海壁垒（支持多行文本）
+  solutions: Solution[]; // 破局战术数组（步骤 + 描述 + 可选佐证图）
+  gallery?: GalleryImage[]; // 实证图集 / 现场图片
   demoUrl?: string;
+  ctaText?: string; // 专属转化按钮文案
+  ctaLink?: string; // 跳转锚点或 URL（默认 #contact）
   // ===== 商业交付指标（Client Success Stories）=====
   clientIndustry?: string; // 客户所属行业
   malaysiaChannels?: string; // 大马本土化渠道搭建成果

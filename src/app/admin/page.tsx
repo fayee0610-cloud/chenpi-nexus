@@ -359,7 +359,29 @@ function LoginView({
 
 // ========== Tab 1: 作品案例编辑器 ==========
 function PortfolioEditor() {
-  const [form, setForm] = useState({
+  // 案例标签候选池（点击即填入输入框）
+  const TAG_SUGGESTIONS = [
+    "JAKIM清真", "FMCG", "达人营销", "线下渠道", "TikTok Shop",
+    "MIDA政策", "MATRADE展会", "Shopee旗舰店", "Lazada", "B2B出海",
+    "跨境电商", "品牌定位", "Halal认证", "供应链合规", "KOL合作",
+  ];
+  // 表单结构：含标签、实证图集、破局步骤佐证图、自定义 CTA
+  type ProjectForm = {
+    title: string;
+    subTitle: string;
+    category: string;
+    role: string;
+    date: string;
+    image: string;
+    challenge: string;
+    metrics: { value: string; label: string }[];
+    solutions: { title: string; detail: string; imageUrl: string }[];
+    tags: string[];
+    gallery: { url: string; caption: string }[];
+    ctaText: string;
+    ctaLink: string;
+  };
+  const emptyForm: ProjectForm = {
     title: "",
     subTitle: "",
     category: "品牌与市场战术",
@@ -368,8 +390,22 @@ function PortfolioEditor() {
     image: "",
     challenge: "",
     metrics: [{ value: "", label: "" }],
-    solutions: [{ title: "", detail: "" }],
-  });
+    solutions: [{ title: "", detail: "", imageUrl: "" }],
+    tags: [],
+    gallery: [],
+    ctaText: "",
+    ctaLink: "#contact",
+  };
+  const [form, setForm] = useState<ProjectForm>(emptyForm);
+  // 标签输入框临时值（回车 / 逗号提交）
+  const [tagInput, setTagInput] = useState("");
+  const [editTagInput, setEditTagInput] = useState("");
+  // 实证图集上传中状态
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [editUploadingGallery, setEditUploadingGallery] = useState(false);
+  // 破局步骤佐证图上传中状态（按步骤索引标记）
+  const [uploadingSolutionImg, setUploadingSolutionImg] = useState<number | null>(null);
+  const [editUploadingSolutionImg, setEditUploadingSolutionImg] = useState<number | null>(null);
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [projectList, setProjectList] = useState<AdminProject[]>([]);
@@ -378,7 +414,7 @@ function PortfolioEditor() {
   const [uploadingImage, setUploadingImage] = useState(false);
   // 编辑 Modal 状态
   const [editingProject, setEditingProject] = useState<AdminProject | null>(null);
-  const [editForm, setEditForm] = useState<typeof form | null>(null);
+  const [editForm, setEditForm] = useState<ProjectForm | null>(null);
   const [editUploadingImage, setEditUploadingImage] = useState(false);
   const [editSubmitting, setEditSubmitting] = useState(false);
 
@@ -451,7 +487,7 @@ function PortfolioEditor() {
   };
 
   const addSolution = () => {
-    setForm((prev) => ({ ...prev, solutions: [...prev.solutions, { title: "", detail: "" }] }));
+    setForm((prev) => ({ ...prev, solutions: [...prev.solutions, { title: "", detail: "", imageUrl: "" }] }));
   };
   const removeSolution = (i: number) => {
     setForm((prev) => ({ ...prev, solutions: prev.solutions.filter((_, idx) => idx !== i) }));
@@ -461,6 +497,92 @@ function PortfolioEditor() {
       ...prev,
       solutions: prev.solutions.map((s, idx) => (idx === i ? { ...s, [key]: val } : s)),
     }));
+  };
+
+  // ===== 标签管理（新建表单）=====
+  const addTag = (tag: string) => {
+    const t = tag.trim();
+    if (!t) return;
+    setForm((prev) => prev.tags.includes(t) ? prev : { ...prev, tags: [...prev.tags, t] });
+    setTagInput("");
+  };
+  const removeTag = (tag: string) => {
+    setForm((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }));
+  };
+  const handleTagInputKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(tagInput);
+    } else if (e.key === "Backspace" && !tagInput && form.tags.length > 0) {
+      removeTag(form.tags[form.tags.length - 1]);
+    }
+  };
+
+  // ===== 实证图集管理（新建表单）=====
+  const addGalleryItem = () => {
+    setForm((prev) => ({ ...prev, gallery: [...prev.gallery, { url: "", caption: "" }] }));
+  };
+  const removeGalleryItem = (i: number) => {
+    setForm((prev) => ({ ...prev, gallery: prev.gallery.filter((_, idx) => idx !== i) }));
+  };
+  const updateGalleryItem = (i: number, key: "url" | "caption", val: string) => {
+    setForm((prev) => ({
+      ...prev,
+      gallery: prev.gallery.map((g, idx) => (idx === i ? { ...g, [key]: val } : g)),
+    }));
+  };
+  // 实证图集批量上传：一次选多张，逐张上传并自动追加到列表
+  const handleGalleryBatchUpload = async (files: FileList, target: "form" | "editForm") => {
+    if (!files || files.length === 0) return;
+    if (target === "form") setUploadingGallery(true);
+    else setEditUploadingGallery(true);
+    try {
+      const uploaded: { url: string; caption: string }[] = [];
+      for (const file of Array.from(files)) {
+        const result = await uploadPortfolioCover(file);
+        if (result?.url) uploaded.push({ url: result.url, caption: "" });
+      }
+      if (uploaded.length > 0) {
+        if (target === "form") {
+          setForm((prev) => ({ ...prev, gallery: [...prev.gallery, ...uploaded] }));
+        } else {
+          setEditForm((prev) => prev ? { ...prev, gallery: [...prev.gallery, ...uploaded] } : prev);
+        }
+        setStatus({ type: "success", msg: `成功上传 ${uploaded.length} 张实证图` });
+      }
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "实证图上传失败" });
+    } finally {
+      if (target === "form") setUploadingGallery(false);
+      else setEditUploadingGallery(false);
+    }
+  };
+  // 破局步骤佐证图上传
+  const handleSolutionImageUpload = async (file: File, i: number, target: "form" | "editForm") => {
+    if (target === "form") setUploadingSolutionImg(i);
+    else setEditUploadingSolutionImg(i);
+    try {
+      const result = await uploadPortfolioCover(file);
+      if (result?.url) {
+        if (target === "form") {
+          setForm((prev) => ({
+            ...prev,
+            solutions: prev.solutions.map((s, idx) => (idx === i ? { ...s, imageUrl: result.url } : s)),
+          }));
+        } else {
+          setEditForm((prev) => prev ? {
+            ...prev,
+            solutions: prev.solutions.map((s, idx) => (idx === i ? { ...s, imageUrl: result.url } : s)),
+          } : prev);
+        }
+        setStatus({ type: "success", msg: "步骤佐证图已上传" });
+      }
+    } catch (err: any) {
+      setStatus({ type: "error", msg: err.message || "步骤图上传失败" });
+    } finally {
+      if (target === "form") setUploadingSolutionImg(null);
+      else setEditUploadingSolutionImg(null);
+    }
   };
 
   const handleSubmit = async () => {
@@ -480,7 +602,17 @@ function PortfolioEditor() {
         image: form.image,
         challenge: form.challenge,
         metrics: form.metrics.filter((m) => m.value),
-        solutions: form.solutions.filter((s) => s.title),
+        tags: form.tags,
+        solutions: form.solutions
+          .filter((s) => s.title)
+          .map((s) => ({
+            title: s.title,
+            detail: s.detail,
+            ...(s.imageUrl ? { imageUrl: s.imageUrl } : {}),
+          })),
+        gallery: form.gallery.filter((g) => g.url),
+        ctaText: form.ctaText,
+        ctaLink: form.ctaLink,
       };
       // 走 API 路由以触发 revalidatePath 刷新前台缓存
       const res = await fetch("/api/projects/create", {
@@ -493,12 +625,7 @@ function PortfolioEditor() {
         throw new Error(result.error || "创建失败");
       }
       setStatus({ type: "success", msg: "作品案例发布成功！前台缓存已刷新" });
-      setForm({
-        title: "", subTitle: "", category: "品牌与市场战术",
-        role: "", date: "", image: "", challenge: "",
-        metrics: [{ value: "", label: "" }],
-        solutions: [{ title: "", detail: "" }],
-      });
+      setForm(emptyForm);
       loadProjects();
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message || "发布失败" });
@@ -540,8 +667,12 @@ function PortfolioEditor() {
       date: project.date || "",
       image: project.image || "",
       challenge: project.challenge || "",
-      metrics: project.metrics?.length ? project.metrics : [{ value: "", label: "" }],
-      solutions: project.solutions?.length ? project.solutions : [{ title: "", detail: "" }],
+      metrics: project.metrics?.length ? project.metrics.map((m) => ({ value: m.value, label: m.label })) : [{ value: "", label: "" }],
+      solutions: (project.solutions?.length ? project.solutions : [{ title: "", detail: "", imageUrl: "" }]).map((s) => ({ title: s.title || "", detail: s.detail || "", imageUrl: s.imageUrl || "" })),
+      tags: project.tags || [],
+      gallery: (project.gallery || []).map((g) => ({ url: g.url, caption: g.caption || "" })),
+      ctaText: project.ctaText || "",
+      ctaLink: project.ctaLink || "#contact",
     });
   };
 
@@ -564,7 +695,17 @@ function PortfolioEditor() {
         image: editForm.image,
         challenge: editForm.challenge,
         metrics: editForm.metrics.filter((m) => m.value),
-        solutions: editForm.solutions.filter((s) => s.title),
+        tags: editForm.tags,
+        solutions: editForm.solutions
+          .filter((s) => s.title)
+          .map((s) => ({
+            title: s.title,
+            detail: s.detail,
+            ...(s.imageUrl ? { imageUrl: s.imageUrl } : {}),
+          })),
+        gallery: editForm.gallery.filter((g) => g.url),
+        ctaText: editForm.ctaText,
+        ctaLink: editForm.ctaLink,
       };
       // 走 API 路由以触发 revalidatePath 刷新前台缓存
       const res = await fetch("/api/projects/update", {
@@ -604,7 +745,7 @@ function PortfolioEditor() {
     } : prev);
   };
   const addEditSolution = () => {
-    setEditForm((prev) => prev ? { ...prev, solutions: [...prev.solutions, { title: "", detail: "" }] } : prev);
+    setEditForm((prev) => prev ? { ...prev, solutions: [...prev.solutions, { title: "", detail: "", imageUrl: "" }] } : prev);
   };
   const removeEditSolution = (i: number) => {
     setEditForm((prev) => prev ? { ...prev, solutions: prev.solutions.filter((_, idx) => idx !== i) } : prev);
@@ -613,6 +754,40 @@ function PortfolioEditor() {
     setEditForm((prev) => prev ? {
       ...prev,
       solutions: prev.solutions.map((s, idx) => (idx === i ? { ...s, [key]: val } : s)),
+    } : prev);
+  };
+
+  // ===== 标签管理（编辑表单）=====
+  const addEditTag = (tag: string) => {
+    const t = tag.trim();
+    if (!t) return;
+    setEditForm((prev) => prev ? (prev.tags.includes(t) ? prev : { ...prev, tags: [...prev.tags, t] }) : prev);
+    setEditTagInput("");
+  };
+  const removeEditTag = (tag: string) => {
+    setEditForm((prev) => prev ? { ...prev, tags: prev.tags.filter((t) => t !== tag) } : prev);
+  };
+  const handleEditTagInputKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!editForm) return;
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addEditTag(editTagInput);
+    } else if (e.key === "Backspace" && !editTagInput && editForm.tags.length > 0) {
+      removeEditTag(editForm.tags[editForm.tags.length - 1]);
+    }
+  };
+
+  // ===== 实证图集管理（编辑表单）=====
+  const addEditGalleryItem = () => {
+    setEditForm((prev) => prev ? { ...prev, gallery: [...prev.gallery, { url: "", caption: "" }] } : prev);
+  };
+  const removeEditGalleryItem = (i: number) => {
+    setEditForm((prev) => prev ? { ...prev, gallery: prev.gallery.filter((_, idx) => idx !== i) } : prev);
+  };
+  const updateEditGalleryItem = (i: number, key: "url" | "caption", val: string) => {
+    setEditForm((prev) => prev ? {
+      ...prev,
+      gallery: prev.gallery.map((g, idx) => (idx === i ? { ...g, [key]: val } : g)),
     } : prev);
   };
 
@@ -761,9 +936,159 @@ function PortfolioEditor() {
                   placeholder="详细描述..."
                   className="input-admin resize-none"
                 />
+                {/* 步骤佐证图 */}
+                <div className="mt-2">
+                  {s.imageUrl ? (
+                    <div className="relative overflow-hidden rounded-lg border border-zinc-800">
+                      <img src={s.imageUrl} alt="步骤佐证图" className="h-24 w-full object-cover" />
+                      <button
+                        onClick={() => updateSolution(i, "imageUrl", "")}
+                        className="absolute right-1 top-1 rounded bg-zinc-950/80 p-0.5 text-zinc-400 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-500 transition-all hover:border-purple-500/50 hover:text-purple-300 ${uploadingSolutionImg === i ? "pointer-events-none opacity-60" : ""}`}>
+                      {uploadingSolutionImg === i ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="h-3.5 w-3.5" />
+                      )}
+                      {uploadingSolutionImg === i ? "上传中..." : "上传步骤佐证图（可选）"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleSolutionImageUpload(file, i, "form");
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* 案例标签 */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <label className="mb-2 block text-sm font-medium text-zinc-300">案例标签 (Tags)</label>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {form.tags.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs text-purple-300">
+                {tag}
+                <button onClick={() => removeTag(tag)} className="text-purple-400 hover:text-red-400">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleTagInputKey}
+            placeholder="输入标签后回车，如：JAKIM清真"
+            className="input-admin mb-3"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {TAG_SUGGESTIONS.filter((s) => !form.tags.includes(s)).map((s) => (
+              <button
+                key={s}
+                onClick={() => addTag(s)}
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-400 hover:border-purple-500/50 hover:text-purple-300 cursor-pointer"
+              >
+                + {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 实证图集 / 现场图片 */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <label className="mb-2 block text-sm font-medium text-zinc-300">实证图集 / 现场图片</label>
+          <label className={`mb-3 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-950/40 px-4 py-5 text-xs text-zinc-500 transition-all hover:border-purple-500/50 hover:text-purple-300 ${uploadingGallery ? "pointer-events-none opacity-60" : ""}`}>
+            {uploadingGallery ? (
+              <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+            ) : (
+              <ImagePlus className="h-5 w-5" />
+            )}
+            {uploadingGallery ? "上传中..." : "点击批量上传现场图片（可多选）"}
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) handleGalleryBatchUpload(e.target.files, "form");
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <div className="space-y-2">
+            {form.gallery.map((g, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {g.url ? (
+                  <div className="relative h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg border border-zinc-700">
+                    <img src={g.url} alt={g.caption || "实证图"} className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => removeGalleryItem(i)}
+                      className="absolute right-1 top-1 rounded bg-zinc-950/80 p-0.5 text-zinc-400 hover:text-red-400"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex h-20 w-32 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-800 bg-zinc-950/40">
+                    <ImagePlus className="h-5 w-5 text-zinc-700" />
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <input
+                    value={g.url}
+                    onChange={(e) => updateGalleryItem(i, "url", e.target.value)}
+                    placeholder="图片 URL"
+                    className="input-admin text-xs"
+                  />
+                  <input
+                    value={g.caption}
+                    onChange={(e) => updateGalleryItem(i, "caption", e.target.value)}
+                    placeholder="图片说明（如：KLCC 展会现场）"
+                    className="input-admin text-xs"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={addGalleryItem}
+            className="mt-2 inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+          >
+            <Plus className="h-3 w-3" /> 添加单张（手动填 URL）
+          </button>
+        </div>
+
+        {/* 自定义 CTA */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="转化按钮文案">
+            <input
+              value={form.ctaText}
+              onChange={(e) => updateField("ctaText", e.target.value)}
+              placeholder="如：预约大马食品 GTM 1v1 诊断"
+              className="input-admin"
+            />
+          </FormField>
+          <FormField label="跳转链接 / 锚点">
+            <input
+              value={form.ctaLink}
+              onChange={(e) => updateField("ctaLink", e.target.value)}
+              placeholder="#contact"
+              className="input-admin"
+            />
+          </FormField>
         </div>
 
         {/* 状态提示 */}
@@ -1035,9 +1360,159 @@ function PortfolioEditor() {
                         </div>
                         <input value={s.title} onChange={(e) => updateEditSolution(i, "title", e.target.value)} placeholder="战术标题" className="input-admin mb-2" />
                         <textarea value={s.detail} onChange={(e) => updateEditSolution(i, "detail", e.target.value)} rows={2} placeholder="详细描述..." className="input-admin resize-none" />
+                        {/* 步骤佐证图 */}
+                        <div className="mt-2">
+                          {s.imageUrl ? (
+                            <div className="relative overflow-hidden rounded-lg border border-zinc-800">
+                              <img src={s.imageUrl} alt="步骤佐证图" className="h-24 w-full object-cover" />
+                              <button
+                                onClick={() => updateEditSolution(i, "imageUrl", "")}
+                                className="absolute right-1 top-1 rounded bg-zinc-950/80 p-0.5 text-zinc-400 hover:text-red-400"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-500 transition-all hover:border-purple-500/50 hover:text-purple-300 ${editUploadingSolutionImg === i ? "pointer-events-none opacity-60" : ""}`}>
+                              {editUploadingSolutionImg === i ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <ImagePlus className="h-3.5 w-3.5" />
+                              )}
+                              {editUploadingSolutionImg === i ? "上传中..." : "上传步骤佐证图（可选）"}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleSolutionImageUpload(file, i, "editForm");
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* 案例标签 */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                  <label className="mb-2 block text-sm font-medium text-zinc-300">案例标签 (Tags)</label>
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {editForm.tags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs text-purple-300">
+                        {tag}
+                        <button onClick={() => removeEditTag(tag)} className="text-purple-400 hover:text-red-400">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <input
+                    value={editTagInput}
+                    onChange={(e) => setEditTagInput(e.target.value)}
+                    onKeyDown={handleEditTagInputKey}
+                    placeholder="输入标签后回车，如：JAKIM清真"
+                    className="input-admin mb-3"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {TAG_SUGGESTIONS.filter((s) => !editForm.tags.includes(s)).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => addEditTag(s)}
+                        className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-400 hover:border-purple-500/50 hover:text-purple-300 cursor-pointer"
+                      >
+                        + {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 实证图集 / 现场图片 */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                  <label className="mb-2 block text-sm font-medium text-zinc-300">实证图集 / 现场图片</label>
+                  <label className={`mb-3 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-950/40 px-4 py-5 text-xs text-zinc-500 transition-all hover:border-purple-500/50 hover:text-purple-300 ${editUploadingGallery ? "pointer-events-none opacity-60" : ""}`}>
+                    {editUploadingGallery ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                    ) : (
+                      <ImagePlus className="h-5 w-5" />
+                    )}
+                    {editUploadingGallery ? "上传中..." : "点击批量上传现场图片（可多选）"}
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) handleGalleryBatchUpload(e.target.files, "editForm");
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <div className="space-y-2">
+                    {editForm.gallery.map((g, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        {g.url ? (
+                          <div className="relative h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg border border-zinc-700">
+                            <img src={g.url} alt={g.caption || "实证图"} className="h-full w-full object-cover" />
+                            <button
+                              onClick={() => removeEditGalleryItem(i)}
+                              className="absolute right-1 top-1 rounded bg-zinc-950/80 p-0.5 text-zinc-400 hover:text-red-400"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex h-20 w-32 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-800 bg-zinc-950/40">
+                            <ImagePlus className="h-5 w-5 text-zinc-700" />
+                          </div>
+                        )}
+                        <div className="flex flex-1 flex-col gap-1.5">
+                          <input
+                            value={g.url}
+                            onChange={(e) => updateEditGalleryItem(i, "url", e.target.value)}
+                            placeholder="图片 URL"
+                            className="input-admin text-xs"
+                          />
+                          <input
+                            value={g.caption}
+                            onChange={(e) => updateEditGalleryItem(i, "caption", e.target.value)}
+                            placeholder="图片说明（如：KLCC 展会现场）"
+                            className="input-admin text-xs"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={addEditGalleryItem}
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                  >
+                    <Plus className="h-3 w-3" /> 添加单张（手动填 URL）
+                  </button>
+                </div>
+
+                {/* 自定义 CTA */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="转化按钮文案">
+                    <input
+                      value={editForm.ctaText}
+                      onChange={(e) => updateEditField("ctaText", e.target.value)}
+                      placeholder="如：预约大马食品 GTM 1v1 诊断"
+                      className="input-admin"
+                    />
+                  </FormField>
+                  <FormField label="跳转链接 / 锚点">
+                    <input
+                      value={editForm.ctaLink}
+                      onChange={(e) => updateEditField("ctaLink", e.target.value)}
+                      placeholder="#contact"
+                      className="input-admin"
+                    />
+                  </FormField>
                 </div>
               </div>
 
