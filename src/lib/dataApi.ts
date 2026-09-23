@@ -995,6 +995,15 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
  * 拉取最新 N 条马来西亚商业情报（按 published_at DESC）
  * 兼容表不存在/列缺失：返回空数组，前端展示空状态
  */
+// 安全解析 tags（兼容 jsonb 数组 / 逗号分隔字符串）
+function safeParseTags(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map((t: any) => String(t || "").trim()).filter(Boolean);
+  } catch { /* 非数组 JSON，按逗号分隔 */ }
+  return raw.split(",").map((s: string) => s.trim()).filter(Boolean);
+}
+
 export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaIntelligence[]> {
   if (!supabase) return [];
   try {
@@ -1024,6 +1033,8 @@ export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaInt
       createdAt: row.created_at || "",
       isPublished: row.is_published !== false,
       isFeatured: row.is_featured ?? false,
+      category: row.category || "宏观政策",
+      tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === "string" ? safeParseTags(row.tags) : []),
     })) as MalaysiaIntelligence[];
   } catch (err) {
     logNetworkFallback("fetchMalaysiaIntelligence", err);

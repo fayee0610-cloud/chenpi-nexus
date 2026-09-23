@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Parser from "rss-parser";
 import { supabaseAdmin, hasServiceRoleKey } from "@/lib/supabaseAdmin";
+import { searchWeb, pickQueriesByWeight } from "@/lib/webSearch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,22 +32,25 @@ const AI_CONFIG = {
   model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
 };
 
-// ---------- 马来西亚精准商业 RSS 源 ----------
-// 严格聚焦：B2B 贸易 / 清真 Halal / MIDA 投资政策 / 零售电商 / 中马合作
-// 排除：房地产 / 股市大盘 / 油价棕油大宗商品 / 国外巨头人事
+// ---------- 东南亚实局 RSS 源（权重矩阵 50/30/20） ----------
+// 50% 本地品牌与营销 grassroots 源 / 30% 展会商会 / 20% 宏观政策
+// 已砍掉 The Star / Bernama / NST 等纯宏观财经流，改为营销/展会/零售 grassroots 源
+// 注：部分 RSS URL 需在部署后验证可用性，失败源会被独立 try-catch 静默跳过
 const RSS_FEEDS = [
-  // 官方机构：MIDA 投资政策、外资准入、Principal Hub
-  { name: "MIDA News", url: "https://www.mida.gov.my/feed/" },
-  // 官方机构：MATRADE 出口促进、贸易展会、市场准入
-  { name: "MATRADE News", url: "https://matrade.gov.my/feed/" },
-  // 主流商业媒体 - Business/Trade 专栏（混合源，依赖 AI 二次过滤）
-  { name: "The Star Business", url: "https://www.thestar.com.my/rss/business/" },
-  { name: "Bernama Business", url: "https://www.bernama.com/en/rss/news.php?cat=biz" },
-  { name: "New Straits Times Biz", url: "https://www.nst.com.my/rss/business" },
+  // ===== 50% 本地品牌与营销（grassroots）=====
+  { name: "Marketing Interactive", url: "https://www.marketing-interactive.com/feed/", topic: "品牌营销", weight: 50 },
+  { name: "Campaign Asia", url: "https://www.campaignasia.com/feed", topic: "品牌营销", weight: 50 },
+  { name: "Vulcan Post MY", url: "https://vulcanpost.com/feed/", topic: "品牌营销", weight: 50 },
+  { name: "Retail Asia", url: "https://www.retailasia.com/feed", topic: "品牌营销", weight: 50 },
+  // ===== 30% 展会与商会动态 =====
+  { name: "MATRADE News", url: "https://matrade.gov.my/feed/", topic: "展会商会", weight: 30 },
+  { name: "MIDA News", url: "https://www.mida.gov.my/feed/", topic: "展会商会", weight: 30 },
+  // ===== 20% 宏观与基建（仅高价值商业政策）=====
+  { name: "The Edge Malaysia Biz", url: "https://theedgemalaysia.com/rss/business", topic: "宏观政策", weight: 20 },
 ] as const;
 
 // ---------- 关键词预过滤：客户端硬性丢弃无关新闻 ----------
-// 命中标题/内容任一关键词即丢弃，不进入 AI 提炼环节
+// 命中标题/内容任一关键词即丢弃，不进入 AI 提炼环节（节省 Token）
 const IRRELEVANT_KEYWORDS = [
   // 房地产
   "property", "real estate", "housing", "condo", "apartment", "property market",
@@ -59,6 +63,22 @@ const IRRELEVANT_KEYWORDS = [
   "gold price", "commodity prices",
   // 国外巨头人事
   "tesla ceo", "apple ceo", "tata group", "elon musk", "netflix", "disney",
+  // ===== 阶段三新增：强制剔除宏观政务类 =====
+  // 航天/航空基建
+  "aerospace", "spaceport", "satellite launch", "rocket launch", "national space",
+  "aerospace industry blueprint",
+  // 人才新政/博士引进
+  "talent", "talentcorp", "phd", "doctorate", "scholarship", "research grant",
+  "talent recruitment", "skilled worker visa",
+  // 数据中心/算力基建
+  "data center", "data centre", "ai computing", "hyperscale", "gpu cluster",
+  "cloud region", "green data center",
+  // 军事
+  "military", "defence ministry", "armed forces", "naval", "air force base",
+  "defence procurement",
+  // 官员任免/政务新闻
+  "minister appoints", "cabinet reshuffle", "sworn in", "takes office",
+  "minister resigns", "official appointment",
   // 通用社会新闻
   "haze", "traffic accident", "murder", "court case", "election",
 ] as const;
@@ -68,34 +88,48 @@ function isIrrelevant(item: RawFeedItem): boolean {
   return IRRELEVANT_KEYWORDS.some((kw) => text.includes(kw));
 }
 
-// ---------- AI 中文提炼 Prompt（强过滤 + 商业启示重构） ----------
-const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌出海 / 清真 Halal 准入】的资深商业分析师。
+// ---------- AI 中文提炼 Prompt（强过滤 + 分类 + 营销启示） ----------
+const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌出海 / 清真 Halal 准入 / 本地品牌营销】的资深商业分析师。
 
-【目标读者】中国 B2B 品牌出海决策者、大马 GTM 咨询客户、清真市场准入企业。
+【目标读者】中国 B2B 品牌出海决策者、大马 GTM 咨询客户、清真市场准入企业、本地营销操盘手。
 
-【严格相关性过滤规则】
-仅当新闻符合以下 5 大领域之一时，才生成摘要：
-1. 大马/东盟 B2B 贸易与消费品市场（零售、FMCG、电商、品牌出海动态）
-2. 清真 Halal 产业与 JAKIM 准入政策（清真认证、食品/美妆/供应链准入）
-3. 中国企业出海大马/东南亚 GTM 实战政策（MIDA 投资优惠、MATRADE 展会、关税、出海合规）
-4. 大马本地渠道与营销趋势（TikTok Shop / Shopee / Lazada / 线下零售 / 品牌营销案例）
-5. 中马双边贸易与产业合作（制造业、跨境电商、品牌供应链合作）
+【优先聚焦领域（按权重降序）】
+1. 【50% 最高优先】本地品牌营销案例 / Pop-up 快闪 / 联名活动 / 营销战役 / KOL 达人案例 / 本地快消与消费动态
+2. 【30% 次优先】展会与商会动态 / 青年商会对接 / 行业博览会（MITEC / MIECC / KLCC / MATRADE 展会）
+3. 【20% 兜底】宏观商业政策与产业动态（仅保留：MIDA 投资优惠、MATRADE 出口政策、关税、Halal 准入、跨境电商政策、中马产业合作）
 
-【直接丢弃规则】
-凡涉及以下主题的新闻，必须返回 {"relevant": false}：
-- 房地产开发/房价/楼盘
-- 股市大盘/股票涨跌/指数收盘
-- 原油/棕榈油/橡胶等大宗商品价格波动
-- 国外无关巨头人事变动（Tesla/Apple/Tata 等）
-- 通用社会新闻（天气/交通/犯罪/选举）
+【强制剔除规则】（命中任一即返回 {"relevant": false}，绝不生成摘要）
+- 航天 / 航空 / 卫星发射 / 太空基建
+- 人才新政 / 博士引进 / 研究生奖学金 / 学术拨款
+- 数据中心 / 算力基建 / GPU 集群 / 云区域
+- 军事 / 国防采购 / 武装部队
+- 官员任免 / 内阁改组 / 政务人事
+- 房地产开发 / 房价 / 楼盘
+- 股市大盘 / 股票涨跌 / 指数收盘
+- 原油 / 棕榈油 / 橡胶等大宗商品价格波动
+- 国外无关巨头人事变动（Tesla / Apple / Tata 等）
+- 通用社会新闻（天气 / 交通 / 犯罪 / 选举）
 
 【输出格式】
-若相关，输出：
-{"relevant": true, "title_zh": "中文标题20字内", "summary_zh": "100字高密度中文摘要，直击核心事实与关键数据", "key_takeaway": "一句话商业启示"}
+若相关，必须输出以下完整 JSON（缺一不可）：
+{
+  "relevant": true,
+  "title_zh": "中文标题20字内",
+  "summary_zh": "100字高密度中文摘要，直击核心事实与关键数据",
+  "category": "品牌营销 | 展会商会 | 宏观政策（三选一）",
+  "marketing_takeaway": "该动态对同赛道品牌进入东南亚或本地化运营的落地参考建议，必须可执行、有具体抓手，50-120字",
+  "tags": ["2-4个标签，如 JAKIM清真 / FMCG / 达人营销 / 线下渠道"]
+}
 
-【key_takeaway 要求】
-必须从"品牌出海 / 大马 GTM 落地 / 渠道拓展 / 清真合规避坑"角度给出可落地建议。
-示例："建议出海消费品牌提前布局 JAKIM 清真认证，认证周期 45-90 天，可借力大马作为东盟与中东清真市场跳板。"
+【marketing_takeaway 硬约束】
+- 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法）
+- 禁止空话套话（如"建议持续关注""未来可期"）
+- 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
+
+【category 判定】
+- 品牌营销：含具体品牌、营销战役、Pop-up、联名、达人合作、零售案例
+- 展会商会：含展会、博览会、商会、行业对接会
+- 宏观政策：投资优惠、关税、准入政策、产业规划
 
 若不相关，输出：{"relevant": false}
 
@@ -133,6 +167,8 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "大马清真产业 2030 总规划：JAKIM 认证国际化互认加速",
     summaryZh: "马来西亚发布清真产业 2030 总规划，目标清真出口突破 1500 亿令吉。JAKIM 已与沙特、阿联酋、印尼等 12 国签署清真认证互认协议，大马成为全球清真市场准入枢纽。",
     keyTakeaway: "建议出海消费品牌提前布局 JAKIM 清真认证（周期 45-90 天），借力大马互认体系一键打通东盟与中东 57 亿清真消费市场。",
+    category: "宏观政策",
+    tags: ["JAKIM清真", "Halal认证", "中马合作"],
   },
   {
     title: "MIDA Principal Hub: 45-Day Fast Track for Chinese Brands Entering Malaysia",
@@ -143,6 +179,8 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "MIDA Principal Hub 绿色通道：中国品牌落地大马 45 天审批",
     summaryZh: "MIDA 将 Principal Hub 外资审批从 6 个月压缩至 45 天，符合资质的出海企业可享 10 年免税期。政策重点吸引 B2B 消费品牌、数字服务和 SaaS 企业落地大马作为东盟总部。",
     keyTakeaway: "年营收 >RM 500 万的 B2B 出海品牌建议申请 Principal Hub 资质，享受 10 年免税 + 100% 外资持股，审批窗口已大幅缩短。",
+    category: "宏观政策",
+    tags: ["MIDA政策", "Principal Hub", "B2B出海"],
   },
   {
     title: "TikTok Shop Malaysia GMV Surges 280%: Cross-Border Brands Dominate FMCG",
@@ -153,6 +191,8 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "TikTok Shop 大马 GMV 暴涨 280%：跨境中国品牌主导 FMCG",
     summaryZh: "TikTok Shop 大马 GMV 同比增长 280%，中国跨境美妆、零食品牌占据 45% 市场份额。直播带货 + 本土仓发货模式成为 FMCG 品牌快速验证大马市场的核心渠道。",
     keyTakeaway: "建议美妆/零食出海品牌优先布局 TikTok Shop 大马本土店 + MFP 计划（马来西亚跨境合作伙伴），3 个月可验证市场需求，初期试错成本 <RM 5 万。",
+    category: "品牌营销",
+    tags: ["TikTok Shop", "FMCG", "达人营销", "跨境电商"],
   },
   {
     title: "China-Malaysia Trade Hits Record USD 200 Billion: Manufacturing & E-Commerce Lead",
@@ -163,6 +203,8 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "中马贸易破 2000 亿美元：制造业与跨境电商双轮驱动",
     summaryZh: "中马双边贸易额 2025 年突破 2000 亿美元，制造业零部件和跨境电商成为核心增长引擎。RCEP 关税削减政策红利释放，中国品牌进入大马的关税成本平均下降 15-20%。",
     keyTakeaway: "出海制造与消费品牌可借力 RCEP 原产地累积规则，在大马设区域分拨中心，享受关税减免 + 东盟 6 亿市场一体化流通红利。",
+    category: "宏观政策",
+    tags: ["中马贸易", "RCEP", "跨境电商", "供应链"],
   },
   {
     title: "Shopee Malaysia Launches China Cross-Border Incubation: Zero Commission for 6 Months",
@@ -173,6 +215,8 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "Shopee 大马启动中国跨境孵化计划：新品牌前 6 月零佣金",
     summaryZh: "Shopee 大马推出中国跨境品牌孵化计划，新入驻中国 FMCG 品牌享前 6 个月零佣金 + 专属流量扶持 + 本土运营顾问。目标 2026 年引入 500 个优质中国品牌。",
     keyTakeaway: "建议新锐消费品牌（美妆/家居/3C 配件）优先申请 Shopee 跨境孵化计划，6 个月零成本验证大马市场 PMF，再决定是否长期投入本土化运营。",
+    category: "品牌营销",
+    tags: ["Shopee", "跨境电商", "FMCG", "孵化计划"],
   },
   {
     title: "MATRADE Export Promotion 2026: 15 Trade Missions Targeting Chinese Brands",
@@ -183,6 +227,8 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "MATRADE 2026 出口促进：15 场贸易展会锁定中国品牌",
     summaryZh: "马来西亚贸易发展局（MATRADE）公布 2026 年 15 场对外贸易展会，中国为核心目标市场。大马本土分销商正主动寻找中国 FMCG、美妆和清真食品品牌开展独家代理合作。",
     keyTakeaway: "出海品牌可关注 MATRADE 官网贸易展会日程，通过 INternational Sourcing Programme (INSP) 对接大马本土分销商，省去 BD 成本，30 天内可签下区域独家代理协议。",
+    category: "展会商会",
+    tags: ["MATRADE", "贸易展会", "渠道对接", "B2B出海"],
   },
 ];
 
@@ -284,7 +330,9 @@ async function deduplicateBySourceUrl(
 type AiResult = {
   titleZh: string;
   summaryZh: string;
-  keyTakeaway: string;
+  keyTakeaway: string; // 映射 DB key_takeaway 列（语义=marketing_takeaway 营销启示）
+  category: string; // 品牌营销 | 展会商会 | 宏观政策
+  tags: string[]; // 结构化标签
 };
 
 async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
@@ -336,10 +384,24 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
       return null;
     }
 
+    // 归一化 category：非法值兜底为「宏观政策」
+    const rawCat = String(parsed.category || "").trim();
+    const validCats = ["品牌营销", "展会商会", "宏观政策"];
+    const category = validCats.includes(rawCat) ? rawCat : "宏观政策";
+    // 归一化 tags：必须是字符串数组
+    let tags: string[] = [];
+    if (Array.isArray(parsed.tags)) {
+      tags = parsed.tags.map((t: any) => String(t || "").trim()).filter(Boolean).slice(0, 6);
+    }
+    // marketing_takeaway 优先，回退旧字段 key_takeaway
+    const takeaway = String(parsed.marketing_takeaway || parsed.key_takeaway || "").trim();
+
     return {
       titleZh: String(parsed.title_zh || "").trim().slice(0, 200),
       summaryZh: String(parsed.summary_zh || "").trim().slice(0, 500),
-      keyTakeaway: String(parsed.key_takeaway || "").trim().slice(0, 300),
+      keyTakeaway: takeaway.slice(0, 300),
+      category,
+      tags,
     };
   } catch (err: any) {
     if (err?.name === "AbortError") {
@@ -378,6 +440,8 @@ async function writeIntelligence(
       source_url: item.link,
       summary_zh: item.summaryZh,
       key_takeaway: item.keyTakeaway,
+      category: item.category || "宏观政策",
+      tags: Array.isArray(item.tags) ? item.tags : [],
       published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
       is_published: true,
       is_featured: false,
@@ -519,6 +583,20 @@ async function handleCron(req: NextRequest) {
   const rawItems = await fetchAllFeeds();
   console.log(`[cron] RSS 抓取合计：${rawItems.length} 条`);
 
+  // 1.5 Web Search 补充（Tavily/Serper，未配置 Key 时静默跳过）
+  // 用 50/30/20 权重矩阵抽取 query，检索全网品牌营销/展会/政策动态
+  try {
+    const queries = pickQueriesByWeight(6);
+    const webResults = await searchWeb(queries);
+    if (webResults.length > 0) {
+      // WebSearchResult 与 RawFeedItem 结构兼容，直接合并
+      rawItems.push(...webResults);
+      console.log(`[cron] Web 搜索补充 ${webResults.length} 条，合并后 ${rawItems.length} 条`);
+    }
+  } catch (webErr: any) {
+    console.warn(`[cron] Web 搜索异常（不影响主流程）：${webErr?.message || webErr}`);
+  }
+
   if (rawItems.length === 0) {
     // 高可用兜底：所有 RSS 源失败时注入预设大马商业情报
     console.warn("[cron] 所有 RSS 源抓取失败，注入兜底情报数据...");
@@ -531,6 +609,8 @@ async function handleCron(req: NextRequest) {
       sourceUrl: item.link,
       summaryZh: item.summaryZh,
       keyTakeaway: item.keyTakeaway,
+      category: item.category,
+      tags: item.tags,
       publishedAt: item.pubDate,
       createdAt: new Date().toISOString(),
       isPublished: true,
@@ -594,6 +674,8 @@ async function handleCron(req: NextRequest) {
       sourceUrl: item.link,
       summaryZh: item.summaryZh,
       keyTakeaway: item.keyTakeaway,
+      category: item.category,
+      tags: item.tags,
       publishedAt: item.pubDate,
       createdAt: new Date().toISOString(),
       isPublished: true,
@@ -636,6 +718,8 @@ async function handleCron(req: NextRequest) {
     sourceUrl: item.link,
     summaryZh: item.summaryZh,
     keyTakeaway: item.keyTakeaway,
+    category: item.category,
+    tags: item.tags,
     publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
     createdAt: new Date().toISOString(),
     isPublished: true,

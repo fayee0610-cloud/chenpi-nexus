@@ -196,11 +196,13 @@ export interface MalaysiaIntelligence {
   sourceName: string;    // 来源媒体（如 The Edge Malaysia）
   sourceUrl: string;     // 原文链接（去重依据）
   summaryZh: string;     // AI 100字中文高密度摘要
-  keyTakeaway: string;   // 一句话商业启示
+  keyTakeaway: string;   // 营销启示 / 商业落地建议（映射 marketing_takeaway）
   publishedAt: string;   // 原文发布时间
   createdAt: string;     // 入库时间
   isPublished: boolean;
   isFeatured?: boolean;
+  category?: string;     // 分类：品牌营销 / 展会商会 / 宏观政策
+  tags?: string[];       // 结构化标签（如 JAKIM清真 / FMCG / 达人营销）
 }
 
 // ========== 1. 个人简介与 Hero 区 ==========

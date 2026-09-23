@@ -111,16 +111,10 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         return;
       }
 
-      // 优先使用 API 返回的内存数据直接渲染（无论 DB 是否写入成功）
-      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-        setItems(result.data as MalaysiaIntelligence[]);
-        setShowAll(false); // 重置为默认 6 卡片视图
-        setAiMessage(result.message || `⚡ 成功加载 ${result.data.length} 条大马商业情报`);
-      } else {
-        // 没有内存数据，尝试从 DB 重新拉取
-        setAiMessage(result.message || "暂无新情报");
-        await loadData();
-      }
+      // 感知完成：强制回读数据库渲染，确保只展示已持久化的数据。
+      // 不再使用接口返回的内存 result.data，避免 DB 写入静默失败时会话级数据"刷新即丢失"。
+      setAiMessage(result.message || "⚡ 已更新最新大马商业情报");
+      await loadData();
     } catch (err: any) {
       setAiMessage(`❌ 网络错误：${err?.message || "请求失败"}`);
     } finally {
