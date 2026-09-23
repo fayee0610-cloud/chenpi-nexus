@@ -492,7 +492,7 @@ export async function createProject(project: Partial<PortfolioProject>) {
         sub_title: project.subTitle,
         category: project.category,
         role: project.role,
-        date: project.date,
+        date: (project.date && String(project.date).trim()) ? project.date : null,
         metrics: project.metrics || [],
         tags: project.tags || [],
         challenge: project.challenge,
@@ -522,7 +522,7 @@ export async function updateProject(id: string, project: Partial<PortfolioProjec
   if (project.subTitle !== undefined) updateData.sub_title = project.subTitle;
   if (project.category !== undefined) updateData.category = project.category;
   if (project.role !== undefined) updateData.role = project.role;
-  if (project.date !== undefined) updateData.date = project.date;
+  if (project.date !== undefined) updateData.date = (project.date && String(project.date).trim()) ? project.date : null;
   if (project.image !== undefined) updateData.image_url = project.image;
   if (project.challenge !== undefined) updateData.challenge = project.challenge;
   if (project.metrics !== undefined) updateData.metrics = project.metrics;
@@ -597,7 +597,7 @@ export async function createInsight(insight: Partial<InsightItem>) {
         category: insight.category,
         tags: Array.isArray(insight.tags) ? JSON.stringify(insight.tags) : null,
         read_time: insight.readTime,
-        date: insight.date,
+        date: (insight.date && String(insight.date).trim()) ? insight.date : null,
         author: insight.author,
         content: insight.content
           ? serializeContent(insight.content as ContentBlock[])
@@ -635,7 +635,7 @@ export async function updateInsight(
   if (patch.category !== undefined) payload.category = patch.category;
   if (patch.tags !== undefined) payload.tags = JSON.stringify(patch.tags || []);
   if (patch.readTime !== undefined) payload.read_time = patch.readTime;
-  if (patch.date !== undefined) payload.date = patch.date;
+  if (patch.date !== undefined) payload.date = (patch.date && String(patch.date).trim()) ? patch.date : null;
   if (patch.author !== undefined) payload.author = patch.author;
   if (patch.content !== undefined) payload.content = serializeContent(patch.content);
   if (patch.listenTime !== undefined) payload.audio_url = patch.listenTime;
@@ -916,6 +916,7 @@ export async function deleteLead(id: string) {
 }
 
 // ---------- Insights Hub (东南亚实局) CRUD ----------
+// 统一操作 malaysia_intelligence 表（后台手动发布 + AI 抓取 + 前台瀑布流三方共表）
 export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
   if (!supabase) return [];
   try {
@@ -926,20 +927,20 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
     const sevenDaysAgoISO = sevenDaysAgo.toISOString();
 
     const { data, error } = await supabase
-      .from("insights_hub")
-      .select("id,title,category,summary,source_name,original_url,published_at,is_published,is_featured,api_source,tags,created_at")
+      .from("malaysia_intelligence")
+      .select("id,title_zh,title_en,title,category,summary_zh,source_name,source_url,published_at,is_published,is_featured,tags,created_at")
       .gte("created_at", sevenDaysAgoISO)
       .order("created_at", { ascending: false })
       .range(0, 19);
 
-    // 若 schema 不匹配（如 tags/api_source 列缺失），降级为基础列查询
+    // 若 schema 不匹配（如 tags 列缺失），降级为基础列查询
     if (error && (error.code === "PGRST204" || error.message.includes("schema cache") || error.message.includes("Could not find"))) {
-      console.warn("[dataApi] insights_hub schema 不完整，降级到基础列查询:", error.message);
+      console.warn("[dataApi] malaysia_intelligence schema 不完整，降级到基础列查询:", error.message);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const basic = await supabase
-        .from("insights_hub")
-        .select("id,title,category,summary,source_name,original_url,published_at,is_published,is_featured,created_at")
+        .from("malaysia_intelligence")
+        .select("id,title_zh,title_en,title,category,summary_zh,source_name,source_url,published_at,is_published,is_featured,created_at")
         .gte("created_at", sevenDaysAgo.toISOString())
         .order("created_at", { ascending: false })
         .range(0, 19);
@@ -948,11 +949,11 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
         .filter((row: any) => row.is_published !== false)
         .map((row: any) => ({
           id: row.id,
-          title: row.title || "",
+          title: row.title_zh || row.title_en || row.title || "",
           category: row.category || "🎯 深度洞察",
-          summary: row.summary || "",
+          summary: row.summary_zh || "",
           sourceName: row.source_name || "",
-          originalUrl: row.original_url || "",
+          originalUrl: row.source_url || "",
           publishedAt: row.published_at || "",
           isPublished: true,
           isFeatured: row.is_featured ?? false,
@@ -970,16 +971,16 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
       .filter((row: any) => row.is_published !== false) // 前台只展示已发布内容
       .map((row: any) => ({
         id: row.id,
-        title: row.title || "",
+        title: row.title_zh || row.title_en || row.title || "",
         category: row.category || "🎯 深度洞察",
-        summary: row.summary || "",
+        summary: row.summary_zh || "",
         sourceName: row.source_name || "",
-        originalUrl: row.original_url || "",
+        originalUrl: row.source_url || "",
         publishedAt: row.published_at || "",
         isPublished: true,
         isFeatured: row.is_featured ?? false,
-        apiSource: row.api_source || "manual",
-        tags: row.tags ? (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags) : [],
+        apiSource: "manual",
+        tags: row.tags ? (typeof row.tags === "string" ? safeParseTags(row.tags) : row.tags) : [],
       })) as InsightHubItem[];
   } catch (err) {
     logNetworkFallback("fetchInsightsHub", err);
@@ -1045,22 +1046,28 @@ export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaInt
 
 /**
  * 创建马来西亚商业情报记录
+ * id 为 UUID 类型，由 DB 用 gen_random_uuid() 自动生成（前端不传 id，避免 22P02 错误）
  * 列缺失时自动降级（逐列移除重试）
  */
 export async function createMalaysiaIntelligence(item: Partial<MalaysiaIntelligence>) {
   if (!supabase) throw new Error("Supabase not configured");
 
   const payload: Record<string, any> = {
-    id: item.id || genId(),
-    title_en: item.titleEn || "",
-    title_zh: item.titleZh || "",
+    // 不传 id：让 DB 的 gen_random_uuid() 自动生成
+    title_en: item.titleEn || item.titleZh || "",
+    title_zh: item.titleZh || item.titleEn || "",
+    title: item.titleZh || item.titleEn || "",
     source_name: item.sourceName || "",
     source_url: item.sourceUrl || "",
+    category: item.category || "政策/贸易",
     summary_zh: item.summaryZh || "",
     key_takeaway: item.keyTakeaway || "",
-    published_at: item.publishedAt || new Date().toISOString(),
+    // 空日期转 null，避免空字符串写 TIMESTAMPTZ 列报错
+    published_at: item.publishedAt && String(item.publishedAt).trim() ? item.publishedAt : new Date().toISOString(),
     is_published: item.isPublished ?? true,
     is_featured: item.isFeatured ?? false,
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    importance_score: typeof item.importanceScore === "number" ? item.importanceScore : 3,
   };
 
   const { data, error } = await supabase
@@ -1073,37 +1080,43 @@ export async function createMalaysiaIntelligence(item: Partial<MalaysiaIntellige
 }
 
 const DATAAPI_MISSING_COLS_CACHE = new Set<string>();
+// malaysia_intelligence 表已知列（用于缺列降级重试）
 const DATAAPI_HUB_KNOWN_COLS = [
-  "id", "title", "category", "summary", "source_name", "original_url",
-  "published_at", "is_published", "is_featured", "api_source", "tags",
+  "title_zh", "title_en", "title", "category", "summary_zh", "source_name", "source_url",
+  "published_at", "is_published", "is_featured", "tags", "importance_score", "key_takeaway",
 ];
 
 export async function createInsightHub(item: Partial<InsightHubItem>) {
   if (!supabase) throw new Error("Supabase not configured");
 
-  const id = genId();
+  // 统一写入 malaysia_intelligence 表（前台瀑布流读取同表，打通前后台数据）
+  // id 为 UUID，由 DB 用 gen_random_uuid() 自动生成，前端不传 id
   const MAX_TRIES = DATAAPI_HUB_KNOWN_COLS.length + 1;
 
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
-    const payload: Record<string, any> = { id };
+    const payload: Record<string, any> = {};
     const maybeAdd = (col: string, value: any) => {
       if (value === undefined || value === null) return;
       if (DATAAPI_MISSING_COLS_CACHE.has(col)) return;
       payload[col] = value;
     };
-    maybeAdd("title", item.title);
-    maybeAdd("category", item.category);
-    maybeAdd("summary", item.summary);
-    maybeAdd("source_name", item.sourceName);
-    maybeAdd("original_url", item.originalUrl);
-    maybeAdd("published_at", item.publishedAt);
+    // 字段映射：InsightHubItem → malaysia_intelligence
+    maybeAdd("title_zh", item.title || "");
+    maybeAdd("title_en", item.title || "");
+    maybeAdd("title", item.title || "");
+    maybeAdd("category", item.category || "🎯 深度洞察");
+    maybeAdd("summary_zh", item.summary || "");
+    maybeAdd("source_name", item.sourceName || "");
+    maybeAdd("source_url", item.originalUrl || "");
+    // 空日期转 ISO，避免空字符串写 TIMESTAMPTZ 列报错
+    maybeAdd("published_at", (item.publishedAt && String(item.publishedAt).trim()) ? item.publishedAt : new Date().toISOString());
     maybeAdd("is_published", item.isPublished ?? true);
     maybeAdd("is_featured", item.isFeatured ?? false);
-    maybeAdd("api_source", item.apiSource || "manual");
-    maybeAdd("tags", item.tags || []);
+    maybeAdd("tags", Array.isArray(item.tags) ? item.tags : []);
+    maybeAdd("importance_score", 3);
 
     const { data, error } = await supabase
-      .from("insights_hub")
+      .from("malaysia_intelligence")
       .insert([payload])
       .select();
 
@@ -1120,7 +1133,7 @@ export async function createInsightHub(item: Partial<InsightHubItem>) {
     }
     throw error;
   }
-  throw new Error("createInsightHub 超过最大重试次数：请补全 insights_hub 表列（ALTER TABLE）");
+  throw new Error("createInsightHub 超过最大重试次数：请补全 malaysia_intelligence 表列（ALTER TABLE）");
 }
 
 // ---------- 服务端专用：API 自动化写入（使用 service_role key） ----------
@@ -1164,24 +1177,29 @@ export async function createInsightHubViaAPI(item: {
   try {
     const { createClient } = await import("@supabase/supabase-js");
     const serverClient = createClient(supabaseUrl, supabaseServiceKey);
-    const id = genId();
-    const { error } = await serverClient.from("insights_hub").insert([
-      {
-        id,
-        title: item.title,
-        category: item.category,
-        summary: item.summary,
-        source_name: item.source_name,
-        original_url: item.original_url,
-        published_at: new Date().toLocaleDateString("zh-CN").replace(/\//g, "."),
-        is_published: true,
-        is_featured: false,
-        api_source: "auto_bot",
-        tags: item.tags || [],
-      },
-    ]);
+    // 统一写入 malaysia_intelligence 表，不传 id（DB 用 gen_random_uuid() 自动生成）
+    // published_at 使用 ISO 8601 格式，避免空字符串/非标准日期写 TIMESTAMPTZ 列报错
+    const insertPayload: Record<string, any> = {
+      title_zh: item.title,
+      title_en: item.title,
+      title: item.title,
+      category: item.category,
+      summary_zh: item.summary,
+      source_name: item.source_name,
+      source_url: item.original_url,
+      published_at: new Date().toISOString(),
+      is_published: true,
+      is_featured: false,
+      tags: item.tags || [],
+      importance_score: 3,
+    };
+    const { data, error } = await serverClient
+      .from("malaysia_intelligence")
+      .insert([insertPayload])
+      .select("id");
     if (error) return { success: false, error: error.message };
-    return { success: true, id };
+    const newId = data && data[0] ? data[0].id : undefined;
+    return { success: true, id: newId };
   } catch (err: any) {
     return { success: false, error: err.message || "Unknown error" };
   }
@@ -1189,14 +1207,14 @@ export async function createInsightHubViaAPI(item: {
 
 export async function deleteInsightHub(id: string) {
   if (!supabase) throw new Error("Supabase not configured");
-  const { error } = await supabase.from("insights_hub").delete().eq("id", String(id));
+  const { error } = await supabase.from("malaysia_intelligence").delete().eq("id", String(id));
   if (error) throw error;
 }
 
 export async function toggleInsightHubPublish(id: string, isPublished: boolean) {
   if (!supabase) throw new Error("Supabase not configured");
   const { error } = await supabase
-    .from("insights_hub")
+    .from("malaysia_intelligence")
     .update({ is_published: isPublished })
     .eq("id", String(id));
   if (error) throw error;
@@ -1206,7 +1224,7 @@ export async function toggleInsightHubPublish(id: string, isPublished: boolean) 
 export async function toggleInsightHubFeature(id: string, isFeatured: boolean) {
   if (!supabase) throw new Error("Supabase not configured");
   const { error } = await supabase
-    .from("insights_hub")
+    .from("malaysia_intelligence")
     .update({ is_featured: isFeatured })
     .eq("id", String(id));
   if (error) throw error;
@@ -1216,18 +1234,26 @@ export async function toggleInsightHubFeature(id: string, isFeatured: boolean) {
 export async function updateInsightHub(id: string, updates: Partial<InsightHubItem>) {
   if (!supabase) throw new Error("Supabase not configured");
   const updateData: Record<string, any> = {};
-  if (updates.title !== undefined) updateData.title = updates.title;
+  // 字段映射：InsightHubItem → malaysia_intelligence
+  if (updates.title !== undefined) {
+    updateData.title_zh = updates.title;
+    updateData.title_en = updates.title;
+    updateData.title = updates.title;
+  }
   if (updates.category !== undefined) updateData.category = updates.category;
-  if (updates.summary !== undefined) updateData.summary = updates.summary;
+  if (updates.summary !== undefined) updateData.summary_zh = updates.summary;
   if (updates.sourceName !== undefined) updateData.source_name = updates.sourceName;
-  if (updates.originalUrl !== undefined) updateData.original_url = updates.originalUrl;
-  if (updates.publishedAt !== undefined) updateData.published_at = updates.publishedAt;
+  if (updates.originalUrl !== undefined) updateData.source_url = updates.originalUrl;
+  if (updates.publishedAt !== undefined) {
+    // 空日期转 null，避免空字符串写 TIMESTAMPTZ 列报错
+    updateData.published_at = (updates.publishedAt && String(updates.publishedAt).trim()) ? updates.publishedAt : null;
+  }
   if (updates.isPublished !== undefined) updateData.is_published = updates.isPublished;
   if (updates.isFeatured !== undefined) updateData.is_featured = updates.isFeatured;
   if (updates.tags !== undefined) updateData.tags = updates.tags;
 
   const { data, error } = await supabase
-    .from("insights_hub")
+    .from("malaysia_intelligence")
     .update(updateData)
     .eq("id", String(id))
     .select();
