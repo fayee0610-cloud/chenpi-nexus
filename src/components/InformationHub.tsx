@@ -92,20 +92,14 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         headers: { "Content-Type": "application/json" },
       });
       const result = await res.json();
-      const stats = result.stats || {};
-      const inserted = stats.inserted ?? 0;
 
-      if (inserted > 0) {
-        setAiMessage(`⚡ 成功抓取并写入 ${inserted} 条马来西亚商业情报`);
-        await new Promise((r) => setTimeout(r, 400));
-        await loadData();
+      // 优先使用 API 返回的内存数据直接渲染（无论 DB 是否写入成功）
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        setItems(result.data as MalaysiaIntelligence[]);
+        setAiMessage(result.message || `⚡ 成功加载 ${result.data.length} 条大马商业情报`);
       } else {
-        if (!result.success) {
-          const realErr = result.error || (result.errors && result.errors[0]) || result.message || "未知错误";
-          setAiMessage(`❌ ${realErr}`);
-        } else {
-          setAiMessage(result.message || "暂无新情报");
-        }
+        // 没有内存数据，尝试从 DB 重新拉取
+        setAiMessage(result.message || "暂无新情报");
         await loadData();
       }
     } catch (err: any) {
