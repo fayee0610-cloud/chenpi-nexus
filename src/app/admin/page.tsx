@@ -67,7 +67,11 @@ import type { SiteConfig, Lead } from "@/lib/dataApi";
 import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory, ContentBlock } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL as HARDCORE_TAGS_POOL_CONST, FLAT_HARDCORE_TAGS as FLAT_HARDCORE_TAGS_CONST } from "@/data/siteData";
 
-type AdminTab = "portfolio" | "insights" | "comments" | "sanctuary" | "resources" | "leads" | "hub" | "config";
+// 导航 Tab 顺序严格对齐前台 6 大模块 + 线索 + 站点配置
+// 评论审核并入「脑洞画布」作为子视图，不再单独占一级 Tab
+type AdminTab = "hub" | "insights" | "resources" | "sanctuary" | "portfolio" | "leads" | "config";
+// 脑洞画布内部子视图：社区帖子 / 评论审核
+type CanvasSubTab = "posts" | "comments";
 
 // 列表项扩展 isPublished 字段（DB 返回，但 fetchProjects/fetchInsights 未映射，admin 页面自行管理）
 type AdminProject = PortfolioProject & { isPublished: boolean };
@@ -91,7 +95,10 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>("portfolio");
+  // 默认聚焦首个模块「东南亚实局」，与前台首屏渲染顺序一致
+  const [activeTab, setActiveTab] = useState<AdminTab>("hub");
+  // 脑洞画布子视图切换（帖子管理 / 评论审核），表单逻辑各自保持不变
+  const [canvasSubTab, setCanvasSubTab] = useState<CanvasSubTab>("posts");
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -157,46 +164,52 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* Tab 切换 */}
-        <div className="mx-auto flex max-w-7xl items-center gap-1 px-6 pb-3">
+        {/* Tab 切换 —— 顺序对齐前台 6 大模块 + 线索与转化 + 站点配置 */}
+        <div className="mx-auto flex max-w-7xl items-center gap-1 overflow-x-auto px-6 pb-3">
           {[
-            { key: "portfolio" as const, label: "实战案例", icon: <Briefcase className="h-3.5 w-3.5" /> },
-            { key: "insights" as const, label: "深度洞察", icon: <Sparkles className="h-3.5 w-3.5" /> },
-            { key: "comments" as const, label: "文章评论", icon: <MessageCircle className="h-3.5 w-3.5" /> },
-            { key: "sanctuary" as const, label: "脑洞画布", icon: <MessageCircle className="h-3.5 w-3.5" /> },
-            { key: "resources" as const, label: "策略工具包", icon: <Package className="h-3.5 w-3.5" /> },
-            { key: "leads" as const, label: "线索", icon: <Mail className="h-3.5 w-3.5" /> },
-            { key: "hub" as const, label: "东南亚实局", icon: <Radar className="h-3.5 w-3.5" /> },
-            { key: "config" as const, label: "站点配置", icon: <Settings className="h-3.5 w-3.5" /> },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                activeTab === tab.key
-                  ? "bg-zinc-100 text-zinc-950"
-                  : "text-zinc-500 hover:text-zinc-200"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+            { key: "hub" as const, label: "东南亚实局", en: "SE Asia Radar", icon: <Radar className="h-3.5 w-3.5" /> },
+            { key: "insights" as const, label: "深度洞察", en: "Deep Insights", icon: <Sparkles className="h-3.5 w-3.5" /> },
+            { key: "resources" as const, label: "策略工具包", en: "Strategy Toolkit", icon: <Package className="h-3.5 w-3.5" /> },
+            { key: "sanctuary" as const, label: "脑洞画布", en: "Brainstorm Canvas", icon: <MessageCircle className="h-3.5 w-3.5" /> },
+            { key: "portfolio" as const, label: "实战案例", en: "Case Studies", icon: <Briefcase className="h-3.5 w-3.5" /> },
+            { key: "leads" as const, label: "线索与转化", en: "Leads & Contact", icon: <Mail className="h-3.5 w-3.5" /> },
+            { key: "config" as const, label: "站点配置", en: "Site Settings", icon: <Settings className="h-3.5 w-3.5" /> },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                title={tab.en}
+                className={`group inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  isActive
+                    ? "bg-gradient-to-r from-blue-500/90 to-purple-500/90 text-white shadow-lg shadow-blue-500/20"
+                    : "text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200"
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                <span className={`hidden text-[9px] uppercase tracking-wider opacity-60 md:inline ${isActive ? "" : "opacity-0 group-hover:opacity-60"}`}>
+                  {tab.en}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </header>
 
-      {/* 主内容区 */}
+      {/* 主内容区 —— 渲染顺序对齐前台模块：东南亚实局 → 深度洞察 → 策略工具包 → 脑洞画布 → 实战案例 → 线索与转化 → 站点配置 */}
       <main className="mx-auto max-w-7xl px-6 py-8">
         <AnimatePresence mode="wait">
-          {activeTab === "portfolio" && (
+          {activeTab === "hub" && (
             <motion.div
-              key="portfolio"
+              key="hub"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              <PortfolioEditor />
+              <InsightHubEditor />
             </motion.div>
           )}
           {activeTab === "insights" && (
@@ -210,28 +223,6 @@ export default function AdminPage() {
               <InsightsEditor />
             </motion.div>
           )}
-          {activeTab === "comments" && (
-            <motion.div
-              key="comments"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <CommentManagement />
-            </motion.div>
-          )}
-          {activeTab === "sanctuary" && (
-            <motion.div
-              key="sanctuary"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <SanctuaryManager />
-            </motion.div>
-          )}
           {activeTab === "resources" && (
             <motion.div
               key="resources"
@@ -243,6 +234,53 @@ export default function AdminPage() {
               <ResourceEditor />
             </motion.div>
           )}
+          {activeTab === "sanctuary" && (
+            <motion.div
+              key="sanctuary"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* 脑洞画布子视图：社区帖子 / 评论审核（表单逻辑各自保持不变） */}
+              <div className="mb-5 inline-flex gap-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-1">
+                <button
+                  onClick={() => setCanvasSubTab("posts")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                    canvasSubTab === "posts"
+                      ? "bg-blue-500/20 text-blue-300"
+                      : "text-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  社区帖子
+                </button>
+                <button
+                  onClick={() => setCanvasSubTab("comments")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                    canvasSubTab === "comments"
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "text-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  评论审核
+                </button>
+              </div>
+              {canvasSubTab === "posts" ? <SanctuaryManager /> : <CommentManagement />}
+            </motion.div>
+          )}
+          {activeTab === "portfolio" && (
+            <motion.div
+              key="portfolio"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <PortfolioEditor />
+            </motion.div>
+          )}
           {activeTab === "leads" && (
             <motion.div
               key="leads"
@@ -252,17 +290,6 @@ export default function AdminPage() {
               transition={{ duration: 0.2 }}
             >
               <LeadsManager />
-            </motion.div>
-          )}
-          {activeTab === "hub" && (
-            <motion.div
-              key="hub"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <InsightHubEditor />
             </motion.div>
           )}
           {activeTab === "config" && (
