@@ -13,6 +13,7 @@ import {
   Clock,
   Lightbulb,
   ChevronDown,
+  CalendarClock,
 } from "lucide-react";
 import { fetchMalaysiaIntelligence } from "@/lib/dataApi";
 import { type MalaysiaIntelligence } from "@/data/siteData";
@@ -20,14 +21,22 @@ import LoadMoreButton from "@/components/LoadMoreButton";
 
 // 来源媒体对应的主题色
 const SOURCE_STYLES: Record<string, { border: string; bg: string; text: string }> = {
-  "The Edge Malaysia": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "MIDA Official": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "MIDA News": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "MATRADE News": { border: "border-blue-500/30", bg: "bg-blue-500/10", text: "text-blue-400" },
   "The Star Business": { border: "border-blue-500/30", bg: "bg-blue-500/10", text: "text-blue-400" },
-  "Malay Mail Money": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
   "Bernama Business": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400" },
+  "New Straits Times Biz": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400" },
   "New Straits Times": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400" },
+  "The Edge Malaysia": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
+  "Malay Mail Money": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
 };
 
 const DEFAULT_SOURCE_STYLE = { border: "border-zinc-700", bg: "bg-zinc-800/50", text: "text-zinc-400" };
+
+// 默认展示 6 条，展开后最多 18 条
+const DEFAULT_LIMIT = 6;
+const EXPANDED_LIMIT = 18;
 
 function formatDate(iso: string): string {
   if (!iso) return "";
@@ -52,11 +61,12 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false); // 展开更多历史情报
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await fetchMalaysiaIntelligence(12);
+      const data = await fetchMalaysiaIntelligence(EXPANDED_LIMIT);
       setItems(data);
     } catch (err: any) {
       console.warn("[InformationHub] loadData 失败:", err?.message || err);
@@ -71,7 +81,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     (async () => {
       try {
         setLoading(true);
-        const data = await fetchMalaysiaIntelligence(12);
+        const data = await fetchMalaysiaIntelligence(EXPANDED_LIMIT);
         if (mounted) setItems(data);
       } catch (err) {
         console.warn("[InformationHub] 首次加载失败:", err);
@@ -82,20 +92,29 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     return () => { mounted = false; };
   }, []);
 
-  // ⚡ 实时感知：触发 RSS 抓取 → AI 摘要 → 写入 malaysia_intelligence
+  // ⚡ 实时感知：触发 RSS 抓取 → AI 摘要 → upsert malaysia_intelligence
+  // 携带 cooldown=1 参数，后端检查 3 分钟冷却防护
   const handleAiRefresh = async () => {
     setAiRefreshing(true);
     setAiMessage(null);
     try {
-      const res = await fetch("/api/cron/fetch-intelligence", {
+      const res = await fetch("/api/cron/fetch-intelligence?cooldown=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       const result = await res.json();
 
+      // 冷却中：距离上次更新 <3 分钟，直接提示不重复消耗 Token
+      if (result.cooldown === true) {
+        setAiMessage(result.message || "⏳ 刚刚已更新过，请稍后再试");
+        setAiRefreshing(false);
+        return;
+      }
+
       // 优先使用 API 返回的内存数据直接渲染（无论 DB 是否写入成功）
       if (result.data && Array.isArray(result.data) && result.data.length > 0) {
         setItems(result.data as MalaysiaIntelligence[]);
+        setShowAll(false); // 重置为默认 6 卡片视图
         setAiMessage(result.message || `⚡ 成功加载 ${result.data.length} 条大马商业情报`);
       } else {
         // 没有内存数据，尝试从 DB 重新拉取
@@ -136,9 +155,11 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     setExpandedId((cur) => (cur === id ? null : id));
   };
 
-  const displayItems = typeof showLimit === "number" && showLimit > 0
-    ? items.slice(0, showLimit)
-    : items;
+  // 首页模式：使用 showLimit；否则默认 6 条，展开后 18 条
+  const isHomeMode = typeof showLimit === "number" && showLimit > 0;
+  const currentLimit = isHomeMode ? showLimit! : (showAll ? EXPANDED_LIMIT : DEFAULT_LIMIT);
+  const displayItems = items.slice(0, currentLimit);
+  const hasMore = !isHomeMode && !showAll && items.length > DEFAULT_LIMIT;
 
   return (
     <section id="intelligence" className="relative mx-auto max-w-7xl px-6 py-20">
@@ -178,6 +199,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
           {aiMessage && (
             <span className={`text-xs whitespace-nowrap ${
               aiMessage.startsWith("❌") ? "text-rose-400"
+              : aiMessage.startsWith("⏳") ? "text-amber-400"
               : aiMessage.startsWith("⚠️") ? "text-amber-400"
               : "text-emerald-400"
             }`}>
@@ -328,8 +350,41 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         )}
       </AnimatePresence>
 
+      {/* 展开更多大马商业情报 */}
+      {!isHomeMode && !loading && items.length > DEFAULT_LIMIT && (
+        <div className="mt-8 flex justify-center">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 px-6 py-3 text-sm font-medium text-zinc-300 backdrop-blur-sm transition-all hover:border-zinc-700 hover:bg-zinc-900/60 hover:text-zinc-100"
+          >
+            <CalendarClock className="h-4 w-4 text-purple-400" />
+            {showAll ? "收起历史情报" : "展开更多大马商业情报"}
+            <ChevronDown className={`h-4 w-4 transition-transform ${showAll ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+      )}
+
+      {/* 获客引导锚点 */}
+      {!isHomeMode && !loading && items.length > 0 && (
+        <div className="mt-6 text-center">
+          <p className="text-sm text-zinc-500">
+            <span className="mr-1">💡</span>
+            需要针对您产品的马来西亚定制化 GTM 策略与 Halal 准入评估？
+            <button
+              onClick={() => {
+                document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="ml-1 inline-flex items-center gap-1 text-purple-400 underline decoration-purple-500/30 underline-offset-4 transition-colors hover:text-purple-300 hover:decoration-purple-500/60"
+            >
+              点击预约 1v1 咨询
+              <ExternalLink className="h-3 w-3" />
+            </button>
+          </p>
+        </div>
+      )}
+
       {/* 首页模式：跳转完整列表 */}
-      {typeof showLimit === "number" && !loading && displayItems.length > 0 && (
+      {isHomeMode && !loading && displayItems.length > 0 && (
         <LoadMoreButton href="/hub" label="进入东南亚实局完整列表" />
       )}
     </section>

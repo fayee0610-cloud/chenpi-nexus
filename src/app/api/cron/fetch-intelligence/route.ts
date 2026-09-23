@@ -354,6 +354,7 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
 }
 
 // ---------- 写入 malaysia_intelligence：Service Role → Anon Key 降级 ----------
+// 使用 upsert（依据 source_url 唯一索引），实现增量更新而非重复插入
 async function writeIntelligence(
   items: Array<RawFeedItem & AiResult>
 ): Promise<{ inserted: number; errors: string[] }> {
@@ -383,13 +384,16 @@ async function writeIntelligence(
     };
 
     try {
-      const { error } = await client.from("malaysia_intelligence").insert([payload]);
+      // upsert：source_url 已存在则更新，不存在则插入
+      const { error } = await client
+        .from("malaysia_intelligence")
+        .upsert([payload], { onConflict: "source_url" });
       if (!error) {
         inserted++;
       } else {
         const msg = `${item.title}: ${error.message}`;
         errors.push(msg);
-        console.warn(`[cron] 写入失败：${msg}`);
+        console.warn(`[cron] upsert 失败：${msg}`);
       }
     } catch (e: any) {
       const msg = `${item.title}: ${e?.message || "写入异常"}`;
@@ -398,6 +402,63 @@ async function writeIntelligence(
   }
 
   return { inserted, errors };
+}
+
+// ---------- 滚动淘汰：保留最新 50 条，删除 is_featured=false 的旧数据 ----------
+async function rollOutdatedData(client: any): Promise<{ deleted: number }> {
+  if (!client) return { deleted: 0 };
+  try {
+    // 查询第 50 条之后的非 featured 记录的 id
+    const { data: outdated, error: queryErr } = await client
+      .from("malaysia_intelligence")
+      .select("id", { count: "exact" })
+      .eq("is_featured", false)
+      .order("published_at", { ascending: false })
+      .range(50, 1000);
+
+    if (queryErr || !outdated || outdated.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const idsToDelete = outdated.map((r: any) => r.id);
+    const { error: delErr } = await client
+      .from("malaysia_intelligence")
+      .delete()
+      .in("id", idsToDelete);
+
+    if (delErr) {
+      console.warn(`[cron] 滚动淘汰删除失败：${delErr.message}`);
+      return { deleted: 0 };
+    }
+
+    console.log(`[cron] 滚动淘汰：删除 ${idsToDelete.length} 条旧数据（保留最新 50 条）`);
+    return { deleted: idsToDelete.length };
+  } catch (err: any) {
+    console.warn(`[cron] 滚动淘汰异常：${err?.message || err}`);
+    return { deleted: 0 };
+  }
+}
+
+// ---------- 冷却检查：返回最近一条记录的 created_at ----------
+async function getLatestRecordTime(): Promise<{ createdAt: string | null; client: any }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const client: any = supabaseAdmin || (supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null);
+  if (!client) return { createdAt: null, client: null };
+
+  try {
+    const { data, error } = await client
+      .from("malaysia_intelligence")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) return { createdAt: null, client };
+    return { createdAt: data.created_at, client };
+  } catch {
+    return { createdAt: null, client };
+  }
 }
 
 // ---------- 权限校验 ----------
@@ -430,6 +491,26 @@ async function handleCron(req: NextRequest) {
 
   if (!isAuthorized(req)) {
     return NextResponse.json({ success: false, error: "未授权：CRON_SECRET 验证失败" }, { status: 401 });
+  }
+
+  // 检查查询参数中是否有 cooldown=1 标记（前台主动感知时携带）
+  const wantsCooldownCheck = req.nextUrl.searchParams.get("cooldown") === "1";
+
+  // 0. 冷却检查：距离最近一次写入 <3 分钟则直接返回，防止 DeepSeek Token 浪费
+  if (wantsCooldownCheck) {
+    const { createdAt, client: coolClient } = await getLatestRecordTime();
+    if (createdAt) {
+      const elapsed = Date.now() - new Date(createdAt).getTime();
+      const COOLDOWN_MS = 3 * 60 * 1000; // 3 分钟
+      if (elapsed < COOLDOWN_MS) {
+        const remaining = Math.ceil((COOLDOWN_MS - elapsed) / 1000 / 60);
+        return NextResponse.json({
+          success: false,
+          cooldown: true,
+          message: `⏳ 刚刚已更新过最新情报，请 ${remaining} 分钟后再试`,
+        });
+      }
+    }
   }
 
   console.log("[cron] 开始执行马来西亚商业情报抓取流水线...");
@@ -529,6 +610,17 @@ async function handleCron(req: NextRequest) {
 
   // 4. 写入数据库
   const { inserted, errors } = await writeIntelligence(summarized);
+
+  // 5. 滚动淘汰：写入成功后删除超过 50 条的旧数据（is_featured=false）
+  if (inserted > 0) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const rollClient = supabaseAdmin || (supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null);
+    const { deleted } = await rollOutdatedData(rollClient);
+    if (deleted > 0) {
+      console.log(`[cron] 滚动淘汰完成：删除 ${deleted} 条旧数据`);
+    }
+  }
 
   const duration = Date.now() - startedAt;
   console.log(
