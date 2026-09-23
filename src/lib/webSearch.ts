@@ -20,6 +20,36 @@ export interface WebSearchResult {
   pubDate: string; // ISO 时间，缺失则用当前
 }
 
+// ---------- 信息源域名黑名单（过滤非新闻源） ----------
+// 排除百科/个人博客/静态站，确保入库的都是真实新闻媒体、商业官方门户或行业 B2B 平台
+const SOURCE_DOMAIN_BLACKLIST = [
+  "wikipedia.org",
+  "baike.baidu.com",
+  "zh.wikipedia.org",
+  "en.wikipedia.org",
+  "blogger.com",
+  "wordpress.com",
+  "medium.com/@", // 个人 Medium 博客（保留机构号需另判）
+  "weibo.com",
+  "zhihu.com",
+  "douyin.com",
+  "youtube.com",
+  "facebook.com",
+  "instagram.com",
+  "x.com",
+  "twitter.com",
+  "tiktok.com",
+];
+
+function isBlacklistedSource(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return SOURCE_DOMAIN_BLACKLIST.some((d) => host === d || host.endsWith("." + d));
+  } catch {
+    return false;
+  }
+}
+
 // ---------- 检索关键词矩阵（50/30/20 权重） ----------
 // 每次感知时按权重抽取对应数量的 query 发起搜索
 export const SEARCH_QUERY_MATRIX: { topic: string; weight: number; queries: string[] }[] = [
@@ -179,5 +209,11 @@ export async function searchWeb(queries: string[]): Promise<WebSearchResult[]> {
   }
 
   console.log(`[webSearch] 合计检索 ${all.length} 条结果`);
-  return all;
+
+  // 黑名单过滤：剔除百科/个人博客/社交站等非新闻源
+  const filtered = all.filter((r) => r.link && !isBlacklistedSource(r.link));
+  if (filtered.length < all.length) {
+    console.log(`[webSearch] 黑名单过滤：${all.length} → ${filtered.length} 条`);
+  }
+  return filtered;
 }

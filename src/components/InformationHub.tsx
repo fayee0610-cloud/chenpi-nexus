@@ -42,6 +42,16 @@ const DEFAULT_SOURCE_STYLE = { border: "border-zinc-700", bg: "bg-zinc-800/50", 
 const DEFAULT_LIMIT = 6;
 const EXPANDED_LIMIT = 18;
 
+// 分类筛选 Tab（与后端 category 字段对齐）
+const CATEGORY_TABS = ["全部", "展会/活动", "渠道/分销", "政策/贸易", "消费趋势"];
+
+// AI 情报价值打分标签（1-5 分）
+function getImportanceBadge(score?: number): { label: string; className: string } | null {
+  if (!score || score < 4) return null;
+  if (score >= 5) return { label: "★ 重点关注", className: "bg-rose-500/15 text-rose-300 border-rose-500/40" };
+  return { label: "高价值", className: "bg-amber-500/15 text-amber-300 border-amber-500/40" };
+}
+
 function formatDate(iso: string): string {
   if (!iso) return "";
   try {
@@ -67,6 +77,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false); // 展开更多历史情报
   const [selectedItem, setSelectedItem] = useState<MalaysiaIntelligence | null>(null); // 详情弹窗
+  const [activeCategory, setActiveCategory] = useState<string>("全部"); // 分类筛选
 
   const loadData = async (): Promise<MalaysiaIntelligence[]> => {
     try {
@@ -214,8 +225,14 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   // 首页模式：使用 showLimit；否则默认 6 条，展开后 18 条
   const isHomeMode = typeof showLimit === "number" && showLimit > 0;
   const currentLimit = isHomeMode ? showLimit! : (showAll ? EXPANDED_LIMIT : DEFAULT_LIMIT);
-  const displayItems = items.slice(0, currentLimit);
-  const hasMore = !isHomeMode && !showAll && items.length > DEFAULT_LIMIT;
+
+  // 分类筛选 + AI 价值打分降序排序（高价值商业情报自动靠前）
+  const filteredItems = items
+    .filter((item) => activeCategory === "全部" || item.category === activeCategory)
+    .sort((a, b) => (b.importanceScore || 3) - (a.importanceScore || 3));
+
+  const displayItems = filteredItems.slice(0, currentLimit);
+  const hasMore = !isHomeMode && !showAll && filteredItems.length > DEFAULT_LIMIT;
 
   return (
     <section id="intelligence" className="relative mx-auto max-w-7xl px-6 py-20">
@@ -265,6 +282,36 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         </div>
       </div>
 
+      {/* 分类筛选 Tab */}
+      {!isHomeMode && items.length > 0 && (
+        <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
+          {CATEGORY_TABS.map((cat) => {
+            const count =
+              cat === "全部"
+                ? items.length
+                : items.filter((it) => it.category === cat).length;
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all ${
+                  activeCategory === cat
+                    ? "border-purple-500/50 bg-purple-500/15 text-purple-200"
+                    : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                {cat}
+                <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${
+                  activeCategory === cat ? "bg-purple-500/30 text-purple-100" : "bg-zinc-800 text-zinc-500"
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 卡片网格 */}
       <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading
@@ -290,12 +337,29 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                       : "border-zinc-800"
                   }`}
                 >
-                  {/* 顶部：来源标签 + 时间 */}
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${style.border} ${style.bg} ${style.text}`}>
-                      <Newspaper className="h-3 w-3" />
-                      {item.sourceName}
-                    </span>
+                  {/* 顶部：来源标签 + 分类 + 价值徽章 + 发布时间 */}
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${style.border} ${style.bg} ${style.text}`}>
+                        <Newspaper className="h-3 w-3" />
+                        {item.sourceName}
+                      </span>
+                      {item.category && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                          <Tag className="h-2.5 w-2.5" />
+                          {item.category}
+                        </span>
+                      )}
+                      {(() => {
+                        const badge = getImportanceBadge(item.importanceScore);
+                        if (!badge) return null;
+                        return (
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
                       <Clock className="h-3 w-3" />
                       {formatDate(item.publishedAt)}

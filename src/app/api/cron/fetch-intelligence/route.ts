@@ -116,9 +116,11 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
   "relevant": true,
   "title_zh": "中文标题20字内",
   "summary_zh": "100字高密度中文摘要，直击核心事实与关键数据",
-  "category": "品牌营销 | 展会商会 | 宏观政策（三选一）",
+  "category": "展会/活动 | 渠道/分销 | 政策/贸易 | 消费趋势（四选一）",
   "marketing_takeaway": "该动态对同赛道品牌进入东南亚或本地化运营的落地参考建议，必须可执行、有具体抓手，50-120字",
-  "tags": ["2-4个标签，如 JAKIM清真 / FMCG / 达人营销 / 线下渠道"]
+  "tags": ["2-4个标签，如 JAKIM清真 / FMCG / 达人营销 / 线下渠道"],
+  "importance_score": 1到5的整数,
+  "published_at": "ISO 8601 格式的新闻真实发布时间，如 2026-09-15T08:30:00Z"
 }
 
 【marketing_takeaway 硬约束】
@@ -127,9 +129,25 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
 - 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
 
 【category 判定】
-- 品牌营销：含具体品牌、营销战役、Pop-up、联名、达人合作、零售案例
-- 展会商会：含展会、博览会、商会、行业对接会
-- 宏观政策：投资优惠、关税、准入政策、产业规划
+- 展会/活动：展会、博览会、Pop-up 快闪、联名活动、行业对接会、商会
+- 渠道/分销：零售渠道、分销商、电商平台（Shopee/TikTok Shop）、线下门店拓展、物流仓储
+- 政策/贸易：投资优惠（MIDA）、关税、Halal 准入、跨境电商政策、中马产业合作
+- 消费趋势：品牌营销案例、消费品类动态、KOL/达人案例、消费者行为
+
+【importance_score 判定（1-5 整数）】
+- 5 分：头部品牌出海战役 / 重大政策落地 / 首个案例（极稀缺，每日≤1 条）
+- 4 分：有具体可复用营销手法或渠道打法的案例
+- 3 分：行业趋势或常规政策动态
+- 2 分：边缘相关或数据较弱
+- 1 分：仅背景参考价值
+
+【published_at 提取】
+- 优先从网页正文/元数据中提取新闻真实发布日期，输出 ISO 8601（含时区）
+- 若完全无法判断，输出空字符串 ""，由后端降级使用抓取时间
+- 严禁把今天日期当作发布时间填入旧闻
+
+【通稿合并】
+- 若本条内容明显是某事件的公关通稿/转载（与已知热点高度重合），在 summary_zh 末尾追加「（同类报道较多）」以便后端去重
 
 若不相关，输出：{"relevant": false}
 
@@ -167,8 +185,9 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "大马清真产业 2030 总规划：JAKIM 认证国际化互认加速",
     summaryZh: "马来西亚发布清真产业 2030 总规划，目标清真出口突破 1500 亿令吉。JAKIM 已与沙特、阿联酋、印尼等 12 国签署清真认证互认协议，大马成为全球清真市场准入枢纽。",
     keyTakeaway: "建议出海消费品牌提前布局 JAKIM 清真认证（周期 45-90 天），借力大马互认体系一键打通东盟与中东 57 亿清真消费市场。",
-    category: "宏观政策",
+    category: "政策/贸易",
     tags: ["JAKIM清真", "Halal认证", "中马合作"],
+    importanceScore: 5,
   },
   {
     title: "MIDA Principal Hub: 45-Day Fast Track for Chinese Brands Entering Malaysia",
@@ -179,8 +198,9 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "MIDA Principal Hub 绿色通道：中国品牌落地大马 45 天审批",
     summaryZh: "MIDA 将 Principal Hub 外资审批从 6 个月压缩至 45 天，符合资质的出海企业可享 10 年免税期。政策重点吸引 B2B 消费品牌、数字服务和 SaaS 企业落地大马作为东盟总部。",
     keyTakeaway: "年营收 >RM 500 万的 B2B 出海品牌建议申请 Principal Hub 资质，享受 10 年免税 + 100% 外资持股，审批窗口已大幅缩短。",
-    category: "宏观政策",
+    category: "政策/贸易",
     tags: ["MIDA政策", "Principal Hub", "B2B出海"],
+    importanceScore: 4,
   },
   {
     title: "TikTok Shop Malaysia GMV Surges 280%: Cross-Border Brands Dominate FMCG",
@@ -191,8 +211,9 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "TikTok Shop 大马 GMV 暴涨 280%：跨境中国品牌主导 FMCG",
     summaryZh: "TikTok Shop 大马 GMV 同比增长 280%，中国跨境美妆、零食品牌占据 45% 市场份额。直播带货 + 本土仓发货模式成为 FMCG 品牌快速验证大马市场的核心渠道。",
     keyTakeaway: "建议美妆/零食出海品牌优先布局 TikTok Shop 大马本土店 + MFP 计划（马来西亚跨境合作伙伴），3 个月可验证市场需求，初期试错成本 <RM 5 万。",
-    category: "品牌营销",
+    category: "消费趋势",
     tags: ["TikTok Shop", "FMCG", "达人营销", "跨境电商"],
+    importanceScore: 4,
   },
   {
     title: "China-Malaysia Trade Hits Record USD 200 Billion: Manufacturing & E-Commerce Lead",
@@ -203,8 +224,9 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "中马贸易破 2000 亿美元：制造业与跨境电商双轮驱动",
     summaryZh: "中马双边贸易额 2025 年突破 2000 亿美元，制造业零部件和跨境电商成为核心增长引擎。RCEP 关税削减政策红利释放，中国品牌进入大马的关税成本平均下降 15-20%。",
     keyTakeaway: "出海制造与消费品牌可借力 RCEP 原产地累积规则，在大马设区域分拨中心，享受关税减免 + 东盟 6 亿市场一体化流通红利。",
-    category: "宏观政策",
+    category: "政策/贸易",
     tags: ["中马贸易", "RCEP", "跨境电商", "供应链"],
+    importanceScore: 3,
   },
   {
     title: "Shopee Malaysia Launches China Cross-Border Incubation: Zero Commission for 6 Months",
@@ -215,8 +237,9 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "Shopee 大马启动中国跨境孵化计划：新品牌前 6 月零佣金",
     summaryZh: "Shopee 大马推出中国跨境品牌孵化计划，新入驻中国 FMCG 品牌享前 6 个月零佣金 + 专属流量扶持 + 本土运营顾问。目标 2026 年引入 500 个优质中国品牌。",
     keyTakeaway: "建议新锐消费品牌（美妆/家居/3C 配件）优先申请 Shopee 跨境孵化计划，6 个月零成本验证大马市场 PMF，再决定是否长期投入本土化运营。",
-    category: "品牌营销",
+    category: "渠道/分销",
     tags: ["Shopee", "跨境电商", "FMCG", "孵化计划"],
+    importanceScore: 4,
   },
   {
     title: "MATRADE Export Promotion 2026: 15 Trade Missions Targeting Chinese Brands",
@@ -227,8 +250,9 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "MATRADE 2026 出口促进：15 场贸易展会锁定中国品牌",
     summaryZh: "马来西亚贸易发展局（MATRADE）公布 2026 年 15 场对外贸易展会，中国为核心目标市场。大马本土分销商正主动寻找中国 FMCG、美妆和清真食品品牌开展独家代理合作。",
     keyTakeaway: "出海品牌可关注 MATRADE 官网贸易展会日程，通过 INternational Sourcing Programme (INSP) 对接大马本土分销商，省去 BD 成本，30 天内可签下区域独家代理协议。",
-    category: "展会商会",
+    category: "展会/活动",
     tags: ["MATRADE", "贸易展会", "渠道对接", "B2B出海"],
+    importanceScore: 3,
   },
 ];
 
@@ -326,13 +350,60 @@ async function deduplicateBySourceUrl(
   }
 }
 
+// ---------- 语义/标题相似度去重（同事件通稿合并）----------
+// 对本批次已 AI 摘要的情报按中文标题做字符 bigram Jaccard 相似度比对，
+// > 0.7 视为同一事件通稿，合并为 1 条（保留 importance_score 更高者）。
+function dedupByTitleSimilarity<T extends AiResult>(
+  items: T[]
+): { deduped: T[]; mergedCount: number } {
+  if (items.length <= 1) return { deduped: items, mergedCount: 0 };
+
+  // 提取中文字符 bigram 集合（去除空白与标点）
+  function bigrams(text: string): Set<string> {
+    const clean = (text || "").replace(/[\s\p{P}A-Za-z0-9]/gu, "");
+    const set = new Set<string>();
+    for (let i = 0; i < clean.length - 1; i++) {
+      set.add(clean.slice(i, i + 2));
+    }
+    return set;
+  }
+  function jaccard(a: Set<string>, b: Set<string>): number {
+    if (a.size === 0 || b.size === 0) return 0;
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter++;
+    return inter / (a.size + b.size - inter);
+  }
+
+  const kept: T[] = [];
+  let mergedCount = 0;
+  for (const item of items) {
+    const itemBi = bigrams(item.titleZh);
+    const idx = kept.findIndex((k) => jaccard(bigrams(k.titleZh), itemBi) > 0.7);
+    if (idx >= 0) {
+      // 命中重复：保留打分更高者（同分保留先到者），合并 source 标注
+      mergedCount++;
+      if ((item.importanceScore || 0) > (kept[idx].importanceScore || 0)) {
+        kept[idx] = item;
+      }
+    } else {
+      kept.push(item);
+    }
+  }
+  if (mergedCount > 0) {
+    console.log(`[cron] 标题相似度去重：${items.length} → ${kept.length} 条（合并 ${mergedCount} 条同事件通稿）`);
+  }
+  return { deduped: kept, mergedCount };
+}
+
 // ---------- AI 摘要：单条调用 ----------
 type AiResult = {
   titleZh: string;
   summaryZh: string;
   keyTakeaway: string; // 映射 DB key_takeaway 列（语义=marketing_takeaway 营销启示）
-  category: string; // 品牌营销 | 展会商会 | 宏观政策
+  category: string; // 展会/活动 | 渠道/分销 | 政策/贸易 | 消费趋势
   tags: string[]; // 结构化标签
+  importanceScore: number; // 1-5 商业价值打分
+  publishedAt?: string; // AI 提取的真实发布时间（ISO），空则由后端降级
 };
 
 async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
@@ -384,10 +455,10 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
       return null;
     }
 
-    // 归一化 category：非法值兜底为「宏观政策」
+    // 归一化 category：四分类，非法值兜底为「政策/贸易」
     const rawCat = String(parsed.category || "").trim();
-    const validCats = ["品牌营销", "展会商会", "宏观政策"];
-    const category = validCats.includes(rawCat) ? rawCat : "宏观政策";
+    const validCats = ["展会/活动", "渠道/分销", "政策/贸易", "消费趋势"];
+    const category = validCats.includes(rawCat) ? rawCat : "政策/贸易";
     // 归一化 tags：必须是字符串数组
     let tags: string[] = [];
     if (Array.isArray(parsed.tags)) {
@@ -395,6 +466,19 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
     }
     // marketing_takeaway 优先，回退旧字段 key_takeaway
     const takeaway = String(parsed.marketing_takeaway || parsed.key_takeaway || "").trim();
+    // importance_score：1-5 整数，非法值兜底为 3
+    let importanceScore = 3;
+    const rawScore = Number(parsed.importance_score);
+    if (Number.isFinite(rawScore) && rawScore >= 1 && rawScore <= 5) {
+      importanceScore = Math.round(rawScore);
+    }
+    // published_at：AI 提取的真实发布时间（ISO），无效则留空由后端降级
+    let publishedAt: string | undefined;
+    const rawPub = String(parsed.published_at || "").trim();
+    if (rawPub) {
+      const d = new Date(rawPub);
+      if (!isNaN(d.getTime())) publishedAt = d.toISOString();
+    }
 
     return {
       titleZh: String(parsed.title_zh || "").trim().slice(0, 200),
@@ -402,6 +486,8 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
       keyTakeaway: takeaway.slice(0, 300),
       category,
       tags,
+      importanceScore,
+      publishedAt,
     };
   } catch (err: any) {
     if (err?.name === "AbortError") {
@@ -445,9 +531,11 @@ async function writeIntelligence(
       source_url: item.link,
       summary_zh: item.summaryZh,
       key_takeaway: item.keyTakeaway,
-      category: item.category || "宏观政策",
+      category: item.category || "政策/贸易",
       tags: Array.isArray(item.tags) ? item.tags : [],
-      published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+      // 优先 AI 提取的真实发布时间，降级用 RSS pubDate / 当前时间，避免旧闻标为最新
+      published_at: item.publishedAt || (item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()),
+      importance_score: item.importanceScore || 3,
       is_published: true,
       is_featured: false,
     };
@@ -689,6 +777,10 @@ async function handleCron(req: NextRequest) {
 
   console.log(`[cron] AI 摘要完成：${summarized.length}/${deduped.length} 条`);
 
+  // 3.5 标题相似度去重：合并同事件通稿（如 Ninja Mart 8500 终端被多源报道）
+  const { deduped: titleDeduped, mergedCount } = dedupByTitleSimilarity(summarized);
+  const finalItems = titleDeduped;
+
   if (summarized.length === 0) {
     // AI 摘要全部失败时，注入兜底情报确保前台有内容
     console.warn("[cron] AI 摘要全部失败，注入兜底情报数据...");
@@ -718,7 +810,7 @@ async function handleCron(req: NextRequest) {
   }
 
   // 4. 写入数据库
-  const { inserted, errors } = await writeIntelligence(summarized);
+  const { inserted, errors } = await writeIntelligence(finalItems);
 
   // 5. 滚动淘汰：写入成功后删除超过 50 条的旧数据（is_featured=false）
   if (inserted > 0) {
@@ -733,11 +825,11 @@ async function handleCron(req: NextRequest) {
 
   const duration = Date.now() - startedAt;
   console.log(
-    `[cron] 完成！RSS ${rawItems.length} → 去重 ${deduped.length} → AI摘要 ${summarized.length} → 写入 ${inserted}，耗时 ${duration}ms`
+    `[cron] 完成！RSS ${rawItems.length} → 去重 ${deduped.length} → AI摘要 ${summarized.length} → 标题去重 ${finalItems.length}（合并 ${mergedCount}）→ 写入 ${inserted}，耗时 ${duration}ms`
   );
 
   // 构建内存数据（无论 DB 写入是否成功，都返回给前端渲染）
-  const memItems = summarized.map((item) => ({
+  const memItems = finalItems.map((item) => ({
     id: genId(),
     titleEn: item.title,
     titleZh: item.titleZh,
@@ -747,7 +839,9 @@ async function handleCron(req: NextRequest) {
     keyTakeaway: item.keyTakeaway,
     category: item.category,
     tags: item.tags,
-    publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+    importanceScore: item.importanceScore,
+    // 优先使用 AI 提取的真实发布时间，降级用 RSS pubDate / 当前时间
+    publishedAt: item.publishedAt || (item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()),
     createdAt: new Date().toISOString(),
     isPublished: true,
     isFeatured: false,
@@ -757,11 +851,12 @@ async function handleCron(req: NextRequest) {
     return NextResponse.json({
       success: true,
       persisted: true,
-      message: `⚡ 抓取 ${rawItems.length} 条 → AI 摘要 ${summarized.length} 条 → 写入 ${inserted} 条大马商业情报`,
+      message: `⚡ 抓取 ${rawItems.length} 条 → AI 摘要 ${summarized.length} 条 → 去重 ${finalItems.length} 条 → 写入 ${inserted} 条大马商业情报`,
       stats: {
         fetched: rawItems.length,
         afterDedup: deduped.length,
         aiSummarized: summarized.length,
+        titleDedupMerged: mergedCount,
         inserted,
       },
       data: memItems,

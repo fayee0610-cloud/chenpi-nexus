@@ -1033,8 +1033,9 @@ export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaInt
       createdAt: row.created_at || "",
       isPublished: row.is_published !== false,
       isFeatured: row.is_featured ?? false,
-      category: row.category || "宏观政策",
+      category: row.category || "政策/贸易",
       tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === "string" ? safeParseTags(row.tags) : []),
+      importanceScore: typeof row.importance_score === "number" ? row.importance_score : 3,
     })) as MalaysiaIntelligence[];
   } catch (err) {
     logNetworkFallback("fetchMalaysiaIntelligence", err);
