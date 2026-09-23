@@ -719,7 +719,7 @@ export async function createResource(resource: Partial<ResourceItem>) {
     .from("resources")
     .insert([
       {
-        id: genId(),
+        // 不传 id：resources 表 id 为 UUID 类型，由 DB 的 gen_random_uuid() 自动生成
         title: resource.title,
         excerpt: resource.excerpt,
         outline: resource.outline || [],
