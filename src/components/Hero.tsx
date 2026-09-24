@@ -88,30 +88,30 @@ export default function Hero() {
   const ch = CHANNELS[active];
 
   return (
-    <section className="relative flex min-h-[80vh] items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
+    <section className="relative flex min-h-[72vh] lg:min-h-[82vh] items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-16 lg:py-20">
       {/* 背景柔光 */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="absolute right-1/4 top-1/2 h-96 w-96 rounded-full bg-purple-500/10 blur-3xl" />
       </div>
 
-      {/* 12 列响应式网格容器 */}
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center w-full max-w-7xl mx-auto min-h-[80vh]">
+      {/* 12 列响应式网格容器 —— 统一空间秩序，避免双重 min-h 撑高 */}
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center w-full max-w-7xl mx-auto">
 
         {/* 左侧文字区 col-span-7 */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="lg:col-span-7 min-w-0 flex flex-col items-start space-y-7"
+          className="lg:col-span-7 min-w-0 flex flex-col items-start space-y-5 lg:space-y-6"
         >
-          {/* 微光 Badge */}
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium text-zinc-300 backdrop-blur-sm">
+          {/* 微光 Badge —— Overline 规范 */}
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium tracking-wide text-zinc-300 backdrop-blur-sm">
             ⚡ 聚焦马来西亚 GTM · 清真 Halal 准入 · AI 策略杠杆
           </div>
 
-          {/* 大标题：紫蓝渐变高亮关键词 */}
-          <h1 className="text-2xl font-extrabold leading-[1.15] tracking-tight text-zinc-50 break-words sm:text-4xl lg:text-4xl xl:text-5xl 2xl:text-6xl">
+          {/* Display 标题：紫蓝渐变高亮关键词，响应式字号阶梯 */}
+          <h1 className="text-3xl font-extrabold leading-[1.18] tracking-tight text-zinc-50 break-words sm:text-4xl lg:text-[2.75rem] xl:text-5xl">
             <span className="block">
               以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">大马</span>为核心，
               <span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">AI</span> 为杠杆
@@ -122,7 +122,8 @@ export default function Hero() {
             </span>
           </h1>
 
-          <p className="text-base text-zinc-400 sm:text-lg lg:text-xl">
+          {/* 副标题 —— H2 级，禁止截断 */}
+          <p className="text-sm sm:text-base lg:text-lg text-zinc-400 break-words leading-relaxed">
             大马 GTM 策略人 / B2B 品牌出海实践者 / 商业情报洞察
           </p>
 
@@ -158,9 +159,9 @@ export default function Hero() {
           transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
           className="lg:col-span-5 flex justify-center lg:justify-end w-full min-w-0"
         >
-          <div className="relative w-full max-w-sm lg:max-w-[420px]">
-            {/* 单体艺术卡片：微光边框 + 通透毛玻璃 + 舒缓层叠阴影 */}
-            <div className="relative rounded-[28px] border border-white/10 bg-gradient-to-br from-zinc-950 to-zinc-900 aspect-[4/5] lg:aspect-auto lg:h-[480px] overflow-hidden transition-all duration-500 hover:-translate-y-1.5 shadow-[0_30px_80px_-25px_rgba(0,0,0,0.6)] hover:shadow-[0_40px_100px_-30px_rgba(0,0,0,0.55)]">
+          <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-[420px]">
+            {/* 单体艺术卡片：微光边框 + 通透毛玻璃 + 舒缓层叠阴影，桌面端限高防碰撞 */}
+            <div className="relative rounded-[28px] border border-white/10 bg-gradient-to-br from-zinc-950 to-zinc-900 aspect-[4/5] lg:aspect-auto lg:h-[440px] lg:max-h-[58vh] overflow-hidden transition-all duration-500 hover:-translate-y-1.5 shadow-[0_30px_80px_-25px_rgba(0,0,0,0.6)] hover:shadow-[0_40px_100px_-30px_rgba(0,0,0,0.55)]">
 
               {/* ① 频道氛围光 —— 切换时平滑丝滑渐变变色 */}
               <AnimatePresence>
@@ -223,19 +224,19 @@ export default function Hero() {
               <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/10 via-transparent to-zinc-950/40" />
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-              {/* ⑤ 前景内容 */}
-              <div className="relative z-10 flex h-full flex-col p-6 sm:p-7">
-                {/* 顶部标题 + LIVE */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-[13px] font-bold tracking-wide text-zinc-100">
+              {/* ⑤ 前景内容 —— 统一排版节奏 */}
+              <div className="relative z-10 flex h-full flex-col p-5 sm:p-6">
+                {/* 顶部标题 + LIVE —— Overline 规范 */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[12px] sm:text-[13px] font-bold tracking-wide text-zinc-100">
                       🇲🇾 切换大马出海频道
                     </div>
-                    <div className="mt-0.5 text-[10px] tracking-[0.2em] text-zinc-400">
+                    <div className="mt-0.5 text-[9px] sm:text-[10px] tracking-[0.2em] text-zinc-400">
                       MALAYSIAN VIBE DECODER
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 rounded-full border border-green-500/20 bg-zinc-950/50 px-2 py-1 text-[9px] font-semibold text-green-400 backdrop-blur-sm">
+                  <div className="flex shrink-0 items-center gap-1 rounded-full border border-green-500/20 bg-zinc-950/50 px-2 py-1 text-[9px] font-semibold text-green-400 backdrop-blur-sm">
                     <span className="relative flex h-1.5 w-1.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
                       <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
@@ -244,19 +245,19 @@ export default function Hero() {
                   </div>
                 </div>
 
-                {/* 5 个互动 Pill —— 移动端横向 Snap 滑动，桌面居中换行 */}
-                <div className="mt-5 flex gap-1.5 overflow-x-auto scrollbar-none snap-x snap-mandatory px-0.5 pb-1 lg:flex-wrap lg:justify-center lg:overflow-x-visible">
+                {/* 5 个互动 Pill —— 移动端横向 Snap 滑动，桌面居中换行，禁止掉行 */}
+                <div className="mt-4 sm:mt-5 flex gap-1.5 overflow-x-auto scrollbar-none snap-x snap-mandatory px-0.5 pb-1 lg:flex-wrap lg:justify-center lg:overflow-x-visible">
                   {CHANNELS.map((c, i) => (
                     <button
                       key={c.name}
                       onClick={() => setActive(i)}
-                      className={`inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-all duration-300 ${
+                      className={`inline-flex shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] sm:text-xs font-medium transition-all duration-300 ${
                         i === active
                           ? `${c.pill} ring-1 ${c.ring}`
                           : "bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/15 hover:text-zinc-200"
                       }`}
                     >
-                      <span className="text-[13px] leading-none">{c.emoji}</span>
+                      <span className="text-[12px] leading-none sm:text-[13px]">{c.emoji}</span>
                       <span>{c.name}</span>
                     </button>
                   ))}
@@ -275,12 +276,12 @@ export default function Hero() {
                       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                       className="flex h-full flex-col"
                     >
-                      {/* Emoji */}
-                      <div className="text-center text-4xl leading-none drop-shadow-lg sm:text-5xl">
+                      {/* Emoji —— 与金句 2:1 比例，垂直锚点 */}
+                      <div className="text-center text-3xl leading-none drop-shadow-lg sm:text-4xl">
                         {ch.emoji}
                       </div>
-                      {/* 文化金句（响应式字号，禁止截断） */}
-                      <div className="mt-3 text-center text-base font-medium italic leading-snug text-zinc-100 sm:text-lg">
+                      {/* 文化金句 —— 响应式字号，禁止截断 */}
+                      <div className="mt-2 sm:mt-3 text-center text-sm font-medium italic leading-snug text-zinc-100 break-words sm:text-base">
                         &ldquo;{ch.quote}&rdquo;
                       </div>
                       {/* 服务卡 —— 微光边框 + 通透毛玻璃 */}
