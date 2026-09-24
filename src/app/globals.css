@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode variant for Tailwind v4 (driven by next-themes) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-background: #09090b;
   --color-foreground: #fafafa;
@@ -21,13 +24,34 @@
   --color-green-500: #22c55e;
 }
 
+/* ============================================================
+   亮色模式 (Light Mode) — 反转 zinc 调色板以适配白天强光
+   全站 bg-zinc-*/text-zinc-*/border-zinc-* 工具类自动跟随切换
+   ============================================================ */
+:root:not(.dark) {
+  --color-background: #f9fafb;          /* 柔和浅灰页面背景 */
+  --color-foreground: #111827;          /* 炭黑主文字 */
+
+  --color-zinc-950: #f9fafb;            /* 页面背景 */
+  --color-zinc-900: #ffffff;            /* 卡片白底 */
+  --color-zinc-800: #e5e7eb;            /* 淡边框 border-gray-200 */
+  --color-zinc-700: #d1d5db;            /* 浅边框 */
+  --color-zinc-600: #9ca3af;
+  --color-zinc-500: #6b7280;            /* 次要文字 */
+  --color-zinc-400: #4b5563;            /* 辅助文字 */
+  --color-zinc-300: #374151;
+  --color-zinc-200: #1f2937;            /* 深灰标题 */
+  --color-zinc-100: #111827;            /* 炭黑主文字 */
+  --color-zinc-50: #09090b;             /* 极深强调文字 */
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  background: #09090b;
-  color: #fafafa;
+  background: var(--color-background);
+  color: var(--color-foreground);
   font-family: var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -38,14 +62,14 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: var(--color-background);
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--color-zinc-800);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--color-zinc-700);
 }
 
 /* Gradient text utility */

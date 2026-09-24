@@ -66,6 +66,7 @@ import {
 import type { SiteConfig, Lead } from "@/lib/dataApi";
 import type { PortfolioProject, InsightItem, SanctuaryPost, ResourceItem, InsightHubItem, InsightHubCategory, ContentBlock } from "@/data/siteData";
 import { HARDCORE_TAGS_POOL as HARDCORE_TAGS_POOL_CONST, FLAT_HARDCORE_TAGS as FLAT_HARDCORE_TAGS_CONST } from "@/data/siteData";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 // 导航 Tab 顺序严格对齐前台 6 大模块 + 线索 + 站点配置
 // 评论审核并入「脑洞画布」作为子视图，不再单独占一级 Tab
@@ -155,13 +156,16 @@ export default function AdminPage() {
               <p className="text-[10px] text-zinc-500">Admin Dashboard</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            退出
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              退出
+            </button>
+          </div>
         </div>
 
         {/* Tab 切换 —— 顺序对齐前台 6 大模块 + 线索与转化 + 站点配置 */}

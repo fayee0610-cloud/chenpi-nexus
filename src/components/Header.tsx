@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Cpu, Radar, Sparkles, Package, MessageCircle, Briefcase, Mail } from "lucide-react";
 import type { SiteConfig } from "@/lib/dataApi";
 import AuthModal, { useAuthUser, UserMenu } from "@/components/AuthModal";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface HeaderProps {
   config?: Partial<SiteConfig> | null;
@@ -140,8 +141,9 @@ export default function Header({ config }: HeaderProps = {}) {
           ))}
         </nav>
 
-        {/* 右侧：登录/注册 或 用户菜单 */}
+        {/* 右侧：主题切换 + 登录/注册 或 用户菜单 */}
         <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle />
           {authLoading ? (
             <div className="h-8 w-8 animate-pulse rounded-full bg-zinc-800" />
           ) : !user ? (
@@ -156,14 +158,17 @@ export default function Header({ config }: HeaderProps = {}) {
           )}
         </div>
 
-        {/* Mobile Toggle */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="菜单"
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100 lg:hidden"
-        >
-          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        {/* Mobile: 主题切换 + 菜单按钮 */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <ThemeToggle />
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            aria-label="菜单"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100 lg:hidden"
+          >
+            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer - 微光抽屉菜单 */}
