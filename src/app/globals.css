@@ -70,6 +70,38 @@
   box-shadow: 0 8px 28px -10px rgba(5, 150, 105, 0.22), 0 2px 8px -4px rgba(5, 150, 105, 0.12);
 }
 
+/* ============================================================
+   亮色模式 —— Badge / Tag 色阶重映射
+   暗色下专为深底设计的浅色字（-200/-300/-400）在白底几乎不可读。
+   此处将各色系的浅色阶统一映射为沉稳深色（-700/-800），
+   形成「微淡底色（-500/10 tint）+ 深色高对比文字」的标准 Badge 规范。
+   -500 阶保持原色（用作淡背景 tint 与实色按钮），不在此覆盖。
+   ============================================================ */
+:root:not(.dark) {
+  /* 绿系 */
+  --color-emerald-200: #065f46; --color-emerald-300: #047857; --color-emerald-400: #047857;
+  --color-green-200:   #166534; --color-green-300:   #15803d; --color-green-400:   #15803d;
+  --color-lime-200:    #3f6212; --color-lime-300:    #4d7c0f; --color-lime-400:    #4d7c0f;
+  --color-teal-200:    #115e59; --color-teal-300:    #0f766e; --color-teal-400:    #0f766e;
+  /* 青/蓝系 */
+  --color-cyan-200:    #155e75; --color-cyan-300:    #0e7490; --color-cyan-400:    #0e7490;
+  --color-sky-200:     #075985; --color-sky-300:     #0369a1; --color-sky-400:     #0369a1;
+  --color-blue-200:    #1e40af; --color-blue-300:    #1d4ed8; --color-blue-400:    #1d4ed8;
+  --color-indigo-200:  #3730a3; --color-indigo-300:  #4338ca; --color-indigo-400:  #4338ca;
+  /* 紫系 */
+  --color-violet-200:  #5b21b6; --color-violet-300:  #6d28d9; --color-violet-400:  #6d28d9;
+  --color-purple-200:  #4c1d95; --color-purple-300:  #6b21a8; --color-purple-400:  #6b21a8;
+  --color-fuchsia-200: #86198f; --color-fuchsia-300: #a21caf; --color-fuchsia-400: #a21caf;
+  --color-pink-200:    #9d174d; --color-pink-300:    #be185d; --color-pink-400:    #be185d;
+  /* 红/玫瑰系 */
+  --color-rose-200:    #9f1239; --color-rose-300:    #be123c; --color-rose-400:    #be123c;
+  --color-red-200:     #991b1b; --color-red-300:     #b91c1c; --color-red-400:     #b91c1c;
+  /* 暖色系（黄/橙/琥珀 → 深棕金，确保浅底可读） */
+  --color-orange-200:  #9a3412; --color-orange-300:  #c2410c; --color-orange-400:  #c2410c;
+  --color-amber-200:   #92400e; --color-amber-300:   #b45309; --color-amber-400:   #b45309;
+  --color-yellow-200:  #854d0e; --color-yellow-300:  #a16207; --color-yellow-400:  #a16207;
+}
+
 html {
   scroll-behavior: smooth;
 }

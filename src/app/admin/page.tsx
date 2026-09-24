@@ -1156,19 +1156,19 @@ function PortfolioEditor() {
         .input-admin {
           width: 100%;
           border-radius: 0.75rem;
-          border: 1px solid rgb(39 39 42);
-          background-color: rgb(9 9 11);
+          border: 1px solid var(--color-zinc-800);
+          background-color: var(--color-zinc-950);
           padding: 0.625rem 0.875rem;
           font-size: 0.875rem;
-          color: rgb(244 244 245);
+          color: var(--color-zinc-100);
           outline: none;
           transition: all 0.15s;
         }
         .input-admin::placeholder {
-          color: rgb(82 82 91);
+          color: var(--color-zinc-500);
         }
         .input-admin:focus {
-          border-color: rgba(168, 85, 247, 0.5);
+          border-color: color-mix(in srgb, var(--color-purple-500) 55%, transparent);
         }
       `}</style>
 
@@ -2219,19 +2219,19 @@ function InsightsEditor() {
         .input-insight {
           width: 100%;
           border-radius: 0.75rem;
-          border: 1px solid rgb(39 39 42);
-          background-color: rgb(9 9 11);
+          border: 1px solid var(--color-zinc-800);
+          background-color: var(--color-zinc-950);
           padding: 0.625rem 0.875rem;
           font-size: 0.875rem;
-          color: rgb(244 244 245);
+          color: var(--color-zinc-100);
           outline: none;
           transition: all 0.15s;
         }
         .input-insight::placeholder {
-          color: rgb(82 82 91);
+          color: var(--color-zinc-500);
         }
         .input-insight:focus {
-          border-color: rgba(168, 85, 247, 0.5);
+          border-color: color-mix(in srgb, var(--color-purple-500) 55%, transparent);
         }
       `}</style>
 
@@ -3286,19 +3286,19 @@ function ResourceEditor() {
         .input-resource {
           width: 100%;
           border-radius: 0.75rem;
-          border: 1px solid rgb(39 39 42);
-          background-color: rgb(9 9 11);
+          border: 1px solid var(--color-zinc-800);
+          background-color: var(--color-zinc-950);
           padding: 0.625rem 0.875rem;
           font-size: 0.875rem;
-          color: rgb(244 244 245);
+          color: var(--color-zinc-100);
           outline: none;
           transition: all 0.15s;
         }
         .input-resource::placeholder {
-          color: rgb(82 82 91);
+          color: var(--color-zinc-500);
         }
         .input-resource:focus {
-          border-color: rgba(168, 85, 247, 0.5);
+          border-color: color-mix(in srgb, var(--color-purple-500) 55%, transparent);
         }
       `}</style>
 
@@ -4089,19 +4089,19 @@ function InsightHubEditor() {
         .input-hub {
           width: 100%;
           border-radius: 0.75rem;
-          border: 1px solid rgb(39 39 42);
-          background-color: rgb(9 9 11);
+          border: 1px solid var(--color-zinc-800);
+          background-color: var(--color-zinc-950);
           padding: 0.625rem 0.875rem;
           font-size: 0.875rem;
-          color: rgb(244 244 245);
+          color: var(--color-zinc-100);
           outline: none;
           transition: all 0.15s;
         }
         .input-hub::placeholder {
-          color: rgb(82 82 91);
+          color: var(--color-zinc-500);
         }
         .input-hub:focus {
-          border-color: rgba(168, 85, 247, 0.5);
+          border-color: color-mix(in srgb, var(--color-purple-500) 55%, transparent);
         }
       `}</style>
 
