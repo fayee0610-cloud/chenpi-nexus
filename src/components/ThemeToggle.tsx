@@ -16,13 +16,15 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   useEffect(() => setMounted(true), []);
 
   const isDark = theme === "dark";
+  // mounted 前用中性 label，避免 SSR(theme=undefined) 与客户端(theme="dark") 的 hydration mismatch
+  const label = !mounted ? "切换主题" : isDark ? "切换至亮色模式" : "切换至暗色模式";
 
   return (
     <button
       type="button"
-      aria-label={isDark ? "切换至亮色模式" : "切换至暗色模式"}
-      title={isDark ? "切换至亮色模式" : "切换至暗色模式"}
-      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={label}
+      title={label}
+      onClick={() => mounted && setTheme(isDark ? "light" : "dark")}
       className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/60 text-zinc-300 transition-all duration-300 hover:border-blue-500/60 hover:text-blue-400 hover:shadow-[0_0_16px_rgba(59,130,246,0.25)] ${className}`}
     >
       {mounted ? (

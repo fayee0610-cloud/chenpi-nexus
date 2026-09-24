@@ -22,6 +22,7 @@ export default function Mascot() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showRateLimit, setShowRateLimit] = useState(false);
+  const [scrolledPastHero, setScrolledPastHero] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 浮动气泡轮播
@@ -30,6 +31,14 @@ export default function Mascot() {
       setBubbleIndex((prev) => (prev + 1) % bubbles.length);
     }, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  // 滚动监听：Hero 区域隐藏气泡（避免与右侧人像卡重叠），滚动后展开
+  useEffect(() => {
+    const onScroll = () => setScrolledPastHero(window.scrollY > 700);
+    onScroll(); // 初始化
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   // 自动滚动到底部
@@ -132,7 +141,7 @@ export default function Mascot() {
     <>
       {/* 浮动气泡 */}
       <AnimatePresence mode="wait">
-        {!showDialog && (
+        {!showDialog && scrolledPastHero && (
           <motion.div
             key={bubbleIndex}
             initial={{ opacity: 0, y: 10, scale: 0.9 }}
