@@ -1,11 +1,67 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowDown, Radio } from "lucide-react";
 import { siteData } from "@/data/siteData";
 
+// ===== 陈皮口述·大马本地化打招呼轮播数据 =====
+const CHENPI_GREETINGS = [
+  {
+    tag: "☕ Kopitiam",
+    quote: "Boss, Teh Tarik Satu! (老板，来杯拉茶！)",
+    service: "【政商与本土资源撮合】精准对接大马政企、本地商会与主流分销渠道网络。",
+    accent: "text-amber-400",
+    dot: "bg-amber-400",
+  },
+  {
+    tag: "👌 Boleh!",
+    quote: "在大马，听到 Boleh 心里就稳了一半。",
+    service: "【GTM 全流程落地】从 0 到 1 定制大马落地路线图，解决准入与经营难题。",
+    accent: "text-emerald-400",
+    dot: "bg-emerald-400",
+  },
+  {
+    tag: "🌙 Halal",
+    quote: "不只是清真标志，更是本地人的安心密码。",
+    service: "【JAKIM 认证与合规准入】高效打通 68% 本土穆斯林主流消费圈，合规准入。",
+    accent: "text-green-400",
+    dot: "bg-green-400",
+  },
+  {
+    tag: "🗣️ Lah!",
+    quote: "少一点高高在上的 PPT，多一点懂本地人的 Lah。",
+    service: "【全渠道本土化营销】涵盖 TikTok 达人孵化、线下快闪打卡与本地多语境传播。",
+    accent: "text-purple-400",
+    dot: "bg-purple-400",
+  },
+  {
+    tag: "🚀 Jom!",
+    quote: "别再观望了，Jom (走起) 出海！",
+    service: "【AI 商业情报与敏捷攻坚】实时提炼大马财经政策与竞争动态，高效率决策。",
+    accent: "text-blue-400",
+    dot: "bg-blue-400",
+  },
+];
+
 export default function Hero() {
   const { profile } = siteData;
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const g = CHENPI_GREETINGS[active];
+
+  // 自动轮播 4.5 秒，hover 暂停
+  useEffect(() => {
+    if (paused) return;
+    timerRef.current = setInterval(() => {
+      setActive((prev) => (prev + 1) % CHENPI_GREETINGS.length);
+    }, 4500);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [paused]);
+
   return (
     <section className="relative flex min-h-[80vh] items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-10 lg:py-20">
       {/* 背景光晕 */}
@@ -91,6 +147,9 @@ export default function Hero() {
                   className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                 />
 
+                {/* 图片底部渐变遮罩：让下方气泡文字可读 */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+
                 {/* 右上角 SYSTEM: ONLINE 状态灯（呼吸脉冲） */}
                 <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md border border-green-500/30 bg-zinc-950/80 px-2.5 py-1 text-[10px] font-semibold text-green-400 backdrop-blur-sm">
                   <span className="relative flex h-2 w-2">
@@ -101,11 +160,61 @@ export default function Hero() {
                   📡 SYSTEM: ONLINE
                 </div>
 
-                {/* 右下方玻璃质感金句浮层 */}
-                <div className="absolute bottom-3 right-3 max-w-[80%] bg-black/50 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2">
-                  <p className="text-xs sm:text-sm font-medium tracking-wide text-zinc-100">
-                    &ldquo;谋于策略，成于闭环，对结果负责。&rdquo;
-                  </p>
+                {/* 陈皮口述·大马本地化打招呼轮播气泡 —— 固定在图片下方，绝不遮挡脸部 */}
+                <div
+                  className="absolute bottom-3 left-3 right-3"
+                  onMouseEnter={() => setPaused(true)}
+                  onMouseLeave={() => setPaused(false)}
+                >
+                  <div className="rounded-2xl border border-white/15 bg-zinc-900/80 p-3 shadow-2xl backdrop-blur-md sm:p-3.5">
+
+                    {/* 顶部标签栏：陈皮说 + 5 个进度点 */}
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold tracking-wide text-zinc-400">
+                        🗣️ 陈皮说
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {CHENPI_GREETINGS.map((item, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setActive(i)}
+                            aria-label={`切换到第 ${i + 1} 条`}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              i === active
+                                ? `w-5 ${item.dot}`
+                                : "w-1.5 bg-zinc-600 hover:bg-zinc-400"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 轮播内容：淡入淡出 + 轻微上移 */}
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={active}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                        className="space-y-1.5"
+                      >
+                        {/* ① 标签胶囊 */}
+                        <span className={`inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-bold tracking-wide ${g.accent}`}>
+                          {g.tag}
+                        </span>
+                        {/* ② 文化金句 —— 斜体口述感 */}
+                        <p className="text-sm font-medium italic leading-snug text-zinc-50 break-words">
+                          &ldquo;{g.quote}&rdquo;
+                        </p>
+                        {/* ③ 落地服务 —— 淡色高亮框 */}
+                        <p className="text-[11px] leading-relaxed text-zinc-300 break-words">
+                          {g.service}
+                        </p>
+                      </motion.div>
+                    </AnimatePresence>
+
+                  </div>
                 </div>
 
               </div>
