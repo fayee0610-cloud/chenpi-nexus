@@ -3,7 +3,12 @@
 /* Enable class-based dark mode variant for Tailwind v4 (driven by next-themes) */
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
+/*
+ * 注意：使用 @theme（非 inline），让生成的工具类引用 var(--color-zinc-*) 变量，
+ * 这样下方的 :root:not(.dark) 覆盖才能在亮色模式下真正生效。
+ * 若用 @theme inline，颜色值会被烘焙进工具类，主题切换将无视觉效果。
+ */
+@theme {
   --color-background: #09090b;
   --color-foreground: #fafafa;
   --font-sans: var(--font-geist-sans);
@@ -26,7 +31,7 @@
 
 /* ============================================================
    亮色模式 (Light Mode) — 反转 zinc 调色板以适配白天强光
-   全站 bg-zinc-*/text-zinc-*/border-zinc-* 工具类自动跟随切换
+   全站 zinc 系工具类将自动跟随切换（背景/文字/边框）
    ============================================================ */
 :root:not(.dark) {
   --color-background: #f9fafb;          /* 柔和浅灰页面背景 */
