@@ -179,7 +179,7 @@ export default function InsightsListPage() {
                     ) : (
                       <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                     <div className="absolute bottom-3 left-4 flex items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-md bg-zinc-950/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
                         {typeIcon[item.type]}

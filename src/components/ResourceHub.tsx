@@ -156,7 +156,7 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
                   ) : (
                     <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   {/* 顶部图标 + 分类 */}
                   <div className="absolute left-3 top-3 flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-950/80 backdrop-blur-sm">

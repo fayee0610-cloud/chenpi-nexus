@@ -30,24 +30,44 @@
 }
 
 /* ============================================================
-   亮色模式 (Light Mode) — 反转 zinc 调色板以适配白天强光
-   全站 zinc 系工具类将自动跟随切换（背景/文字/边框）
+   亮色模式 (Light Mode) — 高级纸质感设计系统
+   设计语言：暖意纸张画布 + 纯白悬浮卡片 + 微弥散阴影 + 珠宝强调色
+   参考 Linear / Stripe / Notion 的优雅白天阅读体验
+   全站 zinc 系工具类自动跟随切换，accent 映射为沉稳珠宝色
    ============================================================ */
 :root:not(.dark) {
-  --color-background: #f9fafb;          /* 柔和浅灰页面背景 */
-  --color-foreground: #111827;          /* 炭黑主文字 */
+  /* 画布与前景 —— 暖意纸张底座，前景为温暖炭灰（禁用纯黑 #000） */
+  --color-background: #f5f4f0;          /* 暖纸画布底色，柔和不刺眼 */
+  --color-foreground: #1a1916;          /* 温暖近黑炭灰主文字 */
 
-  --color-zinc-950: #f9fafb;            /* 页面背景 */
-  --color-zinc-900: #ffffff;            /* 卡片白底 */
-  --color-zinc-800: #e5e7eb;            /* 淡边框 border-gray-200 */
-  --color-zinc-700: #d1d5db;            /* 浅边框 */
-  --color-zinc-600: #9ca3af;
-  --color-zinc-500: #6b7280;            /* 次要文字 */
-  --color-zinc-400: #4b5563;            /* 辅助文字 */
-  --color-zinc-300: #374151;
-  --color-zinc-200: #1f2937;            /* 深灰标题 */
-  --color-zinc-100: #111827;            /* 炭黑主文字 */
-  --color-zinc-50: #09090b;             /* 极深强调文字 */
+  /* zinc 反转色阶 —— 暖灰渐进，建立清晰视觉节奏 */
+  --color-zinc-950: #f5f4f0;            /* 页面画布（暖纸） */
+  --color-zinc-900: #ffffff;            /* 卡片表面（纯白，靠色差悬浮） */
+  --color-zinc-800: #ece9e3;            /* 极弱弥散边框（近乎无感） */
+  --color-zinc-700: #ddd9d1;            /* 悬停边框 / 略强分隔 */
+  --color-zinc-600: #a8a59e;            /* 图标 / 禁用态 */
+  --color-zinc-500: #76736c;            /* 辅助注释 / 占位文字 */
+  --color-zinc-400: #56524c;            /* 次级正文 / 副信息 */
+  --color-zinc-300: #3d3a35;            /* 次要正文 */
+  --color-zinc-200: #2a2824;            /* 正文（沉稳深灰） */
+  --color-zinc-100: #1a1916;            /* 标题（温暖炭灰） */
+  --color-zinc-50: #0e0d0b;             /* 极强强调（温暖浓缩咖啡，非纯黑） */
+
+  /* 强调色映射 —— 暗色霓虹 → 亮色沉稳珠宝色，浅底上依然稳重有质感 */
+  --color-blue-500: #2563eb;            /* 皇家蓝（替代科技蓝） */
+  --color-purple-500: #7c3aed;          /* 深钛紫（替代霓虹紫） */
+  --color-green-500: #059669;           /* 翡翠绿（替代荧光绿） */
+}
+
+/* 亮色模式 —— 霓虹光晕 → 微弥散柔影，建立卡片前后悬浮关系 */
+:root:not(.dark) .glow-blue {
+  box-shadow: 0 8px 28px -10px rgba(37, 99, 235, 0.22), 0 2px 8px -4px rgba(37, 99, 235, 0.12);
+}
+:root:not(.dark) .glow-purple {
+  box-shadow: 0 8px 28px -10px rgba(124, 58, 237, 0.22), 0 2px 8px -4px rgba(124, 58, 237, 0.12);
+}
+:root:not(.dark) .glow-green {
+  box-shadow: 0 8px 28px -10px rgba(5, 150, 105, 0.22), 0 2px 8px -4px rgba(5, 150, 105, 0.12);
 }
 
 html {
@@ -77,9 +97,9 @@ body {
   background: var(--color-zinc-700);
 }
 
-/* Gradient text utility */
+/* Gradient text utility —— 跟随主题变量，亮色呈珠宝渐变 */
 .gradient-text {
-  background: linear-gradient(135deg, #3b82f6, #a855f7);
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-purple-500));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

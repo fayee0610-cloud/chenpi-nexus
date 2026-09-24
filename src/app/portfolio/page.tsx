@@ -118,7 +118,7 @@ export default function PortfolioListPage() {
                     ) : (
                       <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                     {project.metrics[0] && (
                       <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
                         <div>

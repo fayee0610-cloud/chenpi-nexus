@@ -163,7 +163,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                   ) : (
                     <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                   <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
                     {project.metrics[0] && (
                       <div>
@@ -454,7 +454,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                             className="aspect-[4/3] w-full object-cover transition-transform group-hover:scale-105"
                           />
                           {g.caption && (
-                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 py-2 text-[11px] text-zinc-300">
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent px-3 py-2 text-[11px] text-white/80">
                               {g.caption}
                             </div>
                           )}
@@ -480,7 +480,7 @@ export default function Portfolio({ showLimit }: { showLimit?: number }) {
                     ) : (
                       <div className="h-64 w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/60 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     {/* 状态灯 */}
                     <div className="absolute left-3 top-3 flex items-center gap-1.5">
                       <span className="h-2 w-2 animate-pulse rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />

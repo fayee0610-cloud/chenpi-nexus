@@ -379,7 +379,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                 ) : (
                   <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-blue-950/30 to-zinc-900" />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-zinc-950/60 to-transparent" />
               </div>
               <div className="relative p-6 sm:p-8">
                 <div className="mb-4 flex items-center gap-3">
@@ -420,7 +420,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                     ) : (
                       <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent" />
                   </div>
                   <div className="p-5">
                     <div className="mb-2 flex items-center gap-2">
@@ -478,7 +478,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
                   ) : (
                     <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   <div className="absolute bottom-3 left-4 flex items-center gap-2">
                     <span className="inline-flex items-center gap-1 rounded-md bg-zinc-950/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
                       {typeIcon[item.type]}

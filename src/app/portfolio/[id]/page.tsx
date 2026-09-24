@@ -262,7 +262,7 @@ export default async function PortfolioDetailPage({
                     className="aspect-[4/3] w-full object-cover transition-transform group-hover:scale-105"
                   />
                   {g.caption && (
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 py-2 text-[11px] text-zinc-300">
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent px-3 py-2 text-[11px] text-white/80">
                       {g.caption}
                     </div>
                   )}
