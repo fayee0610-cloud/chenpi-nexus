@@ -2,73 +2,83 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, ArrowRight } from "lucide-react";
 
-// ===== 大马出海频道数据：地道梗 + 极简服务 =====
+// ===== 5 大频道：地道文化金句 + 极简落地服务 =====
 const CHANNELS = [
   {
     emoji: "☕",
     name: "Kopitiam",
-    tag: "Boss, Teh Tarik Satu!",
-    sub: "老板，来杯拉茶！",
-    service: "南洋社交与资源撮合",
-    desc: "在大马，硬核的商业关系可能就是在茶室里聊出来的。",
+    quote: "Boss, Teh Tarik Satu! (老板，来杯拉茶！)",
+    service: "政商与本土资源撮合",
+    desc: "精准对接大马政企、本地商会与主流分销渠道网络。",
     pill: "border-amber-500/50 bg-amber-500/15 text-amber-400",
     accent: "text-amber-400",
     dot: "bg-amber-400",
     bar: "from-amber-500 to-amber-400",
+    glow: "rgba(245, 158, 11, 0.22)", // 茶室琥珀
   },
   {
     emoji: "👌",
     name: "Boleh!",
-    tag: "Boleh! 心里就稳了一半",
-    sub: "在大马，听到「Boleh」就稳了一半。",
-    service: "GTM 策略与实操落地",
-    desc: "找准本地路子，就没有 Tak Boleh 办不到的难题。",
+    quote: "在大马，听到 Boleh 心里就稳了一半。",
+    service: "GTM 全流程落地",
+    desc: "从 0 到 1 定制大马落地路线图，解决准入与经营难题。",
     pill: "border-emerald-500/50 bg-emerald-500/15 text-emerald-400",
     accent: "text-emerald-400",
     dot: "bg-emerald-400",
     bar: "from-emerald-500 to-emerald-400",
+    glow: "rgba(16, 185, 129, 0.22)", // 稳健翡翠
   },
   {
     emoji: "🌙",
     name: "Halal",
-    tag: "本地人的安心密码",
-    sub: "不只是清真标志，更是 68% 人口的信任。",
-    service: "Halal 准入与合规咨询",
-    desc: "带你打通本土核心消费圈，顺畅拿到 JAKIM 准入。",
+    quote: "不只是清真标志，更是本地人的安心密码。",
+    service: "JAKIM 认证与合规准入",
+    desc: "高效打通 68% 本土穆斯林主流消费圈，合规准入。",
     pill: "border-green-500/50 bg-green-500/15 text-green-400",
     accent: "text-green-400",
     dot: "bg-green-400",
     bar: "from-green-500 to-green-400",
+    glow: "rgba(34, 197, 94, 0.22)", // 清真绿
   },
   {
     emoji: "🗣️",
     name: "Lah!",
-    tag: "多一点懂本地人的 Lah",
-    sub: "少一点 PPT，多一点 Manglish 的温度。",
-    service: "地道 Manglish 本土化营销",
-    desc: "用本地族裔的沟通方式，做有温度的品牌表达。",
-    pill: "border-blue-500/50 bg-blue-500/15 text-blue-400",
-    accent: "text-blue-400",
-    dot: "bg-blue-400",
-    bar: "from-blue-500 to-blue-400",
-  },
-  {
-    emoji: "🚀",
-    name: "Jom!",
-    tag: "Jom! 走起出海！",
-    sub: "别再观望了，用 AI 杠杆快速实操。",
-    service: "AI 商业情报与判断",
-    desc: "拒绝纸上谈兵，用 AI 杠杆带你快速出海大马。",
+    quote: "少一点高高在上的 PPT，多一点懂本地人的 Lah。",
+    service: "全渠道本土化营销",
+    desc: "涵盖 TikTok 达人孵化、线下快闪打卡与本地多语境传播。",
     pill: "border-purple-500/50 bg-purple-500/15 text-purple-400",
     accent: "text-purple-400",
     dot: "bg-purple-400",
     bar: "from-purple-500 to-purple-400",
+    glow: "rgba(168, 85, 247, 0.22)", // 芒语紫光
+  },
+  {
+    emoji: "🚀",
+    name: "Jom!",
+    quote: "别再观望了，Jom (走起) 出海！",
+    service: "AI 商业情报与敏捷攻坚",
+    desc: "实时提炼大马财经政策与竞争动态，高效率决策。",
+    pill: "border-blue-500/50 bg-blue-500/15 text-blue-400",
+    accent: "text-blue-400",
+    dot: "bg-blue-400",
+    bar: "from-blue-500 to-blue-400",
+    glow: "rgba(59, 130, 246, 0.22)", // 科技蓝
   },
 ];
 
+// 查看实战案例 —— 平滑滚动到 #cases，无 #cases 时优雅降级（不触发置顶）
+const scrollToCases = (e: React.MouseEvent) => {
+  e.preventDefault();
+  const el = document.getElementById("cases");
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+};
+
 export default function Hero() {
+  // 默认选中 01 / Kopitiam；无自动轮播，控制权完全交给用户
   const [active, setActive] = useState(0);
   const ch = CHANNELS[active];
 
@@ -95,7 +105,7 @@ export default function Hero() {
             ⚡ 聚焦马来西亚 GTM · 清真 Halal 准入 · AI 策略杠杆
           </div>
 
-          {/* 大标题：两行结构，允许自然折行，紫蓝渐变高亮关键词 */}
+          {/* 大标题：两行结构，紫蓝渐变高亮关键词 */}
           <h1 className="text-2xl font-extrabold leading-[1.15] tracking-tight text-zinc-50 break-words sm:text-4xl lg:text-4xl xl:text-5xl 2xl:text-6xl">
             <span className="block">
               以<span className="bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">大马</span>为核心，
@@ -136,73 +146,83 @@ export default function Hero() {
           </div>
         </motion.div>
 
-        {/* 右侧：🇲🇾 大马出海频道解码器 —— 单体艺术卡片（地道文化 + 互动切换） */}
+        {/* 右侧：🇲🇾 大马出海频道解码器 —— 单体艺术画幅（频道氛围变色） */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
           className="lg:col-span-5 flex justify-center lg:justify-end w-full min-w-0"
         >
-          <div className="relative w-full max-w-sm lg:max-w-md">
+          <div className="relative w-full max-w-sm lg:max-w-[420px]">
             {/* 流光外框 + 悬浮升起 */}
             <div className="relative group rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500/50 via-zinc-700/30 to-blue-500/50 transition-all duration-500 hover:-translate-y-1.5 shadow-[0_0_30px_rgba(168,85,247,0.18)] hover:shadow-[0_14px_44px_rgba(124,58,237,0.32)]">
-              <div className="relative w-full rounded-[22px] overflow-hidden aspect-[4/5] bg-slate-950">
+              <div className="relative w-full overflow-hidden rounded-[22px] bg-gradient-to-br from-zinc-950 to-zinc-900 aspect-[4/5] lg:aspect-auto lg:h-[480px]">
 
-                {/* 大马风情背景画：双峰塔剪影 + 落日 + 椰树 */}
+                {/* ① 频道氛围光 —— 切换频道时平滑渐变变色 */}
+                <AnimatePresence>
+                  <motion.div
+                    key={active}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.7 }}
+                    className="absolute inset-0"
+                    style={{ background: `radial-gradient(circle at 50% 26%, ${ch.glow} 0%, transparent 62%)` }}
+                    aria-hidden
+                  />
+                </AnimatePresence>
+                {/* 底部第二层氛围光，增加纵深 */}
+                <AnimatePresence>
+                  <motion.div
+                    key={`b-${active}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.7 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.7 }}
+                    className="absolute inset-0"
+                    style={{ background: `radial-gradient(circle at 50% 92%, ${ch.glow} 0%, transparent 50%)` }}
+                    aria-hidden
+                  />
+                </AnimatePresence>
+
+                {/* ② 点阵暗纹（双主题通用） */}
+                <div
+                  className="absolute inset-0 opacity-40"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(rgba(130,130,140,0.22) 1px, transparent 1px)",
+                    backgroundSize: "18px 18px",
+                  }}
+                  aria-hidden
+                />
+
+                {/* ③ 双峰塔天际线剪影（底部，theme-aware 暗纹） */}
                 <svg
-                  className="absolute inset-0 h-full w-full"
-                  viewBox="0 0 400 500"
-                  preserveAspectRatio="xMidYMid slice"
+                  className="absolute bottom-0 left-0 h-[34%] w-full"
+                  viewBox="0 0 400 150"
+                  preserveAspectRatio="xMidYMax slice"
                   fill="none"
                   aria-hidden
                 >
-                  <defs>
-                    <linearGradient id="mySky" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stopColor="#1e1b4b" />
-                      <stop offset="0.45" stopColor="#3b1d6e" />
-                      <stop offset="0.8" stopColor="#0f766e" />
-                      <stop offset="1" stopColor="#0b1220" />
-                    </linearGradient>
-                    <radialGradient id="mySun" cx="0.5" cy="0.5" r="0.5">
-                      <stop offset="0" stopColor="#fbbf24" stopOpacity="0.95" />
-                      <stop offset="0.5" stopColor="#f59e0b" stopOpacity="0.5" />
-                      <stop offset="1" stopColor="#f59e0b" stopOpacity="0" />
-                    </radialGradient>
-                  </defs>
-                  {/* 天空 */}
-                  <rect width="400" height="500" fill="url(#mySky)" />
-                  {/* 落日 */}
-                  <circle cx="305" cy="135" r="62" fill="url(#mySun)" />
-                  <circle cx="305" cy="135" r="26" fill="#fde68a" opacity="0.85" />
-                  {/* 双峰塔剪影 */}
-                  <g fill="#070611" opacity="0.92">
-                    <path d="M152 500 L152 250 L162 218 L176 184 L190 218 L200 250 L200 500 Z" />
-                    <path d="M210 500 L210 240 L220 208 L236 172 L252 208 L262 240 L262 500 Z" />
+                  <g fill="var(--color-zinc-800)">
+                    <path d="M120 150 L120 56 L128 36 L140 16 L152 36 L160 56 L160 150 Z" />
+                    <path d="M168 150 L168 48 L176 28 L188 8 L200 28 L208 48 L208 150 Z" />
+                    <path d="M216 150 L216 62 L224 44 L236 24 L248 44 L256 62 L256 150 Z" />
+                    <rect x="158" y="70" width="14" height="4" rx="1.5" fill="var(--color-zinc-700)" />
+                    <rect x="206" y="60" width="14" height="4" rx="1.5" fill="var(--color-zinc-700)" />
                   </g>
-                  {/* 天桥 */}
-                  <rect x="192" y="318" width="22" height="5" rx="2" fill="#1e293b" />
-                  {/* 塔身窗格微光 */}
-                  <g fill="#a78bfa" opacity="0.35">
-                    <rect x="166" y="280" width="3" height="6" />
-                    <rect x="184" y="300" width="3" height="6" />
-                    <rect x="224" y="270" width="3" height="6" />
-                    <rect x="246" y="290" width="3" height="6" />
-                  </g>
-                  {/* 椰树剪影 */}
-                  <g stroke="#0f766e" strokeWidth="2.5" opacity="0.55" fill="none" strokeLinecap="round">
-                    <path d="M28 486 Q58 444 92 472" />
-                    <path d="M36 494 Q66 462 100 486" />
-                    <path d="M372 488 Q340 446 308 474" />
-                    <path d="M364 496 Q334 464 300 488" />
+                  <g stroke="var(--color-zinc-800)" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.8">
+                    <path d="M16 150 Q40 120 64 140" />
+                    <path d="M372 150 Q348 120 324 140" />
                   </g>
                 </svg>
 
-                {/* 玻璃质感遮罩，让前景文字可读 */}
-                <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/30 via-zinc-950/45 to-zinc-950/70 backdrop-blur-[3px]" />
+                {/* ④ 玻璃遮罩增强前景可读性（双主题通用） */}
+                <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/10 via-transparent to-zinc-950/40" />
 
-                {/* 前景内容 */}
+                {/* ⑤ 前景内容 */}
                 <div className="relative z-10 flex h-full flex-col p-5 sm:p-6">
-                  {/* 顶部标题 */}
+                  {/* 顶部标题 + LIVE */}
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-[13px] font-bold tracking-wide text-zinc-100">
@@ -221,13 +241,13 @@ export default function Hero() {
                     </div>
                   </div>
 
-                  {/* 5 个互动 Pill */}
-                  <div className="mt-4 flex flex-wrap gap-1.5 justify-center">
+                  {/* 5 个互动 Pill —— 移动端横向滑动 snap，桌面居中换行 */}
+                  <div className="mt-4 flex gap-1.5 overflow-x-auto scrollbar-none snap-x snap-mandatory px-0.5 pb-1 lg:flex-wrap lg:justify-center lg:overflow-x-visible">
                     {CHANNELS.map((c, i) => (
                       <button
                         key={c.name}
                         onClick={() => setActive(i)}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-all duration-200 ${
+                        className={`inline-flex shrink-0 snap-start items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-all duration-200 ${
                           i === active
                             ? `${c.pill} scale-105 shadow-md`
                             : "border-zinc-800 bg-zinc-950/50 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
@@ -239,7 +259,7 @@ export default function Hero() {
                     ))}
                   </div>
 
-                  {/* 内容区：流畅切换地道梗 + 服务 */}
+                  {/* 内容区：地道梗 + 服务 + CTA，流畅切换 */}
                   <div className="relative mt-4 flex-1 overflow-hidden">
                     {/* 顶部彩色光带，跟随频道色 */}
                     <div className={`absolute -top-1 left-1/2 h-1 w-16 -translate-x-1/2 rounded-full bg-gradient-to-r ${ch.bar} blur-[2px]`} />
@@ -250,22 +270,37 @@ export default function Hero() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -14, scale: 0.97 }}
                         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                        className="flex h-full flex-col justify-center text-center"
+                        className="flex h-full flex-col"
                       >
-                        <div className="text-5xl sm:text-6xl leading-none drop-shadow-lg">{ch.emoji}</div>
-                        <div className="mt-3 text-lg sm:text-xl font-bold italic text-zinc-50">
-                          &ldquo;{ch.tag}&rdquo;
+                        {/* Emoji */}
+                        <div className="text-center text-4xl sm:text-5xl leading-none drop-shadow-lg">
+                          {ch.emoji}
                         </div>
-                        <div className="mt-1 text-xs text-zinc-400">{ch.sub}</div>
-
-                        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3 text-left backdrop-blur-sm">
+                        {/* 文化金句（响应式字号，禁止截断） */}
+                        <div className="mt-3 text-center text-base font-bold italic leading-snug text-zinc-50 sm:text-lg">
+                          &ldquo;{ch.quote}&rdquo;
+                        </div>
+                        {/* 服务卡 */}
+                        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3 backdrop-blur-sm">
                           <div className="flex items-center gap-1.5">
                             <span className={`h-1.5 w-1.5 rounded-full ${ch.dot}`} />
-                            <span className={`text-[11px] font-bold tracking-wide ${ch.accent}`}>【{ch.service}】</span>
+                            <span className={`text-[11px] font-bold tracking-wide ${ch.accent}`}>
+                              【{ch.service}】
+                            </span>
                           </div>
                           <div className="mt-1.5 text-[13px] leading-relaxed text-zinc-300">
                             {ch.desc}
                           </div>
+                        </div>
+                        {/* 预留案例联动 CTA */}
+                        <div className="mt-auto pt-4">
+                          <button
+                            onClick={scrollToCases}
+                            className={`group/cta inline-flex w-full items-center justify-center gap-1.5 rounded-xl border ${ch.pill} px-4 py-2.5 text-xs font-semibold transition-all duration-200 hover:gap-2.5`}
+                          >
+                            查看实战案例
+                            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover/cta:translate-x-0.5" />
+                          </button>
                         </div>
                       </motion.div>
                     </AnimatePresence>

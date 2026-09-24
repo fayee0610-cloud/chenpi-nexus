@@ -129,6 +129,22 @@ body {
   background: var(--color-zinc-700);
 }
 
+/* 隐藏原生滚动条，保留手势滑动（移动端横向 Pill 容器） */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* 短屏（笔记本 height<700px）自动隐藏 Mascot 引导气泡，避免与 Hero 艺术卡碰撞 */
+@media (max-height: 700px) {
+  .mascot-bubble {
+    display: none !important;
+  }
+}
+
 /* Gradient text utility —— 跟随主题变量，亮色呈珠宝渐变 */
 .gradient-text {
   background: linear-gradient(135deg, var(--color-blue-500), var(--color-purple-500));

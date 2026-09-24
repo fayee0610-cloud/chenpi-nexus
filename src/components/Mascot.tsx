@@ -139,7 +139,7 @@ export default function Mascot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.9 }}
             transition={{ duration: 0.4 }}
-            className="fixed bottom-24 right-6 z-40 max-w-[200px] rounded-xl border border-zinc-800 bg-zinc-900/95 px-4 py-2.5 text-xs font-medium text-zinc-300 shadow-xl backdrop-blur-sm"
+            className="mascot-bubble fixed bottom-24 right-6 z-40 max-w-[200px] rounded-xl border border-zinc-800 bg-zinc-900/95 px-4 py-2.5 text-xs font-medium text-zinc-300 shadow-xl backdrop-blur-sm"
           >
             {bubbles[bubbleIndex]}
             <div className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 border-b border-r border-zinc-800 bg-zinc-900/95" />
