@@ -1,9 +1,77 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ArrowDown, ShieldCheck, MapPin, CheckCircle2, Zap, Radio } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowDown } from "lucide-react";
+
+// ===== 大马出海频道数据：地道梗 + 极简服务 =====
+const CHANNELS = [
+  {
+    emoji: "☕",
+    name: "Kopitiam",
+    tag: "Boss, Teh Tarik Satu!",
+    sub: "老板，来杯拉茶！",
+    service: "南洋社交与资源撮合",
+    desc: "在大马，硬核的商业关系可能就是在茶室里聊出来的。",
+    pill: "border-amber-500/50 bg-amber-500/15 text-amber-400",
+    accent: "text-amber-400",
+    dot: "bg-amber-400",
+    bar: "from-amber-500 to-amber-400",
+  },
+  {
+    emoji: "👌",
+    name: "Boleh!",
+    tag: "Boleh! 心里就稳了一半",
+    sub: "在大马，听到「Boleh」就稳了一半。",
+    service: "GTM 策略与实操落地",
+    desc: "找准本地路子，就没有 Tak Boleh 办不到的难题。",
+    pill: "border-emerald-500/50 bg-emerald-500/15 text-emerald-400",
+    accent: "text-emerald-400",
+    dot: "bg-emerald-400",
+    bar: "from-emerald-500 to-emerald-400",
+  },
+  {
+    emoji: "🌙",
+    name: "Halal",
+    tag: "本地人的安心密码",
+    sub: "不只是清真标志，更是 68% 人口的信任。",
+    service: "Halal 准入与合规咨询",
+    desc: "带你打通本土核心消费圈，顺畅拿到 JAKIM 准入。",
+    pill: "border-green-500/50 bg-green-500/15 text-green-400",
+    accent: "text-green-400",
+    dot: "bg-green-400",
+    bar: "from-green-500 to-green-400",
+  },
+  {
+    emoji: "🗣️",
+    name: "Lah!",
+    tag: "多一点懂本地人的 Lah",
+    sub: "少一点 PPT，多一点 Manglish 的温度。",
+    service: "地道 Manglish 本土化营销",
+    desc: "用本地族裔的沟通方式，做有温度的品牌表达。",
+    pill: "border-blue-500/50 bg-blue-500/15 text-blue-400",
+    accent: "text-blue-400",
+    dot: "bg-blue-400",
+    bar: "from-blue-500 to-blue-400",
+  },
+  {
+    emoji: "🚀",
+    name: "Jom!",
+    tag: "Jom! 走起出海！",
+    sub: "别再观望了，用 AI 杠杆快速实操。",
+    service: "AI 商业情报与判断",
+    desc: "拒绝纸上谈兵，用 AI 杠杆带你快速出海大马。",
+    pill: "border-purple-500/50 bg-purple-500/15 text-purple-400",
+    accent: "text-purple-400",
+    dot: "bg-purple-400",
+    bar: "from-purple-500 to-purple-400",
+  },
+];
 
 export default function Hero() {
+  const [active, setActive] = useState(0);
+  const ch = CHANNELS[active];
+
   return (
     <section className="relative flex min-h-[80vh] items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-10 lg:py-20">
       {/* 背景光晕 */}
@@ -68,146 +136,143 @@ export default function Hero() {
           </div>
         </motion.div>
 
-        {/* 右侧：大马出海策略指挥舱 —— 错落悬浮 UI 卡片组（替代休闲人像，建立商务信任） */}
+        {/* 右侧：🇲🇾 大马出海频道解码器 —— 单体艺术卡片（地道文化 + 互动切换） */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
           className="lg:col-span-5 flex justify-center lg:justify-end w-full min-w-0"
         >
-          <div className="relative w-full max-w-sm lg:max-w-md aspect-[4/5] mx-auto">
+          <div className="relative w-full max-w-sm lg:max-w-md">
+            {/* 流光外框 + 悬浮升起 */}
+            <div className="relative group rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500/50 via-zinc-700/30 to-blue-500/50 transition-all duration-500 hover:-translate-y-1.5 shadow-[0_0_30px_rgba(168,85,247,0.18)] hover:shadow-[0_14px_44px_rgba(124,58,237,0.32)]">
+              <div className="relative w-full rounded-[22px] overflow-hidden aspect-[4/5] bg-slate-950">
 
-            {/* 卡片 1：Halal 准入 AI 流程（左上，微倾 -4°，翡翠呼吸光） */}
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0, rotate: -4 }}
-              transition={{ duration: 0.6, delay: 0.25, type: "spring", stiffness: 120 }}
-              whileHover={{ rotate: 0, y: -8, scale: 1.035, transition: { type: "spring", stiffness: 300, damping: 18 } }}
-              className="absolute top-[3%] left-[1%] w-[74%] z-10"
-            >
-              <motion.div
-                aria-hidden
-                animate={{ opacity: [0.25, 0.5, 0.25] }}
-                transition={{ repeat: Infinity, duration: 3.2, delay: 0.4 }}
-                className="absolute -inset-1.5 rounded-3xl bg-emerald-500/25 blur-2xl pointer-events-none"
-              />
-              <div className="relative rounded-2xl border border-zinc-800 bg-zinc-900/80 backdrop-blur-xl p-3.5 shadow-xl">
-                <div className="mb-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-emerald-400">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    <span className="text-[11px] font-semibold">Halal 准入 · AI 流程</span>
+                {/* 大马风情背景画：双峰塔剪影 + 落日 + 椰树 */}
+                <svg
+                  className="absolute inset-0 h-full w-full"
+                  viewBox="0 0 400 500"
+                  preserveAspectRatio="xMidYMid slice"
+                  fill="none"
+                  aria-hidden
+                >
+                  <defs>
+                    <linearGradient id="mySky" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor="#1e1b4b" />
+                      <stop offset="0.45" stopColor="#3b1d6e" />
+                      <stop offset="0.8" stopColor="#0f766e" />
+                      <stop offset="1" stopColor="#0b1220" />
+                    </linearGradient>
+                    <radialGradient id="mySun" cx="0.5" cy="0.5" r="0.5">
+                      <stop offset="0" stopColor="#fbbf24" stopOpacity="0.95" />
+                      <stop offset="0.5" stopColor="#f59e0b" stopOpacity="0.5" />
+                      <stop offset="1" stopColor="#f59e0b" stopOpacity="0" />
+                    </radialGradient>
+                  </defs>
+                  {/* 天空 */}
+                  <rect width="400" height="500" fill="url(#mySky)" />
+                  {/* 落日 */}
+                  <circle cx="305" cy="135" r="62" fill="url(#mySun)" />
+                  <circle cx="305" cy="135" r="26" fill="#fde68a" opacity="0.85" />
+                  {/* 双峰塔剪影 */}
+                  <g fill="#070611" opacity="0.92">
+                    <path d="M152 500 L152 250 L162 218 L176 184 L190 218 L200 250 L200 500 Z" />
+                    <path d="M210 500 L210 240 L220 208 L236 172 L252 208 L262 240 L262 500 Z" />
+                  </g>
+                  {/* 天桥 */}
+                  <rect x="192" y="318" width="22" height="5" rx="2" fill="#1e293b" />
+                  {/* 塔身窗格微光 */}
+                  <g fill="#a78bfa" opacity="0.35">
+                    <rect x="166" y="280" width="3" height="6" />
+                    <rect x="184" y="300" width="3" height="6" />
+                    <rect x="224" y="270" width="3" height="6" />
+                    <rect x="246" y="290" width="3" height="6" />
+                  </g>
+                  {/* 椰树剪影 */}
+                  <g stroke="#0f766e" strokeWidth="2.5" opacity="0.55" fill="none" strokeLinecap="round">
+                    <path d="M28 486 Q58 444 92 472" />
+                    <path d="M36 494 Q66 462 100 486" />
+                    <path d="M372 488 Q340 446 308 474" />
+                    <path d="M364 496 Q334 464 300 488" />
+                  </g>
+                </svg>
+
+                {/* 玻璃质感遮罩，让前景文字可读 */}
+                <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/30 via-zinc-950/45 to-zinc-950/70 backdrop-blur-[3px]" />
+
+                {/* 前景内容 */}
+                <div className="relative z-10 flex h-full flex-col p-5 sm:p-6">
+                  {/* 顶部标题 */}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-[13px] font-bold tracking-wide text-zinc-100">
+                        🇲🇾 切换大马出海频道
+                      </div>
+                      <div className="mt-0.5 text-[10px] tracking-[0.2em] text-zinc-400">
+                        MALAYSIAN VIBE DECODER
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 rounded-full border border-green-500/30 bg-zinc-950/60 px-2 py-1 text-[9px] font-semibold text-green-400">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+                      </span>
+                      LIVE
+                    </div>
                   </div>
-                  <span className="inline-flex items-center gap-0.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
-                    <Zap className="h-2.5 w-2.5" />AI
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 text-[9px] font-medium text-zinc-300">
-                  <span className="rounded bg-emerald-500/10 px-1.5 py-0.5">原料审核</span>
-                  <span className="text-zinc-600">→</span>
-                  <span className="rounded bg-emerald-500/10 px-1.5 py-0.5">JAKIM 申报</span>
-                  <span className="text-zinc-600">→</span>
-                  <span className="rounded border border-emerald-500/30 px-1.5 py-0.5 text-emerald-400">清真标印</span>
-                </div>
-                <div className="mt-2.5 flex items-center justify-between text-[9px] text-zinc-500">
-                  <span>周期预估</span>
-                  <span className="text-zinc-300">8-12 周</span>
+
+                  {/* 5 个互动 Pill */}
+                  <div className="mt-4 flex flex-wrap gap-1.5 justify-center">
+                    {CHANNELS.map((c, i) => (
+                      <button
+                        key={c.name}
+                        onClick={() => setActive(i)}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-all duration-200 ${
+                          i === active
+                            ? `${c.pill} scale-105 shadow-md`
+                            : "border-zinc-800 bg-zinc-950/50 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                        }`}
+                      >
+                        <span className="text-[13px] leading-none">{c.emoji}</span>
+                        <span>{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 内容区：流畅切换地道梗 + 服务 */}
+                  <div className="relative mt-4 flex-1 overflow-hidden">
+                    {/* 顶部彩色光带，跟随频道色 */}
+                    <div className={`absolute -top-1 left-1/2 h-1 w-16 -translate-x-1/2 rounded-full bg-gradient-to-r ${ch.bar} blur-[2px]`} />
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={active}
+                        initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -14, scale: 0.97 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="flex h-full flex-col justify-center text-center"
+                      >
+                        <div className="text-5xl sm:text-6xl leading-none drop-shadow-lg">{ch.emoji}</div>
+                        <div className="mt-3 text-lg sm:text-xl font-bold italic text-zinc-50">
+                          &ldquo;{ch.tag}&rdquo;
+                        </div>
+                        <div className="mt-1 text-xs text-zinc-400">{ch.sub}</div>
+
+                        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3 text-left backdrop-blur-sm">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-1.5 w-1.5 rounded-full ${ch.dot}`} />
+                            <span className={`text-[11px] font-bold tracking-wide ${ch.accent}`}>【{ch.service}】</span>
+                          </div>
+                          <div className="mt-1.5 text-[13px] leading-relaxed text-zinc-300">
+                            {ch.desc}
+                          </div>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
-            </motion.div>
-
-            {/* 卡片 2：大马商业情报 LIVE（居中最大，不倾斜，科技蓝呼吸光） */}
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4, type: "spring", stiffness: 120 }}
-              whileHover={{ y: -8, scale: 1.035, transition: { type: "spring", stiffness: 300, damping: 18 } }}
-              className="absolute top-[27%] left-[14%] w-[82%] z-30"
-            >
-              <motion.div
-                aria-hidden
-                animate={{ opacity: [0.3, 0.6, 0.3] }}
-                transition={{ repeat: Infinity, duration: 2.8, delay: 0.2 }}
-                className="absolute -inset-1.5 rounded-3xl bg-blue-500/30 blur-2xl pointer-events-none"
-              />
-              <div className="relative rounded-2xl border border-zinc-800 bg-zinc-900/85 backdrop-blur-xl p-4 shadow-2xl">
-                <div className="mb-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
-                    </span>
-                    <span className="text-[11px] font-semibold text-zinc-100">大马商业情报</span>
-                  </div>
-                  <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-blue-400">LIVE</span>
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400" />
-                    <span className="truncate text-[10px] text-zinc-300">大马零售渠道周报</span>
-                    <span className="ml-auto shrink-0 text-[8px] text-zinc-500">The Edge · 2h</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
-                    <span className="truncate text-[10px] text-zinc-300">Halal 政策更新</span>
-                    <span className="ml-auto shrink-0 text-[8px] text-zinc-500">JAKIM · 5h</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                    <span className="truncate text-[10px] text-zinc-300">令吉汇率波动</span>
-                    <span className="ml-auto shrink-0 text-[8px] text-zinc-500">BNM · 1d</span>
-                  </div>
-                </div>
-                <div className="mt-2.5 flex items-center gap-1 border-t border-zinc-800 pt-2 text-[9px] text-zinc-500">
-                  <Radio className="h-2.5 w-2.5 text-blue-400" />
-                  本周 <span className="font-semibold text-blue-400">+12</span> 条情报
-                </div>
-              </div>
-            </motion.div>
-
-            {/* 卡片 3：KL/柔佛战略节点（右下，微倾 +4°，钛紫呼吸光） */}
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0, rotate: 4 }}
-              transition={{ duration: 0.6, delay: 0.55, type: "spring", stiffness: 120 }}
-              whileHover={{ rotate: 0, y: -8, scale: 1.035, transition: { type: "spring", stiffness: 300, damping: 18 } }}
-              className="absolute bottom-[2%] right-[1%] w-[72%] z-20"
-            >
-              <motion.div
-                aria-hidden
-                animate={{ opacity: [0.25, 0.5, 0.25] }}
-                transition={{ repeat: Infinity, duration: 3.5, delay: 0.6 }}
-                className="absolute -inset-1.5 rounded-3xl bg-purple-500/25 blur-2xl pointer-events-none"
-              />
-              <div className="relative rounded-2xl border border-zinc-800 bg-zinc-900/80 backdrop-blur-xl p-3.5 shadow-xl">
-                <div className="mb-2.5 flex items-center gap-1.5 text-purple-400">
-                  <MapPin className="h-3.5 w-3.5" />
-                  <span className="text-[11px] font-semibold">战略节点 · 3 城</span>
-                </div>
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-purple-400 ring-2 ring-purple-500/30" />
-                    <span className="text-[8px] text-zinc-400">巴生谷</span>
-                  </div>
-                  <span className="h-px flex-1 mx-1 border-t border-dashed border-zinc-700" />
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-purple-500 ring-2 ring-purple-500/40" />
-                    <span className="text-[8px] font-medium text-zinc-200">柔佛</span>
-                  </div>
-                  <span className="h-px flex-1 mx-1 border-t border-dashed border-zinc-700" />
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-purple-400 ring-2 ring-purple-500/30" />
-                    <span className="text-[8px] text-zinc-400">槟城</span>
-                  </div>
-                </div>
-                <div className="mt-2.5 flex items-center justify-between text-[9px] text-zinc-500">
-                  <span>GTM 落地</span>
-                  <span className="inline-flex items-center gap-0.5 text-emerald-400">
-                    <CheckCircle2 className="h-2.5 w-2.5" />已部署
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-
+            </div>
           </div>
         </motion.div>
       </div>
