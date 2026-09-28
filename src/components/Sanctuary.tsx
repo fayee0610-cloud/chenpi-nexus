@@ -704,11 +704,12 @@ export default function Sanctuary({
     // Toast 温馨提示
     showIncenseToast("诚心已至，愿以此祝祷！");
 
-    // 3) 持久化：原子递增 DB 总能量 + 单柱 count
+    // 3) 持久化：原子递增 DB 单柱 count，成功后重新拉取全网总能量（避免单柱 count 覆盖总能量导致乱跳）
     incrementIncense(id)
-      .then((dbCount) => {
-        if (typeof dbCount === "number") {
-          setTotalEnergy(dbCount);
+      .then(() => fetchAsylumStats())
+      .then((stats) => {
+        if (typeof stats.incenseCount === "number" && stats.incenseCount > 0) {
+          setTotalEnergy(stats.incenseCount);
         }
       })
       .catch((err) => {
@@ -730,7 +731,7 @@ export default function Sanctuary({
     );
   }, []);
 
-  // 注入能量 +1（乐观更新 + 异步持久化到 sanctuary_posts.likes）
+  // 注入能量 +1（乐观更新 + 异步持久化到 sanctuary_posts.likes，成功后同步全网总能量）
   const handleEnergy = useCallback((fartId: string) => {
     setFarts((prev) =>
       prev.map((f) => (f.id === fartId ? { ...f, likes: f.likes + 1 } : f))
@@ -743,6 +744,13 @@ export default function Sanctuary({
           setFarts((prev) =>
             prev.map((f) => (f.id === fartId ? { ...f, likes: dbEnergy } : f))
           );
+        }
+        // 持久化成功后，重新拉取全网总能量，保证数值真实连贯
+        return fetchAsylumStats();
+      })
+      .then((stats) => {
+        if (stats && typeof stats.incenseCount === "number" && stats.incenseCount > 0) {
+          setTotalEnergy(stats.incenseCount);
         }
       })
       .catch((err) => {

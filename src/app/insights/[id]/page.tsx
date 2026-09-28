@@ -16,7 +16,7 @@ import InsightShareClient from "./InsightShareClient";
 import InspireButton from "./InspireButton";
 import ArticleComments from "./ArticleComments";
 import type { ContentBlock } from "@/data/siteData";
-import { HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS } from "@/data/siteData";
+import { HARDCORE_TAGS_POOL, FLAT_HARDCORE_TAGS, contact } from "@/data/siteData";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 export const dynamic = "force-dynamic";
@@ -274,6 +274,21 @@ export default async function InsightDetailPage({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
 
+        {/* 面包屑导航 */}
+        <nav aria-label="面包屑" className="mb-6 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+          <Link href="/" className="transition-colors hover:text-zinc-300">
+            首页
+          </Link>
+          <span className="text-zinc-700">/</span>
+          <Link href="/insights" className="transition-colors hover:text-zinc-300">
+            深度洞察
+          </Link>
+          <span className="text-zinc-700">/</span>
+          <span className="max-w-[200px] truncate text-zinc-300" title={insight.title}>
+            {insight.title}
+          </span>
+        </nav>
+
         {/* 返回按钮 */}
         <Link
           href="/insights"
@@ -362,6 +377,24 @@ export default async function InsightDetailPage({
           )}
         </header>
 
+        {/* 作者简介卡片 */}
+        <div className="mb-8 flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-lg font-bold text-white shadow-lg">
+            陈
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-zinc-100">{authorName}</span>
+              <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                陈述中马
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
+              大马 GTM 策略人 · B2B 品牌出海实践者 · 深耕清真 Halal 准入与 AI 商业情报
+            </p>
+          </div>
+        </div>
+
         {/* 高清大尺寸封面图（无图时不渲染任何占位） */}
         {insight.image && insight.image.trim() !== "" && (
           <div className="relative mb-8 aspect-video w-full overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
@@ -413,6 +446,38 @@ export default async function InsightDetailPage({
           <div className="flex flex-wrap items-center gap-4">
             <InspireButton insightId={String(id)} initialLikes={insight.likes} />
             <InsightShareClient title={insight.title} />
+          </div>
+        </section>
+
+        {/* 微信公众号引流卡片 */}
+        <section className="mt-8 overflow-hidden rounded-2xl border border-green-500/20 bg-gradient-to-br from-green-950/20 via-zinc-900/60 to-emerald-950/10 p-6 shadow-2xl">
+          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+            {/* 左侧：公众号标识 + 文案 */}
+            <div className="flex-1">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1">
+                <span className="text-base">📡</span>
+                <span className="text-xs font-semibold text-green-300">陈述中马 · 微信公众号</span>
+              </div>
+              <h3 className="mb-1.5 text-lg font-bold text-zinc-50">
+                关注公众号，获取更多大马出海实战干货
+              </h3>
+              <p className="text-sm leading-relaxed text-zinc-400">
+                马来西亚 GTM 策略 · 清真 Halal 准入 · B2B 品牌出海 · AI 商业情报，每周深度更新。
+              </p>
+            </div>
+            {/* 右侧：微信号复制 */}
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 px-5 py-3 sm:min-w-[180px]">
+              <span className="text-[10px] text-zinc-500">微信号</span>
+              <span className="font-mono text-base font-bold text-green-400">{contact.wechatId}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(contact.wechatId);
+                }}
+                className="mt-1 rounded-lg bg-green-500/15 px-3 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/25"
+              >
+                复制微信号
+              </button>
+            </div>
           </div>
         </section>
 
