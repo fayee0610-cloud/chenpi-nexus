@@ -8,6 +8,7 @@ import {
   Clock,
   Tag,
   Sparkles,
+  Video,
 } from "lucide-react";
 import { fetchInsightById } from "@/lib/dataApi";
 import Header from "@/components/Header";
@@ -40,16 +41,17 @@ export async function generateMetadata({
     description,
     keywords: tagsFlat.length ? tagsFlat.join(",") : undefined,
     openGraph: {
-      type: "article",
+      type: insight.type === "video" ? "video.other" : "article",
       title: `${title} | 陈皮同学深度洞察`,
       description,
       tags: tagsFlat.length ? tagsFlat : undefined,
       images: insight.image ? [{ url: insight.image, width: 1200, height: 630 }] : undefined,
       publishedTime: insight.date,
       authors: insight.author ? [insight.author] : undefined,
+      ...(insight.type === "video" && insight.videoUrl ? { videos: [{ url: insight.videoUrl }] } : {}),
     },
     twitter: {
-      card: "summary_large_image",
+      card: insight.type === "video" ? "player" : "summary_large_image",
       title: `${title} | 陈皮同学深度洞察`,
       description,
       images: insight.image ? [insight.image] : undefined,
@@ -248,10 +250,34 @@ export default async function InsightDetailPage({
         }
       : null;
 
-  // @graph 打包 TechArticle + FAQPage（兼容 Perplexity / Google AI / 秘塔 / Kimi）
+  // VideoObject JSON-LD：视频内容 GEO 结构化数据（Google Video Search / AI 爬虫可抓取）
+  const videoObject =
+    insight.type === "video" && insight.videoId
+      ? {
+          "@type": "VideoObject",
+          name: headline,
+          description: insight.videoSummary || description,
+          thumbnailUrl: insight.image || undefined,
+          uploadDate: datePublished,
+          contentUrl: insight.videoUrl,
+          embedUrl:
+            insight.videoSource === "youtube"
+              ? `https://www.youtube.com/embed/${insight.videoId}`
+              : insight.videoSource === "bilibili"
+                ? `https://player.bilibili.com/player.html?bvid=${insight.videoId}`
+                : undefined,
+          publisher: {
+            "@type": "Person",
+            name: "陈皮 · 陈述中马",
+            url: "https://chenpi.dev",
+          },
+        }
+      : null;
+
+  // @graph 打包 TechArticle + FAQPage + VideoObject
   const jsonLd: Record<string, any> = {
     "@context": "https://schema.org",
-    "@graph": faqPage ? [techArticle, faqPage] : [techArticle],
+    "@graph": [techArticle, ...(faqPage ? [faqPage] : []), ...(videoObject ? [videoObject] : [])],
   };
 
   // 标签分组展示（只展示命中池中的真实 tag）
@@ -407,6 +433,48 @@ export default async function InsightDetailPage({
           </div>
         )}
 
+        {/* 视频嵌入播放器（YouTube / Bilibili） */}
+        {insight.type === "video" && insight.videoId && insight.videoSource && (
+          <div className="mb-8">
+            <div className="mb-3 flex items-center gap-2">
+              <Video className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-medium text-zinc-300">视频</span>
+              <span className="text-[10px] text-zinc-600">
+                {insight.videoSource === "youtube" ? "YouTube" : "Bilibili"}
+              </span>
+            </div>
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+              {insight.videoSource === "youtube" ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${insight.videoId}`}
+                  title={insight.title}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <iframe
+                  src={`https://player.bilibili.com/player.html?bvid=${insight.videoId}&high_quality=1&autoplay=0`}
+                  title={insight.title}
+                  className="h-full w-full"
+                  allowFullScreen
+                  scrolling="no"
+                />
+              )}
+            </div>
+            {/* 视频看点摘要（GEO 可抓取的文本） */}
+            {insight.videoSummary && (
+              <div className="mt-4 rounded-xl border border-purple-500/20 bg-purple-950/10 p-4">
+                <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-purple-300">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  视频核心看点
+                </div>
+                <p className="text-sm leading-relaxed text-zinc-300">{insight.videoSummary}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 摘要 */}
         {insight.excerpt && (
           <p className="mb-8 text-lg leading-relaxed text-zinc-400">
@@ -415,7 +483,7 @@ export default async function InsightDetailPage({
         )}
 
         {/* 正文排版（Markdown 引擎渲染） */}
-        <article className="space-y-2">
+        <article className="space-y-6">
           {/* 首段 blockquote 高亮为 TL;DR */}
           {firstBlockquoteIndex !== null && insight.content[firstBlockquoteIndex] && (
             <section

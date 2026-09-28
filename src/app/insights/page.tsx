@@ -7,8 +7,8 @@ import {
   ArrowLeft,
   Clock,
   BookOpen,
-  MessageSquare,
-  Headphones,
+  Video,
+  Sparkles,
   Search,
   Loader2,
   Eye,
@@ -17,29 +17,30 @@ import Header from "@/components/Header";
 import type { InsightItem } from "@/data/siteData";
 import { fetchInsights } from "@/lib/dataApi";
 
-type FilterKey = "all" | "article" | "short" | "podcast";
+type FilterKey = "featured" | "article" | "video";
 
 const filters: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "全部" },
-  { key: "article", label: "图文长文" },
-  { key: "short", label: "短观点" },
-  { key: "podcast", label: "播客与音频" },
+  { key: "featured", label: "精选" },
+  { key: "article", label: "图文" },
+  { key: "video", label: "视频" },
 ];
 
 const typeIcon: Record<string, React.ReactNode> = {
   article: <BookOpen className="h-3.5 w-3.5" />,
-  short: <MessageSquare className="h-3.5 w-3.5" />,
-  podcast: <Headphones className="h-3.5 w-3.5" />,
+  video: <Video className="h-3.5 w-3.5" />,
+  short: <BookOpen className="h-3.5 w-3.5" />,
+  podcast: <Video className="h-3.5 w-3.5" />,
 };
 
 const typeLabel: Record<string, string> = {
-  article: "长文",
-  short: "短观点",
-  podcast: "播客",
+  article: "图文",
+  video: "视频",
+  short: "图文",
+  podcast: "视频",
 };
 
 export default function InsightsListPage() {
-  const [filter, setFilter] = useState<FilterKey>("all");
+  const [filter, setFilter] = useState<FilterKey>("featured");
   const [searchQuery, setSearchQuery] = useState("");
   const [insights, setInsights] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,8 +64,11 @@ export default function InsightsListPage() {
 
   const filtered = useMemo(() => {
     let result = insights;
-    if (filter !== "all") {
-      result = result.filter((i) => i.type === filter);
+    // "featured" 显示全部（精选 = 不限类型），"article" 过滤图文，"video" 过滤视频
+    if (filter === "article") {
+      result = result.filter((i) => i.type === "article" || i.type === "short");
+    } else if (filter === "video") {
+      result = result.filter((i) => i.type === "video" || i.type === "podcast");
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -180,10 +184,18 @@ export default function InsightsListPage() {
                       <div className="h-full w-full bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                    {/* 视频卡片播放图标 */}
+                    {(item.type === "video" || item.type === "podcast") && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur-md transition-transform group-hover:scale-110">
+                          <Video className="h-5 w-5 text-white" fill="currentColor" />
+                        </div>
+                      </div>
+                    )}
                     <div className="absolute bottom-3 left-4 flex items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-md bg-zinc-950/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
-                        {typeIcon[item.type]}
-                        {typeLabel[item.type]}
+                        {typeIcon[item.type] || <BookOpen className="h-3.5 w-3.5" />}
+                        {typeLabel[item.type] || "图文"}
                       </span>
                       {item.readTime && (
                         <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400">

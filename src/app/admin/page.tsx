@@ -1612,10 +1612,12 @@ function calcReadTime(contentText: string): string {
 function InsightsEditor() {
   const [form, setForm] = useState({
     title: "",
-    category: "✦ 深度长文",
+    category: "图文",
     readTime: "",
     audioUrl: "",
     coverUrl: "",
+    videoUrl: "",
+    videoSummary: "",
     date: getUTC8DateStr(), // 默认东八区当前日期
     author: "陈皮",         // 默认锁定作者
     summary: "",
@@ -1644,9 +1646,11 @@ function InsightsEditor() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
-    category: "",
+    category: "图文",
     readTime: "",
     audioUrl: "",
+    videoUrl: "",
+    videoSummary: "",
     date: "",
     author: "陈皮",
     summary: "",
@@ -1713,9 +1717,11 @@ function InsightsEditor() {
     setEditingFullId(item.id);
     setEditForm({
       title: item.title || "",
-      category: item.category || "",
+      category: item.category || "图文",
       readTime: item.readTime || "",
       audioUrl: item.listenTime || "",
+      videoUrl: item.videoUrl || "",
+      videoSummary: item.videoSummary || "",
       date: item.date || "",
       author: item.author || "陈皮",
       summary: item.excerpt || "",
@@ -1789,6 +1795,8 @@ function InsightsEditor() {
         author: editForm.author,
         listenTime: editForm.audioUrl,
         coverUrl: editForm.coverUrl,
+        videoUrl: editForm.videoUrl,
+        videoSummary: editForm.videoSummary,
       });
 
       setEditingFullId(null);
@@ -1996,12 +2004,15 @@ function InsightsEditor() {
         excerpt: form.summary,
         content,
         image: form.coverUrl || undefined,
+        videoUrl: form.videoUrl || undefined,
+        videoSummary: form.videoSummary || undefined,
       };
       await createInsight(insight);
       setStatus({ type: "success", msg: "深度洞察发布成功！" });
       setForm({
-        title: "", category: "✦ 深度长文",
+        title: "", category: "图文",
         readTime: "", audioUrl: "", coverUrl: "",
+        videoUrl: "", videoSummary: "",
         date: getUTC8DateStr(), author: "陈皮", summary: "", contentText: "",
         tags: [],
       });
@@ -2027,7 +2038,15 @@ function InsightsEditor() {
             <input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="如：AI 时代下 B2B 营销人的第二曲线" className="input-insight" />
           </FormField>
           <FormField label="分类 *">
-            <input value={form.category} onChange={(e) => updateField("category", e.target.value)} placeholder="如：✦ 深度长文 / 短观点 / 🎙️ 音频思考" className="input-insight" />
+            <select
+              value={form.category}
+              onChange={(e) => updateField("category", e.target.value)}
+              className="input-insight"
+            >
+              <option value="精选">精选</option>
+              <option value="图文">图文</option>
+              <option value="视频">视频</option>
+            </select>
           </FormField>
           <FormField label="作者（默认锁定）">
             <input
@@ -2049,6 +2068,29 @@ function InsightsEditor() {
             <input value={form.audioUrl} onChange={(e) => updateField("audioUrl", e.target.value)} placeholder="https://..." className="input-insight" />
           </FormField>
         </div>
+
+        {/* 视频专属字段（分类=视频时显示） */}
+        {form.category === "视频" && (
+          <div className="grid gap-4 md:grid-cols-2 rounded-xl border border-purple-500/20 bg-purple-950/10 p-4">
+            <FormField label="视频链接 / BVID *">
+              <input
+                value={form.videoUrl}
+                onChange={(e) => updateField("videoUrl", e.target.value)}
+                placeholder="YouTube 链接或 Bilibili BV1xxxxxx"
+                className="input-insight"
+              />
+            </FormField>
+            <FormField label="视频看点摘要（GEO 可抓取）*">
+              <textarea
+                value={form.videoSummary}
+                onChange={(e) => updateField("videoSummary", e.target.value)}
+                placeholder="视频核心看点文字摘要，搜索引擎可抓取的结构化文本"
+                rows={2}
+                className="input-insight resize-none"
+              />
+            </FormField>
+          </div>
+        )}
 
         {/* 封面图 URL + 本地上传 */}
         <div className="grid gap-4 md:grid-cols-2">
@@ -2456,12 +2498,15 @@ function InsightsEditor() {
                     />
                   </FormField>
                   <FormField label="分类 *">
-                    <input
+                    <select
                       value={editForm.category}
                       onChange={(e) => updateEditField("category", e.target.value)}
-                      placeholder="如：深度长文 / 短观点 / 音频思考"
                       className="input-insight"
-                    />
+                    >
+                      <option value="精选">精选</option>
+                      <option value="图文">图文</option>
+                      <option value="视频">视频</option>
+                    </select>
                   </FormField>
                   <FormField label="阅读时长">
                     <input
@@ -2496,6 +2541,29 @@ function InsightsEditor() {
                     />
                   </FormField>
                 </div>
+
+                {/* 视频专属字段（编辑模式，分类=视频时显示） */}
+                {editForm.category === "视频" && (
+                  <div className="grid gap-4 md:grid-cols-2 rounded-xl border border-purple-500/20 bg-purple-950/10 p-4">
+                    <FormField label="视频链接 / BVID">
+                      <input
+                        value={editForm.videoUrl}
+                        onChange={(e) => updateEditField("videoUrl", e.target.value)}
+                        placeholder="YouTube 链接或 Bilibili BV1xxxxxx"
+                        className="input-insight"
+                      />
+                    </FormField>
+                    <FormField label="视频看点摘要（GEO 可抓取）">
+                      <textarea
+                        value={editForm.videoSummary}
+                        onChange={(e) => updateEditField("videoSummary", e.target.value)}
+                        placeholder="视频核心看点文字摘要"
+                        rows={2}
+                        className="input-insight resize-none"
+                      />
+                    </FormField>
+                  </div>
+                )}
 
                 {/* 硬核结构化标签 */}
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">

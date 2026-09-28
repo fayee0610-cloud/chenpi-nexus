@@ -58,7 +58,7 @@ export interface InsightItem {
   title: string;
   excerpt: string;
   image: string;
-  type: "all" | "featured" | "article" | "short" | "podcast";
+  type: "all" | "featured" | "article" | "short" | "podcast" | "video";
   category: string;
   tags?: string[]; // 结构化硬核标签池（与 HARDCORE_TAGS_POOL 对齐）
   readTime?: string;
@@ -70,6 +70,11 @@ export interface InsightItem {
   likes: number;
   commentCount?: number; // 真实评论数（从 insights.comment_count 读取）
   content: ContentBlock[];
+  // 视频专属字段
+  videoUrl?: string;       // YouTube/Bilibili 原始链接
+  videoSource?: "youtube" | "bilibili"; // 视频平台
+  videoId?: string;        // 解析后的视频 ID（YouTube videoId / Bilibili BVID）
+  videoSummary?: string;   // 视频核心看点文字摘要（GEO 可抓取）
 }
 
 // ============================================================

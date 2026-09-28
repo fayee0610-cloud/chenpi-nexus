@@ -245,9 +245,10 @@ export async function fetchInsights(): Promise<InsightItem[]> {
 // insights 表行 → InsightItem 映射
 function mapInsightRow(row: any): InsightItem {
   const cat = row.category || "";
-  let type: "article" | "short" | "podcast" = "article";
+  let type: "article" | "short" | "podcast" | "video" = "article";
   if (cat.includes("短观点")) type = "short";
   else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
+  else if (cat.includes("视频") || row.video_url) type = "video";
 
   let tags: string[] | undefined = undefined;
   if (row.tags) {
@@ -261,6 +262,22 @@ function mapInsightRow(row: any): InsightItem {
       tags = row.tags;
     }
     if (tags && !Array.isArray(tags)) tags = undefined;
+  }
+
+  // 视频字段解析
+  const videoUrl = row.video_url || "";
+  let videoSource: "youtube" | "bilibili" | undefined;
+  let videoId: string | undefined;
+  if (videoUrl) {
+    if (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be")) {
+      videoSource = "youtube";
+      const m = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+      videoId = m ? m[1] : undefined;
+    } else if (videoUrl.includes("bilibili.com") || videoUrl.startsWith("BV") || videoUrl.startsWith("bv")) {
+      videoSource = "bilibili";
+      const m = videoUrl.match(/(BV[\w]+)$/i);
+      videoId = m ? m[1] : (videoUrl.startsWith("BV") ? videoUrl : undefined);
+    }
   }
 
   return {
@@ -280,6 +297,10 @@ function mapInsightRow(row: any): InsightItem {
     likes: 0,
     commentCount: typeof row.comment_count === "number" ? row.comment_count : 0,
     content: parseContent(row.content || ""),
+    videoUrl: videoUrl || undefined,
+    videoSource: videoSource || undefined,
+    videoId: videoId || undefined,
+    videoSummary: row.video_summary || undefined,
   } as InsightItem;
 }
 
@@ -409,27 +430,7 @@ export async function fetchInsightById(id: string): Promise<InsightItem | null> 
   try {
     const { data, error } = await supabase.from("insights").select("*").eq("id", id).single();
     if (error || !data) return null;
-    const row = data as any;
-    const cat = row.category || "";
-    let type: "article" | "short" | "podcast" = "article";
-    if (cat.includes("短观点")) type = "short";
-    else if (cat.includes("音频") || cat.includes("播客") || row.audio_url) type = "podcast";
-    return {
-      id: row.id,
-      title: row.title || "",
-      excerpt: row.summary || "",
-      image: row.cover_url || "",
-      type,
-      category: row.category || "",
-      readTime: row.read_time || undefined,
-      listenTime: row.audio_url ? "15 min" : undefined,
-      isFeatured: false,
-      date: row.date || "",
-      author: row.author || "",
-      views: "0",
-      likes: 0,
-      content: parseContent(row.content || ""),
-    } as InsightItem;
+    return mapInsightRow(data as any);
   } catch (err) {
     logNetworkFallback("fetchInsightById", err);
     return null;
@@ -604,6 +605,8 @@ export async function createInsight(insight: Partial<InsightItem>) {
           : "",
         audio_url: insight.listenTime ? insight.listenTime : null,
         cover_url: insight.image || null,
+        video_url: insight.videoUrl || null,
+        video_summary: insight.videoSummary || null,
         is_published: true,
       },
     ])
@@ -626,6 +629,8 @@ export async function updateInsight(
     content: ContentBlock[];
     listenTime: string;
     coverUrl: string;
+    videoUrl: string;
+    videoSummary: string;
   }>
 ) {
   if (!supabase) throw new Error("Supabase not configured");
@@ -638,6 +643,8 @@ export async function updateInsight(
   if (patch.date !== undefined) payload.date = (patch.date && String(patch.date).trim()) ? patch.date : null;
   if (patch.author !== undefined) payload.author = patch.author;
   if (patch.content !== undefined) payload.content = serializeContent(patch.content);
+  if (patch.videoUrl !== undefined) payload.video_url = patch.videoUrl || null;
+  if (patch.videoSummary !== undefined) payload.video_summary = patch.videoSummary || null;
   if (patch.listenTime !== undefined) payload.audio_url = patch.listenTime;
   if (patch.coverUrl !== undefined) payload.cover_url = patch.coverUrl || null;
   const { error } = await supabase

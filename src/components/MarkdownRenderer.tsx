@@ -18,7 +18,7 @@ interface MarkdownRendererProps {
 
 export default function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
   return (
-    <div className={`prose prose-invert max-w-none text-zinc-300 leading-relaxed ${className}`}>
+    <div className={`max-w-none text-zinc-300 leading-relaxed ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
