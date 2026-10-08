@@ -238,11 +238,6 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     <section id="intelligence" className="relative mx-auto max-w-7xl px-6 py-20">
       {/* 标题 */}
       <div className="mb-10 text-center">
-        <div className="mb-3 flex items-center justify-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-            ⚡ 以马来西亚/东盟市场为绝对核心
-          </span>
-        </div>
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
           东南亚实局
         </h2>

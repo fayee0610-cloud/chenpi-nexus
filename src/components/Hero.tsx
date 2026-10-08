@@ -140,11 +140,15 @@ export default function Hero() {
               {/* 内层容器：裁剪溢出，图片高清无遮罩 */}
               <div className="relative w-full h-full rounded-[14px] overflow-hidden bg-slate-900 aspect-[4/5]">
 
-                {/* 核心图片：高清原色，Hover 微放大拉近 */}
+                {/* 核心图片：高清原色，Hover 微放大拉近，点击快捷跳转马来语打卡 */}
                 <img
                   src={profile.avatarUrl}
                   alt="陈皮"
-                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  title="点击前往每日马来语打卡 →"
+                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 cursor-pointer"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("switch-to-malay"));
+                  }}
                 />
 
                 {/* 图片底部渐变遮罩：让下方气泡文字可读 */}

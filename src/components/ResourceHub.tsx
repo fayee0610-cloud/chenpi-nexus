@@ -8,7 +8,7 @@ import { type ResourceItem } from "@/data/siteData";
 import AuthModal, { useAuthUser } from "@/components/AuthModal";
 import LoadMoreButton from "@/components/LoadMoreButton";
 
-export default function ResourceHub({ showLimit }: { showLimit?: number }) {
+export default function ResourceHub({ showLimit, noSection }: { showLimit?: number; noSection?: boolean }) {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [lockResource, setLockResource] = useState<ResourceItem | null>(null);
@@ -105,9 +105,12 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
     return resources;
   })();
 
+  const Wrapper = noSection ? "div" : "section";
+  const wrapperProps = noSection ? {} : { id: "toolkit", className: "relative mx-auto max-w-7xl px-6 py-20" };
+
   return (
-    <section id="toolkit" className="relative mx-auto max-w-7xl px-6 py-20">
-      {/* 标题 */}
+    <Wrapper {...wrapperProps}>
+      {!noSection && (
       <div className="mb-12 text-center">
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
           策略工具包
@@ -116,6 +119,7 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
           实战 SOP · 东南亚渠道指南 · AI 营销 Prompt 库 · 品牌策略模板
         </p>
       </div>
+      )}
 
       {/* 资源卡片列表 */}
       {loading ? (
@@ -317,6 +321,6 @@ export default function ResourceHub({ showLimit }: { showLimit?: number }) {
 
       {/* 登录弹窗（is_gated 资源未登录时触发） */}
       <AuthModal isOpen={authOpen} onClose={() => { setAuthOpen(false); setPendingResource(null); }} />
-    </section>
+    </Wrapper>
   );
 }

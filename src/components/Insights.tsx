@@ -41,30 +41,30 @@ function blocksToMarkdown(blocks: any[]): string {
   }).join("\n\n");
 }
 
-type FilterKey = "all" | "featured" | "article" | "short" | "podcast";
+type FilterKey = "featured" | "article" | "video";
 
 const filters: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "全部" },
-  { key: "featured", label: "✦ 精选" },
-  { key: "article", label: "图文长文" },
-  { key: "short", label: "短观点" },
-  { key: "podcast", label: "播客与音频" },
+  { key: "featured", label: "精选" },
+  { key: "article", label: "图文" },
+  { key: "video", label: "视频" },
 ];
 
 const typeIcon: Record<string, React.ReactNode> = {
   article: <BookOpen className="h-3.5 w-3.5" />,
   short: <MessageSquare className="h-3.5 w-3.5" />,
   podcast: <Headphones className="h-3.5 w-3.5" />,
+  video: <Play className="h-3.5 w-3.5" />,
 };
 
 const typeLabel: Record<string, string> = {
-  article: "长文",
-  short: "短观点",
-  podcast: "播客",
+  article: "图文",
+  short: "图文",
+  podcast: "音频",
+  video: "视频",
 };
 
 export default function Insights({ showLimit }: { showLimit?: number }) {
-  const [filter, setFilter] = useState<FilterKey>("all");
+  const [filter, setFilter] = useState<FilterKey>("featured");
   const [selectedInsight, setSelectedInsight] = useState<InsightItem | null>(null);
   const [copied, setCopied] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -136,9 +136,10 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
   const sideFeatured = featured.slice(1);
 
   const regular = scopedData.filter((i) => {
-    if (filter === "all") return !i.isFeatured;
-    if (filter === "featured") return false;
-    return !i.isFeatured && i.type === filter;
+    if (filter === "featured") return !i.isFeatured;
+    if (filter === "article") return !i.isFeatured && (i.type === "article" || i.type === "short");
+    if (filter === "video") return !i.isFeatured && (i.type === "video" || i.type === "podcast");
+    return false;
   });
 
   // 是否显示 LoadMore
@@ -360,7 +361,7 @@ export default function Insights({ showLimit }: { showLimit?: number }) {
         ) : (
         <>
         {/* Featured Focus Area */}
-        {(filter === "all" || filter === "featured") && heroFeatured && (
+        {filter === "featured" && heroFeatured && (
           <div className="mb-10 grid gap-4 md:gap-6 lg:grid-cols-3">
             {/* Hero Featured */}
             <div
