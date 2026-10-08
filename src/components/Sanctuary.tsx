@@ -35,7 +35,6 @@ import {
 } from "@/lib/dataApi";
 import { getOrCreateCyberId, getCyberHash } from "@/lib/cyberId";
 import LoadMoreButton from "@/components/LoadMoreButton";
-import MalayDailyCard from "@/components/MalayDailyCard";
 
 // ========== 常量数据（从 siteData 导入：仅 UI 配置，非数据库内容）==========
 const buffs = siteData.sanctuary.incenseBuffs;
@@ -484,6 +483,8 @@ export default function Sanctuary({
   showInspirationSign?: boolean;
   showCanvasLimit?: number;
 } = {}) {
+  // 解压站 Tab：incense = 祈福上香，canvas = 脑洞吐槽
+  const [relaxTab, setRelaxTab] = useState<"incense" | "canvas">("incense");
   const [incenses, setIncenses] = useState<Incense[]>(initialIncenses);
   const [activeIncense, setActiveIncense] = useState<string | null>(null);
   const [buffText, setBuffText] = useState<string | null>(null);
@@ -977,9 +978,16 @@ export default function Sanctuary({
     return farts;
   })();
 
-  // 滚动至发帖框
+  // 滚动至发帖框（若当前不在脑洞 Tab，先切换再滚动）
   const scrollToCanvas = () => {
-    canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (relaxTab !== "canvas") {
+      setRelaxTab("canvas");
+      setTimeout(() => {
+        canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 120);
+    } else {
+      canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   return (
@@ -989,24 +997,52 @@ export default function Sanctuary({
     >
       <div className="mx-auto max-w-7xl">
         {/* Header */}
-        <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
-            脑洞画布
+        <div className="mb-10 text-center">
+          <h2 className="mb-3 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
+            ☕ 出海解压站
           </h2>
           <p className="mx-auto max-w-xl text-zinc-400">
-            出海同行与大马本土商业探索者的互动交流与脑洞碰撞
+            上香祈福 · 脑洞吐槽 —— 出海路上的轻量解压角落
           </p>
-          <Link
-            href="/sanctuary"
-            className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-4 py-1.5 text-xs font-medium text-zinc-400 transition-all hover:border-purple-500/40 hover:text-purple-300"
-          >
-            查看全部
-            <ArrowRight className="h-3 w-3" />
-          </Link>
+
+          {/* Tab 切换器：祈福上香 / 脑洞吐槽 二合一，减少纵向空间占用 */}
+          <div className="mt-6 inline-flex rounded-xl border border-zinc-800 bg-zinc-900/40 p-1">
+            <button
+              onClick={() => setRelaxTab("incense")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-medium transition-all ${
+                relaxTab === "incense"
+                  ? "bg-purple-500/15 text-purple-200 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Flame className="h-4 w-4" />
+              祈福上香
+            </button>
+            <button
+              onClick={() => setRelaxTab("canvas")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-medium transition-all ${
+                relaxTab === "canvas"
+                  ? "bg-blue-500/15 text-blue-200 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Zap className="h-4 w-4" />
+              脑洞吐槽
+            </button>
+          </div>
         </div>
 
+        {/* Tab 内容区：上香 / 脑洞 二选一，带动画过渡 */}
+        <AnimatePresence mode="wait">
         {/* ========== 模块 A：一起上上香 ========== */}
-        <div className="mb-16">
+        {relaxTab === "incense" && (
+        <motion.div
+          key="incense"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Flame className="h-5 w-5 text-purple-400" />
@@ -1134,23 +1170,18 @@ export default function Sanctuary({
             </div>
             )}
           </div>
-        </div>
-
-        {/* ========== 模块 C：马来语轻打卡（1-Min Daily Malay） ========== */}
-        <div className="mb-16">
-          <div className="mb-6 flex items-center gap-2">
-            <span className="text-xl">🗣️</span>
-            <h3 className="text-lg font-bold text-zinc-100">马来语轻打卡</h3>
-            <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
-              1 分钟 · 每日更新
-            </span>
-          </div>
-          <div className="mx-auto max-w-2xl">
-            <MalayDailyCard />
-          </div>
-        </div>
+        </motion.div>
+        )}
 
         {/* ========== 模块 B：脑洞与吐槽画布 ========== */}
+        {relaxTab === "canvas" && (
+        <motion.div
+          key="canvas"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
         <div ref={canvasRef}>
           <div className="mb-6 flex items-center gap-2">
             <Zap className="h-5 w-5 text-blue-400" />
@@ -1242,6 +1273,9 @@ export default function Sanctuary({
           </>
           )}
         </div>
+        </motion.div>
+        )}
+        </AnimatePresence>
       </div>
 
       {/* 签文 9:16 海报 Modal */}
