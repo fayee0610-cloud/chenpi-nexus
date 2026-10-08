@@ -35,6 +35,7 @@ import {
 } from "@/lib/dataApi";
 import { getOrCreateCyberId, getCyberHash } from "@/lib/cyberId";
 import LoadMoreButton from "@/components/LoadMoreButton";
+import MalayDailyCard from "@/components/MalayDailyCard";
 
 // ========== 常量数据（从 siteData 导入：仅 UI 配置，非数据库内容）==========
 const buffs = siteData.sanctuary.incenseBuffs;
@@ -1132,6 +1133,20 @@ export default function Sanctuary({
               </div>
             </div>
             )}
+          </div>
+        </div>
+
+        {/* ========== 模块 C：马来语轻打卡（1-Min Daily Malay） ========== */}
+        <div className="mb-16">
+          <div className="mb-6 flex items-center gap-2">
+            <span className="text-xl">🗣️</span>
+            <h3 className="text-lg font-bold text-zinc-100">马来语轻打卡</h3>
+            <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+              1 分钟 · 每日更新
+            </span>
+          </div>
+          <div className="mx-auto max-w-2xl">
+            <MalayDailyCard />
           </div>
         </div>
 
