@@ -707,8 +707,7 @@ function generateLessons(): DailyLesson[] {
 export const ALL_LESSONS: DailyLesson[] = generateLessons();
 
 // ============================================================
-// 日期 Seed 算法：全网用户每天同步看到当天的课程
-// Day = (hash(YYYY-MM-DD) mod 90) + 1，实现无人值守自动循环
+// 日期工具 + 课程查找（进度驱动，非全局 hash）
 // ============================================================
 export function getUTC8DateKey(): string {
   const now = new Date();
@@ -719,19 +718,14 @@ export function getUTC8DateKey(): string {
   return `${y}-${m}-${d}`;
 }
 
-function hashSeed(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-export function getTodayLesson(): DailyLesson {
-  const dateKey = getUTC8DateKey();
-  const dayNum = (hashSeed(dateKey) % 90) + 1;
-  return ALL_LESSONS.find((l) => l.day === dayNum) || ALL_LESSONS[0];
+// 获取东八区昨天的日期 key（用于判断是否连续打卡）
+export function getYesterdayDateKey(): string {
+  const now = new Date();
+  const utc8 = new Date(now.getTime() + 8 * 60 * 60 * 1000 - 86400000);
+  const y = utc8.getUTCFullYear();
+  const m = String(utc8.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(utc8.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export function getLessonByDay(day: number): DailyLesson {

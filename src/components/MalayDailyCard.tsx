@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, Flame, CheckCircle2, Sparkles, BookOpen, MessageSquare, ArrowLeft, ArrowRight } from "lucide-react";
 import {
-  getTodayLesson,
   getLessonByDay,
   getUTC8DateKey,
+  getYesterdayDateKey,
   type DailyLesson,
 } from "@/data/malayLessons";
 
@@ -18,7 +18,6 @@ function speak(text: string) {
   utter.lang = "ms-MY";
   utter.rate = 0.9;
   utter.pitch = 1;
-  // 优先选择马来语语音
   const voices = window.speechSynthesis.getVoices();
   const msVoice = voices.find((v) => v.lang.startsWith("ms")) || voices.find((v) => v.lang === "id-ID");
   if (msVoice) utter.voice = msVoice;
@@ -26,70 +25,113 @@ function speak(text: string) {
 }
 
 interface CheckinState {
-  lastDate: string;
-  streak: number;
+  lastDate: string;       // 最后打卡日期 YYYY-MM-DD
+  streak: number;         // 连续打卡天数
+  progressDay: number;    // 当前应学天数（1-90）
 }
 
 const STORAGE_KEY = "malay_checkin_state";
 
-function loadCheckinState(): CheckinState {
-  if (typeof window === "undefined") return { lastDate: "", streak: 0 };
+function loadCheckinState(): CheckinState | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch {
     /* ignore */
   }
-  return { lastDate: "", streak: 0 };
+  return null;
+}
+
+function saveCheckinState(state: CheckinState) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/**
+ * 计算今日应学天数（进度驱动）：
+ * - 新用户（无记录）→ Day 1
+ * - 昨天打卡了 → 推进 Day + 1
+ * - 断签未打卡 → 保持当前 Day
+ */
+function resolveProgressDay(): { day: number; state: CheckinState; checkedInToday: boolean } {
+  const today = getUTC8DateKey();
+  const yesterday = getYesterdayDateKey();
+  const stored = loadCheckinState();
+
+  // 新用户
+  if (!stored) {
+    const fresh: CheckinState = { lastDate: "", streak: 0, progressDay: 1 };
+    return { day: 1, state: fresh, checkedInToday: false };
+  }
+
+  // 今天已打卡 → 显示当前进度
+  if (stored.lastDate === today) {
+    return { day: stored.progressDay, state: stored, checkedInToday: true };
+  }
+
+  // 昨天打卡了 → 推进到下一天
+  if (stored.lastDate === yesterday) {
+    const nextDay = Math.min(stored.progressDay + 1, 90);
+    const updated: CheckinState = { ...stored, progressDay: nextDay };
+    saveCheckinState(updated); // 持久化推进
+    return { day: nextDay, state: updated, checkedInToday: false };
+  }
+
+  // 断签 → 保持当前应学天数
+  return { day: stored.progressDay, state: stored, checkedInToday: false };
 }
 
 export default function MalayDailyCard() {
-  const [lesson, setLesson] = useState<DailyLesson>(() => getTodayLesson());
-  const [dateKey] = useState(getUTC8DateKey());
-  const [checkin, setCheckin] = useState<CheckinState>({ lastDate: "", streak: 0 });
+  const [progressDay, setProgressDay] = useState(1);
+  const [lesson, setLesson] = useState<DailyLesson>(() => getLessonByDay(1));
+  const [checkin, setCheckin] = useState<CheckinState>({ lastDate: "", streak: 0, progressDay: 1 });
   const [checkedIn, setCheckedIn] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // 初始化：从 localStorage 加载进度
   useEffect(() => {
-    const state = loadCheckinState();
+    const { day, state, checkedInToday } = resolveProgressDay();
+    setProgressDay(day);
+    setLesson(getLessonByDay(day));
     setCheckin(state);
-    setCheckedIn(state.lastDate === dateKey);
-    // 触发语音列表加载（部分浏览器需要）
+    setCheckedIn(checkedInToday);
+    // 触发语音列表加载
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.getVoices();
     }
-  }, [dateKey]);
+  }, []);
 
-  // 手动切换上一天/下一天（仅浏览，不影响今日打卡）
+  // 翻页 offset（仅浏览，不影响进度）
   const [offset, setOffset] = useState(0);
   useEffect(() => {
     if (offset === 0) {
-      setLesson(getTodayLesson());
+      setLesson(getLessonByDay(progressDay));
     } else {
-      const todayNum = getTodayLesson().day;
-      const targetDay = (((todayNum - 1 + offset) % 90) + 90) % 90 + 1;
+      // 基于 progressDay 前后翻阅
+      const targetDay = (((progressDay - 1 + offset) % 90) + 90) % 90 + 1;
       setLesson(getLessonByDay(targetDay));
     }
-  }, [offset]);
+  }, [offset, progressDay]);
 
   const handleCheckin = useCallback(() => {
     if (checkedIn) return;
     const today = getUTC8DateKey();
+    const yesterday = getYesterdayDateKey();
     const prev = loadCheckinState();
-    // 连续打卡：昨天打卡则 streak+1，否则重置为 1
-    const yest = new Date(Date.now() - 86400000);
-    const y = yest.getUTCFullYear();
-    const m = String(yest.getUTCMonth() + 1).padStart(2, "0");
-    const d = String(yest.getUTCDate()).padStart(2, "0");
-    const yestKey = `${y}-${m}-${d}`;
-    const newStreak = prev.lastDate === yestKey ? prev.streak + 1 : 1;
-    const next: CheckinState = { lastDate: today, streak: newStreak };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    const wasConsecutive = prev?.lastDate === yesterday;
+    const newStreak = wasConsecutive ? (prev?.streak || 0) + 1 : 1;
+    const next: CheckinState = {
+      lastDate: today,
+      streak: newStreak,
+      progressDay,
+    };
+    saveCheckinState(next);
     setCheckin(next);
     setCheckedIn(true);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2500);
-  }, [checkedIn]);
+  }, [checkedIn, progressDay]);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-950/15 via-zinc-900/50 to-blue-950/15 p-5 sm:p-6 shadow-[0_20px_60px_-25px_rgba(168,85,247,0.25)] backdrop-blur-sm">
