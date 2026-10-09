@@ -32,21 +32,27 @@ const AI_CONFIG = {
   model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
 };
 
-// ---------- 东南亚实局 RSS 源（权重矩阵 50/30/20） ----------
-// 50% 本地品牌与营销 grassroots 源 / 30% 展会商会 / 20% 宏观政策
-// 已砍掉 The Star / Bernama / NST 等纯宏观财经流，改为营销/展会/零售 grassroots 源
+// ---------- 东南亚实局 RSS 源（权重矩阵 40/30/20/10） ----------
+// 40% 本地零售/商超/消费/平台动态 / 30% 中企出海与电商 / 20% 展会商会 / 10% 宏观政策
 // 注：部分 RSS URL 需在部署后验证可用性，失败源会被独立 try-catch 静默跳过
 const RSS_FEEDS = [
-  // ===== 50% 本地品牌与营销（grassroots）=====
-  { name: "Marketing Interactive", url: "https://www.marketing-interactive.com/feed/", topic: "品牌营销", weight: 50 },
-  { name: "Campaign Asia", url: "https://www.campaignasia.com/feed", topic: "品牌营销", weight: 50 },
-  { name: "Vulcan Post MY", url: "https://vulcanpost.com/feed/", topic: "品牌营销", weight: 50 },
-  { name: "Retail Asia", url: "https://www.retailasia.com/feed", topic: "品牌营销", weight: 50 },
-  // ===== 30% 展会与商会动态 =====
-  { name: "MATRADE News", url: "https://matrade.gov.my/feed/", topic: "展会商会", weight: 30 },
-  { name: "MIDA News", url: "https://www.mida.gov.my/feed/", topic: "展会商会", weight: 30 },
-  // ===== 20% 宏观与基建（仅高价值商业政策）=====
-  { name: "The Edge Malaysia Biz", url: "https://theedgemalaysia.com/rss/business", topic: "宏观政策", weight: 20 },
+  // ===== 40% 本地零售/商超/消费/平台动态 =====
+  { name: "Marketing Interactive", url: "https://www.marketing-interactive.com/feed/", topic: "消费趋势", weight: 40 },
+  { name: "Campaign Asia", url: "https://www.campaignasia.com/feed", topic: "消费趋势", weight: 40 },
+  { name: "Vulcan Post MY", url: "https://vulcanpost.com/feed/", topic: "消费趋势", weight: 40 },
+  { name: "Retail Asia", url: "https://www.retailasia.com/feed", topic: "零售/商超", weight: 40 },
+  { name: "Inside Retail Asia", url: "https://www.insideretail.asia/feed/", topic: "零售/商超", weight: 40 },
+  { name: "SoyaCincau", url: "https://www.soyacincau.com/feed/", topic: "科技消费", weight: 40 },
+  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "科技消费", weight: 40 },
+  // ===== 30% 中企出海大马 / 电商与平台动态 =====
+  { name: "KrAsia", url: "https://kr-asia.com/feed", topic: "中企出海", weight: 30 },
+  { name: "e27", url: "https://e27.co/feed/", topic: "电商/平台", weight: 30 },
+  { name: "TechNode", url: "https://technode.com/feed/", topic: "中企出海", weight: 30 },
+  // ===== 20% 展会与商会动态 =====
+  { name: "MATRADE News", url: "https://matrade.gov.my/feed/", topic: "展会商会", weight: 20 },
+  { name: "MIDA News", url: "https://www.mida.gov.my/feed/", topic: "展会商会", weight: 20 },
+  // ===== 10% 宏观与基建（仅高价值商业政策）=====
+  { name: "The Edge Malaysia Biz", url: "https://theedgemalaysia.com/rss/business", topic: "宏观政策", weight: 10 },
 ] as const;
 
 // ---------- 关键词预过滤：客户端硬性丢弃无关新闻 ----------
@@ -88,15 +94,32 @@ function isIrrelevant(item: RawFeedItem): boolean {
   return IRRELEVANT_KEYWORDS.some((kw) => text.includes(kw));
 }
 
-// ---------- AI 中文提炼 Prompt（强过滤 + 分类 + 营销启示） ----------
-const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌出海 / 清真 Halal 准入 / 本地品牌营销】的资深商业分析师。
+// ---------- AI 中文提炼 Prompt（四大核心偏好 + 信息差深度 + 商业启示） ----------
+const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌出海 / 清真 Halal 准入 / 本土零售与电商渠道】的资深商业分析师。
 
 【目标读者】中国 B2B 品牌出海决策者、大马 GTM 咨询客户、清真市场准入企业、本地营销操盘手。
 
-【优先聚焦领域（按权重降序）】
-1. 【50% 最高优先】本地品牌营销案例 / Pop-up 快闪 / 联名活动 / 营销战役 / KOL 达人案例 / 本地快消与消费动态
-2. 【30% 次优先】展会与商会动态 / 青年商会对接 / 行业博览会（MITEC / MIECC / KLCC / MATRADE 展会）
-3. 【20% 兜底】宏观商业政策与产业动态（仅保留：MIDA 投资优惠、MATRADE 出口政策、关税、Halal 准入、跨境电商政策、中马产业合作）
+【四大核心偏好维度（按权重降序）】
+
+1.【本土文化与消费】40% 最高优先
+   - 大马三大族群（马来/华裔/印度）消费心理差异、文化禁忌、宗教节日营销节点
+   - 本土消费习惯变迁：如移动支付渗透率、清真包装要求、社区商超 vs 购物中心行为差异
+   - 新兴消费品类趋势：美妆/食品/家居/3C 在大马市场的本土化适配案例
+
+2.【渠道与商超平台】30% 次优先
+   - 线下重点渠道动态：Watsons/Guardian/Lotus's/AEON/FamilyMart 等商超药妆的选品规则、上架门槛、SKU 变动
+   - 线上平台规则与算法：TikTok Shop MY 官方活动与流量分配规则、Shopee/Lazada 大马站大促节奏与佣金调整
+   - 全渠道趋势：O2O 融合、直播带货 GMV 数据、社交电商新玩法落地实况
+
+3.【中企出海大马】20% 重要
+   - 中国企业/品牌在大马的最新落地动作：建厂、合资、渠道签约、品牌营销战役
+   - 竞争态势：中国品牌在大马各品类的市场份额、与日韩/本土品牌的竞争格局
+   - 踩坑实况：合规失误、文化冲突、渠道选择失败案例（高信息差价值）
+
+4.【高价值信息差】10% 兜底但关键
+   - 能帮助咨询师对中国企业主建立「认知壁垒」的深度商业动态
+   - 政策窗口期、牌照发放、关税变动等非公开/半公开信息
+   - 行业拐点信号：如某品类突然爆发、某渠道规则即将变更的前瞻线索
 
 【强制剔除规则】（命中任一即返回 {"relevant": false}，绝不生成摘要）
 - 航天 / 航空 / 卫星发射 / 太空基建
@@ -117,26 +140,27 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
   "title_zh": "中文标题20字内",
   "summary_zh": "100字高密度中文摘要，直击核心事实与关键数据",
   "category": "展会/活动 | 渠道/分销 | 政策/贸易 | 消费趋势（四选一）",
-  "marketing_takeaway": "该动态对同赛道品牌进入东南亚或本地化运营的落地参考建议，必须可执行、有具体抓手，50-120字",
-  "tags": ["2-4个标签，如 JAKIM清真 / FMCG / 达人营销 / 线下渠道"],
+  "marketing_takeaway": "该动态对中国企业/品牌进入大马市场的直接商业启示或防坑提示，必须可执行、有具体抓手，50-120字",
+  "tags": ["2-4个标签，如 JAKIM清真 / FMCG / TikTok Shop / 达人营销 / 线下渠道"],
   "importance_score": 1到5的整数,
   "published_at": "ISO 8601 格式的新闻真实发布时间，如 2026-09-15T08:30:00Z"
 }
 
 【marketing_takeaway 硬约束】
-- 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法）
-- 禁止空话套话（如"建议持续关注""未来可期"）
+- 严格聚焦于「该动态对中国企业/品牌进入大马市场有什么直接的商业启示或防坑提示」
+- 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法、平台规则利用）
+- 禁止空话套话（如"建议持续关注""未来可期""值得关注"）
 - 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
 
 【category 判定】
 - 展会/活动：展会、博览会、Pop-up 快闪、联名活动、行业对接会、商会
-- 渠道/分销：零售渠道、分销商、电商平台（Shopee/TikTok Shop）、线下门店拓展、物流仓储
+- 渠道/分销：零售渠道（Watsons/Guardian/Lotus's/AEON）、分销商、电商平台（Shopee/TikTok Shop/Lazada）、线下门店拓展、物流仓储
 - 政策/贸易：投资优惠（MIDA）、关税、Halal 准入、跨境电商政策、中马产业合作
-- 消费趋势：品牌营销案例、消费品类动态、KOL/达人案例、消费者行为
+- 消费趋势：品牌营销案例、消费品类动态、KOL/达人案例、消费者行为、三大族群消费差异
 
 【importance_score 判定（1-5 整数）】
 - 5 分：头部品牌出海战役 / 重大政策落地 / 首个案例（极稀缺，每日≤1 条）
-- 4 分：有具体可复用营销手法或渠道打法的案例
+- 4 分：有具体可复用营销手法或渠道打法的案例，或含高信息差（如平台规则变动、渠道准入门槛变化）
 - 3 分：行业趋势或常规政策动态
 - 2 分：边缘相关或数据较弱
 - 1 分：仅背景参考价值
