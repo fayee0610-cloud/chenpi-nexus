@@ -729,6 +729,10 @@ export function getYesterdayDateKey(): string {
 }
 
 export function getLessonByDay(day: number): DailyLesson {
+  // 防御性校验：处理 NaN/undefined/非正整数
+  if (!day || typeof day !== "number" || !Number.isFinite(day) || day < 1) {
+    return ALL_LESSONS[0];
+  }
   const safeDay = ((day - 1) % 90) + 1;
   return ALL_LESSONS.find((l) => l.day === safeDay) || ALL_LESSONS[0];
 }

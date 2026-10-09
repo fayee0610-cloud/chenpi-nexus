@@ -25,9 +25,10 @@ function speak(text: string) {
 }
 
 interface CheckinState {
-  lastDate: string;       // 最后打卡日期 YYYY-MM-DD
-  streak: number;         // 连续打卡天数
-  progressDay: number;    // 当前应学天数（1-90）
+  lastDate: string;        // 最后打卡日期 YYYY-MM-DD
+  streak: number;          // 连续打卡天数
+  progressDay: number;     // 当前应学天数（1-90）
+  dayResolvedDate: string; // 上次推进/解析日期（防止 Strict Mode 双跑重复推进）
 }
 
 const STORAGE_KEY = "malay_checkin_state";
@@ -36,7 +37,17 @@ function loadCheckinState(): CheckinState | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // 旧数据迁移：确保 progressDay 是有效正整数
+      if (!parsed.progressDay || typeof parsed.progressDay !== "number" || parsed.progressDay < 1) {
+        parsed.progressDay = 1;
+      }
+      if (parsed.progressDay > 90) parsed.progressDay = 90;
+      if (typeof parsed.streak !== "number" || parsed.streak < 0) parsed.streak = 0;
+      if (typeof parsed.dayResolvedDate !== "string") parsed.dayResolvedDate = "";
+      return parsed;
+    }
   } catch {
     /* ignore */
   }
@@ -61,31 +72,43 @@ function resolveProgressDay(): { day: number; state: CheckinState; checkedInToda
 
   // 新用户
   if (!stored) {
-    const fresh: CheckinState = { lastDate: "", streak: 0, progressDay: 1 };
+    const fresh: CheckinState = { lastDate: "", streak: 0, progressDay: 1, dayResolvedDate: today };
     return { day: 1, state: fresh, checkedInToday: false };
   }
 
+  // 防御性校验
+  const currentProgress = (typeof stored.progressDay === "number" && stored.progressDay >= 1)
+    ? Math.min(stored.progressDay, 90)
+    : 1;
+
   // 今天已打卡 → 显示当前进度
   if (stored.lastDate === today) {
-    return { day: stored.progressDay, state: stored, checkedInToday: true };
+    return { day: currentProgress, state: stored, checkedInToday: true };
   }
 
-  // 昨天打卡了 → 推进到下一天
+  // 防重复推进锁：今天已解析过进度，不再重复推进
+  if (stored.dayResolvedDate === today) {
+    return { day: currentProgress, state: stored, checkedInToday: false };
+  }
+
+  // 昨天打卡了 → 推进到下一天（写入 dayResolvedDate 防止 Strict Mode 双跑）
   if (stored.lastDate === yesterday) {
-    const nextDay = Math.min(stored.progressDay + 1, 90);
-    const updated: CheckinState = { ...stored, progressDay: nextDay };
-    saveCheckinState(updated); // 持久化推进
+    const nextDay = Math.min(currentProgress + 1, 90);
+    const updated: CheckinState = { ...stored, progressDay: nextDay, dayResolvedDate: today };
+    saveCheckinState(updated);
     return { day: nextDay, state: updated, checkedInToday: false };
   }
 
-  // 断签 → 保持当前应学天数
-  return { day: stored.progressDay, state: stored, checkedInToday: false };
+  // 断签 → 保持当前应学天数，标记已解析
+  const resolved: CheckinState = { ...stored, dayResolvedDate: today };
+  saveCheckinState(resolved);
+  return { day: currentProgress, state: resolved, checkedInToday: false };
 }
 
 export default function MalayDailyCard() {
   const [progressDay, setProgressDay] = useState(1);
   const [lesson, setLesson] = useState<DailyLesson>(() => getLessonByDay(1));
-  const [checkin, setCheckin] = useState<CheckinState>({ lastDate: "", streak: 0, progressDay: 1 });
+  const [checkin, setCheckin] = useState<CheckinState>({ lastDate: "", streak: 0, progressDay: 1, dayResolvedDate: "" });
   const [checkedIn, setCheckedIn] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -125,6 +148,7 @@ export default function MalayDailyCard() {
       lastDate: today,
       streak: newStreak,
       progressDay,
+      dayResolvedDate: today,
     };
     saveCheckinState(next);
     setCheckin(next);
