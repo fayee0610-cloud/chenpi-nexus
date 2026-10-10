@@ -25,48 +25,84 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// ---------- 拉取知识库上下文 ----------
+// ---------- 拉取知识库上下文（含实时大马市场情报） ----------
 async function fetchKnowledgeBase(): Promise<string> {
   const supabase = getSupabase();
   if (!supabase) return "（知识库暂未加载，请以陈皮 AI 通用人设回复）";
 
-  let kb = "【陈皮同学 · 全站知识库】\n\n";
+  let kb = "【陈皮同学 · 全站知识库 + 实时市场情报】\n\n";
 
+  // 1. 最新大马商业情报（近 7 天，最多 10 条，按 created_at 倒序）
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data: intel } = await supabase
+      .from("malaysia_intelligence")
+      .select("title, title_zh, summary_zh, key_takeaway, source_name, category, importance_score, created_at")
+      .eq("is_published", true)
+      .gte("created_at", sevenDaysAgo.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (intel && intel.length > 0) {
+      kb += "## 最新马来西亚商业情报（近 7 天实时数据）\n";
+      for (const item of intel) {
+        const title = item.title_zh || item.title || "未知";
+        const score = item.importance_score ? ` [价值${item.importance_score}/5]` : "";
+        kb += `- ${title}${score} | 来源：${item.source_name || "未知"} | 分类：${item.category || "未分类"}\n`;
+        if (item.summary_zh) kb += `  摘要：${item.summary_zh}\n`;
+        if (item.key_takeaway) kb += `  商业启示：${item.key_takeaway}\n`;
+      }
+      kb += "\n";
+    } else {
+      kb += "## 最新马来西亚商业情报\n（近 7 天暂无新情报，可参考下方案例与洞察数据回答）\n\n";
+    }
+  } catch {
+    // malaysia_intelligence 表可能未配置或字段缺失，跳过
+  }
+
+  // 2. 实战案例（含商业交付指标）
   try {
     const { data: projects } = await supabase
       .from("projects")
-      .select("title, sub_title, category, challenge, strategy")
+      .select("title, sub_title, category, challenge, strategy, solutions, client_industry, malaysia_channels, halal_certification_cycle, deliverables")
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(10);
     if (projects && projects.length > 0) {
-      kb += "## 作品案例\n";
+      kb += "## 实战案例\n";
       for (const p of projects) {
         kb += `- 《${p.title}》${p.sub_title ? `（${p.sub_title}）` : ""} | 分类：${p.category || "未分类"}\n`;
+        if (p.client_industry) kb += `  客户行业：${p.client_industry}\n`;
         if (p.challenge) kb += `  挑战：${p.challenge}\n`;
-        if (p.strategy && Array.isArray(p.strategy)) {
-          kb += `  策略：${p.strategy.map((s: any) => s.title || s).join("、")}\n`;
+        const rawSolutions = p.solutions || p.strategy;
+        if (rawSolutions && Array.isArray(rawSolutions)) {
+          kb += `  策略：${rawSolutions.map((s: any) => s.title || s).join("、")}\n`;
         }
+        if (p.malaysia_channels) kb += `  大马渠道：${p.malaysia_channels}\n`;
+        if (p.halal_certification_cycle) kb += `  Halal认证周期：${p.halal_certification_cycle}\n`;
       }
       kb += "\n";
     }
   } catch {
-    kb += "（作品案例数据加载失败，跳过）\n\n";
+    kb += "（实战案例数据加载失败，跳过）\n\n";
   }
 
+  // 3. 深度洞察文章（最新 10 条摘要）
   try {
     const { data: insights } = await supabase
       .from("insights")
-      .select("title, summary, category, content")
+      .select("title, summary, category, tags")
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(10);
     if (insights && insights.length > 0) {
-      kb += "## 深度文章\n";
+      kb += "## 深度洞察文章\n";
       for (const i of insights) {
         kb += `- 《${i.title}》| 分类：${i.category || "未分类"}\n`;
         if (i.summary) kb += `  摘要：${i.summary}\n`;
-        if (i.content) {
-          const text = typeof i.content === "string" ? i.content.slice(0, 200) : "";
-          if (text) kb += `  片段：${text}...\n`;
+        if (i.tags) {
+          const tags = Array.isArray(i.tags) ? i.tags.join(", ") : String(i.tags);
+          if (tags) kb += `  标签：${tags}\n`;
         }
       }
     }
@@ -78,10 +114,12 @@ async function fetchKnowledgeBase(): Promise<string> {
 }
 
 // ---------- 陈皮 AI 核心人设 System Prompt ----------
-const CHENPI_SYSTEM_PROMPT = `你叫"陈皮 AI"，是陈皮的数字分身。陈皮是一位专注于【品牌策略、跨境出海、AI+硬件/自动化实战】的策略人。
+const CHENPI_SYSTEM_PROMPT = `你叫"陈皮 AI"，是陈皮的数字分身。陈皮是一位专注于【品牌策略、跨境出海、AI+硬件/自动化实战】的策略人，深耕马来西亚 GTM 落地与清真 Halal 准入。
 核心信念："人为本，AI 为杠杆，市场会有答案。"
 职业底线："谋于策略，成于闭环，对结果负责。"
-当前阶段：陈皮正在开放探索高价值的团队与战略协同机会（求职与面试阶段）。
+
+【核心能力】：
+你不仅拥有陈皮老师的核心人设与出海知识体系，还能实时掌握最新的马来西亚商业与市场情报。回答时请务必结合最新的市场资讯与实战数据，为用户提供最新鲜、最有信息差的咨询解答。当访客询问大马市场动态时，优先引用下方 [Latest Market Context] 中的情报数据（标题、来源、商业启示），让回答具有时效性与数据支撑。
 
 【语言风格 (Tone of Voice)】：
 - 犀利且务实：不堆砌"赋能/链路/闭环生态"等大词，少谈概念，多做落地。
@@ -92,6 +130,7 @@ const CHENPI_SYSTEM_PROMPT = `你叫"陈皮 AI"，是陈皮的数字分身。陈
 【核心知识与观点】：
 - 关于 AI 与营销：AI 是"策略杠杆"，用极速完成数据结构化和流程自动化；但洞察人性的原点依然在人身上，算法买不到人心，策略才能穿透市场。
 - 关于出海与 B2B/B2C：出海不是把产品搬到海外，而是从流量思维转向本地化心智穿透。尊重真实市场给出的反馈。
+- 关于马来西亚 GTM：聚焦大马本土渠道搭建、JAKIM Halal 认证准入、本土文化与消费洞察，为中企出海提供可落地的战术路径。
 - 关于个人战术：既懂品牌的战略心智，又懂实操打法的落地闭环，具备从 0 到 1 的实操与 AI 自动化落地能力。
 
 【边界控制与引导】：
@@ -124,7 +163,7 @@ const FEW_SHOT_EXAMPLES = [
 function buildSystemPrompt(kb: string): string {
   return `${CHENPI_SYSTEM_PROMPT}
 
-【全站知识库（作为回答的事实依据，回答时可精准引用项目名/文章标题）】：
+[Latest Market Context — 网站最新大马市场动态与案例数据（作为回答的事实依据，回答时可精准引用情报标题、来源、商业启示、案例名）]：
 ${kb}`;
 }
 
@@ -150,8 +189,8 @@ async function streamLLM(
         ...FEW_SHOT_EXAMPLES,
         { role: "user", content: userMessage },
       ],
-      temperature: 0.75,
-      max_tokens: 1024,
+      temperature: 0.6,
+      max_tokens: 2048,
     }),
     signal: controller.signal,
   });
@@ -225,7 +264,10 @@ function fallbackReply(message: string): string {
     return "我是**陈皮同学**的数字分身。陈皮的核心能力有三块：\n\n1. **品牌策略与市场冷启动** — 擅长从 0 到 1 搭建增长引擎\n2. **AI+硬件产品探索** — 关注交互体验与边缘智能\n3. **创意内容生产** — 用 AIGC 工作流提升 10 倍产能\n\n简单说：**把脑洞变成可落地的生意。**";
   }
   if (/陶瓷|出海|跨境|外贸|brand.*出海|海外/.test(msg)) {
-    return "关于**陶瓷品牌出海与跨境营销**，陈皮有丰富的实战经验。\n\n- 深耕陶瓷品类的外贸品牌孵化\n- 搭建从选品、视觉、社媒到投放的完整跨境链路\n- 关注海外市场本地化与文化适配\n\n你可以去「作品案例」模块查看相关项目，或在「深度洞察」中找到深度拆解。";
+    return "关于**品牌出海与跨境营销**，陈皮有丰富的实战经验。\n\n- 深耕马来西亚 GTM 全流程落地\n- 搭建从选品、视觉、社媒到投放的完整跨境链路\n- 关注海外市场本地化与文化适配\n\n你可以去「作品案例」模块查看相关项目，或在「深度洞察」中找到深度拆解。";
+  }
+  if (/大马|马来|马来西亚|halal|清真|jakim|gtm|本土化|渠道|分销/.test(msg)) {
+    return "关于**马来西亚 GTM 落地与 Halal 准入**，陈皮有深度实战经验：\n\n- **Halal 认证**：JAKIM 认证全流程避坑，从申请到拿证的最短路径\n- **渠道搭建**：大马本土零售/商超/电商平台对接与分销网络\n- **本土化营销**：TikTok 种草、Kopitiam 文化营销、B2B 精准获客\n- **商业情报**：实时追踪大马政策/消费/中企出海动态\n\n点击页面【⚡ 实时感知】获取最新大马商业情报，或在「作品案例」查看落地成果。";
   }
   if (/opc|自动化|流程|ai.*自动化|超级个体/.test(msg)) {
     return "**OPC（One Person Company）** 是陈皮同学的核心方法论。\n\n- 一个人就是一家公司，关键在于把碎片技能织成网络\n- 用 AI 自动化流程放大个人产能：内容生产、数据分析、客户沟通\n- 增长杠杆的本质：找到那个能被无限放大的微小动作\n\n推荐你去「深度洞察」模块翻阅相关深度长文。";
