@@ -588,28 +588,28 @@ export async function uploadPortfolioCover(file: File): Promise<{ url: string } 
 // ---------- 写入：创建深度洞察 ----------
 export async function createInsight(insight: Partial<InsightItem>) {
   if (!supabase) throw new Error("Supabase not configured");
+  const payload: Record<string, any> = {
+    id: genId(),
+    title: insight.title,
+    summary: insight.excerpt,
+    category: insight.category,
+    tags: Array.isArray(insight.tags) ? JSON.stringify(insight.tags) : null,
+    read_time: insight.readTime,
+    date: (insight.date && String(insight.date).trim()) ? insight.date : null,
+    author: insight.author,
+    content: insight.content
+      ? serializeContent(insight.content as ContentBlock[])
+      : "",
+    audio_url: insight.listenTime ? insight.listenTime : null,
+    cover_url: insight.image || null,
+    is_published: true,
+  };
+  // 仅在有值时携带 video 字段（Supabase 表可能尚未添加这些列）
+  if (insight.videoUrl) payload.video_url = insight.videoUrl;
+  if (insight.videoSummary) payload.video_summary = insight.videoSummary;
   const { data, error } = await supabase
     .from("insights")
-    .insert([
-      {
-        id: genId(),
-        title: insight.title,
-        summary: insight.excerpt, // DB 列名为 summary
-        category: insight.category,
-        tags: Array.isArray(insight.tags) ? JSON.stringify(insight.tags) : null,
-        read_time: insight.readTime,
-        date: (insight.date && String(insight.date).trim()) ? insight.date : null,
-        author: insight.author,
-        content: insight.content
-          ? serializeContent(insight.content as ContentBlock[])
-          : "",
-        audio_url: insight.listenTime ? insight.listenTime : null,
-        cover_url: insight.image || null,
-        video_url: insight.videoUrl || null,
-        video_summary: insight.videoSummary || null,
-        is_published: true,
-      },
-    ])
+    .insert([payload])
     .select();
   if (error) throw error;
   return data;
@@ -643,8 +643,8 @@ export async function updateInsight(
   if (patch.date !== undefined) payload.date = (patch.date && String(patch.date).trim()) ? patch.date : null;
   if (patch.author !== undefined) payload.author = patch.author;
   if (patch.content !== undefined) payload.content = serializeContent(patch.content);
-  if (patch.videoUrl !== undefined) payload.video_url = patch.videoUrl || null;
-  if (patch.videoSummary !== undefined) payload.video_summary = patch.videoSummary || null;
+  if (patch.videoUrl) payload.video_url = patch.videoUrl;
+  if (patch.videoSummary) payload.video_summary = patch.videoSummary;
   if (patch.listenTime !== undefined) payload.audio_url = patch.listenTime;
   if (patch.coverUrl !== undefined) payload.cover_url = patch.coverUrl || null;
   const { error } = await supabase

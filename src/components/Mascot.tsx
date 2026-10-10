@@ -333,12 +333,12 @@ export default function Mascot() {
                 >
                   知道了
                 </button>
-                <a
-                  href="/admin"
+                <button
+                  onClick={() => { setShowRateLimit(false); window.location.href = "/contact"; }}
                   className="flex-1 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:brightness-110"
                 >
                   注册解锁
-                </a>
+                </button>
               </div>
             </motion.div>
           </motion.div>
