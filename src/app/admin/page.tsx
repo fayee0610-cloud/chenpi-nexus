@@ -1759,30 +1759,8 @@ function InsightsEditor() {
     }
     setEditSubmitting(true);
     try {
-      const content = editForm.contentText
-        .split("\n\n")
-        .filter(Boolean)
-        .map((para) => {
-          if (para.startsWith("> ")) {
-            return { type: "blockquote" as const, text: para.slice(2) };
-          }
-          if (para.startsWith("## ")) {
-            return { type: "heading" as const, text: para.slice(3) };
-          }
-          if (para.startsWith("```")) {
-            const lines = para.split("\n");
-            const lang = lines[0].slice(3).trim();
-            const text = lines.slice(1, lines.length - 1).join("\n");
-            return { type: "code" as const, lang, text };
-          }
-          if (para.startsWith("- ")) {
-            return {
-              type: "list" as const,
-              items: para.split("\n").map((l) => l.replace(/^- /, "")),
-            };
-          }
-          return { type: "paragraph" as const, text: para };
-        });
+      // 保留原始 Markdown 文本，由 MarkdownRenderer 统一解析（同 create 逻辑）
+      const content = [{ type: "paragraph" as const, text: editForm.contentText }];
 
       await updateInsight(editingFullId, {
         title: editForm.title,
@@ -1968,30 +1946,9 @@ function InsightsEditor() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const content = form.contentText
-        .split("\n\n")
-        .filter(Boolean)
-        .map((para) => {
-          if (para.startsWith("> ")) {
-            return { type: "blockquote" as const, text: para.slice(2) };
-          }
-          if (para.startsWith("## ")) {
-            return { type: "heading" as const, text: para.slice(3) };
-          }
-          if (para.startsWith("```")) {
-            const lines = para.split("\n");
-            const lang = lines[0].slice(3).trim();
-            const text = lines.slice(1, lines.length - 1).join("\n");
-            return { type: "code" as const, lang, text };
-          }
-          if (para.startsWith("- ")) {
-            return {
-              type: "list" as const,
-              items: para.split("\n").map((l) => l.replace(/^- /, "")),
-            };
-          }
-          return { type: "paragraph" as const, text: para };
-        });
+      // 保留原始 Markdown 文本，由 MarkdownRenderer（react-markdown + remark-gfm）统一解析
+      // 避免 \n\n 拆分导致 ### ** 等符号因未正确分块而外溢为源码文本
+      const content = [{ type: "paragraph" as const, text: form.contentText }];
 
       const insight: Partial<InsightItem> = {
         title: form.title,

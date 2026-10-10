@@ -60,37 +60,16 @@ function logNetworkFallback(scope: string, err: unknown): void {
 // 将纯文本 content 解析为 ContentBlock[]（简易 Markdown）
 function parseContent(text: string): ContentBlock[] {
   if (!text) return [];
-  // 如果已经是 JSON 数组格式，直接解析
+  // 如果已经是 JSON 数组格式（ContentBlock[]），直接解析
   try {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return parsed;
   } catch {
-    // 不是 JSON，按 Markdown 解析
+    // 不是 JSON，为原始 Markdown 文本
   }
-  return text
-    .split("\n\n")
-    .filter(Boolean)
-    .map((para) => {
-      if (para.startsWith("> ")) {
-        return { type: "blockquote" as const, text: para.slice(2) };
-      }
-      if (para.startsWith("## ")) {
-        return { type: "heading" as const, text: para.slice(3) };
-      }
-      if (para.startsWith("```")) {
-        const lines = para.split("\n");
-        const lang = lines[0].slice(3).trim();
-        const codeText = lines.slice(1, lines.length - 1).join("\n");
-        return { type: "code" as const, lang, text: codeText };
-      }
-      if (para.startsWith("- ")) {
-        return {
-          type: "list" as const,
-          items: para.split("\n").map((l) => l.replace(/^- /, "")),
-        };
-      }
-      return { type: "paragraph" as const, text: para };
-    });
+  // 保留完整原始 Markdown，交由 MarkdownRenderer（react-markdown + remark-gfm）统一解析
+  // 避免 \n\n 拆分导致 ### ** > 等符号因分块不当而外溢为源码文本
+  return [{ type: "paragraph" as const, text }];
 }
 
 // 将 ContentBlock[] 序列化为纯文本（用于存入 insights.content TEXT 列）
