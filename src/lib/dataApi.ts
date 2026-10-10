@@ -1015,11 +1015,13 @@ function safeParseTags(raw: string): string[] {
 export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaIntelligence[]> {
   if (!supabase) return [];
   try {
+    // 按 created_at DESC 排序（入库时间倒序），确保最新抓取的情报排在最前
+    // published_at 仅用于卡片显示（新闻原始发布时间），不用于排序
     const { data, error } = await supabase
       .from("malaysia_intelligence")
       .select("*")
       .eq("is_published", true)
-      .order("published_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) {

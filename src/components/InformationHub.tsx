@@ -78,19 +78,20 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [showAll, setShowAll] = useState(false); // 展开更多历史情报
   const [selectedItem, setSelectedItem] = useState<MalaysiaIntelligence | null>(null); // 详情弹窗
   const [activeCategory, setActiveCategory] = useState<string>("全部"); // 分类筛选
+  const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set()); // 刚抓取的新情报高亮
 
-  const loadData = async (): Promise<MalaysiaIntelligence[]> => {
+  const loadData = async (silent = false): Promise<MalaysiaIntelligence[]> => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await fetchMalaysiaIntelligence(EXPANDED_LIMIT);
       setItems(data);
       return data;
     } catch (err: any) {
       console.warn("[InformationHub] loadData 失败:", err?.message || err);
-      setItems([]);
+      if (!silent) setItems([]);
       return [];
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -175,15 +176,32 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
         return;
       }
 
-      // 感知完成：优先回读数据库渲染已持久化的数据。
+      // 感知完成：回读数据库获取最新排序后的全量数据
       setAiMessage(result.message || "⚡ 已更新最新大马商业情报");
-      const dbData = await loadData();
+      const prevIds = new Set(items.map((i) => i.id));
+      const dbData = await loadData(true);
 
-      // 兜底：DB 回读为空（写入失败退回内存模式 / Supabase 暂时不可读）时，
-      // 必须用 API 返回的 result.data 渲染，绝不让用户看到空白页。
+      // 标记新出现的情报 ID 用于高亮
+      if (dbData.length > 0) {
+        const newIds = new Set<string>();
+        dbData.forEach((item) => {
+          if (!prevIds.has(item.id)) newIds.add(item.id);
+        });
+        if (newIds.size > 0) {
+          setNewItemIds(newIds);
+          setTimeout(() => setNewItemIds(new Set()), 5000);
+        }
+      }
+
+      // 兜底：DB 回读为空时，用 API 返回的 result.data 渲染
       if ((!dbData || dbData.length === 0) && Array.isArray(result.data) && result.data.length > 0) {
-        setItems(result.data as MalaysiaIntelligence[]);
+        // 将 API 返回的内存数据 prepend 到当前列表顶部
+        const apiItems = result.data as MalaysiaIntelligence[];
+        const apiNewIds = new Set(apiItems.map((i) => i.id));
+        setItems((prev) => [...apiItems, ...prev.filter((i) => !apiNewIds.has(i.id))]);
         setShowAll(false);
+        setNewItemIds(apiNewIds);
+        setTimeout(() => setNewItemIds(new Set()), 5000);
         if (result.persisted === false) {
           setAiMessage("⚡ 已加载最新情报（本次 DB 未持久化，刷新后需重新感知）");
         }
@@ -319,6 +337,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
           : displayItems.map((item, i) => {
               const style = SOURCE_STYLES[item.sourceName] || DEFAULT_SOURCE_STYLE;
               const isExpanded = expandedId === item.id;
+              const isNew = newItemIds.has(item.id);
               return (
                 <motion.div
                   key={item.id}
@@ -327,7 +346,9 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                   viewport={{ once: true }}
                   transition={{ delay: (i % 3) * 0.08 }}
                   className={`break-inside-avoid rounded-2xl border bg-zinc-900/40 p-5 backdrop-blur-sm transition-all hover:bg-zinc-900/60 ${
-                    item.isFeatured
+                    isNew
+                      ? "border-blue-500/50 ring-1 ring-blue-500/20 shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)]"
+                      : item.isFeatured
                       ? `${style.border} ${style.bg} shadow-lg`
                       : "border-zinc-800"
                   }`}
