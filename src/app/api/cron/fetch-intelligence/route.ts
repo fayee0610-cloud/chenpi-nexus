@@ -87,6 +87,11 @@ const IRRELEVANT_KEYWORDS = [
   "minister resigns", "official appointment",
   // 通用社会新闻
   "haze", "traffic accident", "murder", "court case", "election",
+  // ===== 通稿类剔除：产品召回 / 例行财报 / 常规公告 =====
+  "recall", "vehicle recall", "safety recall", "product recall",
+  "quarterly results", "quarterly profit", "earnings report", "net profit rose",
+  "dividend declared", "annual general meeting", "agm ",
+  "appoints new", "new ceo", "new cfo", "board appointment",
 ] as const;
 
 function isIrrelevant(item: RawFeedItem): boolean {
@@ -132,6 +137,8 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
 - 原油 / 棕榈油 / 橡胶等大宗商品价格波动
 - 国外无关巨头人事变动（Tesla / Apple / Tata 等）
 - 通用社会新闻（天气 / 交通 / 犯罪 / 选举）
+- **产品召回 / 车辆召回 / 例行财报 / 高管任命等纯公关通稿**：此类新闻即使涉及大马市场，若无法提炼出「对中企出海大马的直接渠道/营销/合规启示」，一律返回 {"relevant": false}
+- **通稿识别**：若内容为多媒體转载的同一事件公关稿（如某品牌发布会、某企业声明），且缺乏本土消费/渠道/出海实操增量信息，返回 {"relevant": false}
 
 【输出格式】
 若相关，必须输出以下完整 JSON（缺一不可）：
@@ -374,37 +381,56 @@ async function deduplicateBySourceUrl(
   }
 }
 
-// ---------- 语义/标题相似度去重（同事件通稿合并）----------
-// 对本批次已 AI 摘要的情报按中文标题做字符 bigram Jaccard 相似度比对，
-// > 0.7 视为同一事件通稿，合并为 1 条（保留 importance_score 更高者）。
-function dedupByTitleSimilarity<T extends AiResult>(
+// ---------- 相似度工具：bigram + Jaccard（模块级复用）----------
+// 保留中英文与数字（品牌名如 Ninja Mart / TikTok 是事件核心实体，不可剔除），仅去除空白与标点
+function bigramsOf(text: string): Set<string> {
+  const clean = (text || "").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+  const set = new Set<string>();
+  for (let i = 0; i < clean.length - 1; i++) {
+    set.add(clean.slice(i, i + 2));
+  }
+  return set;
+}
+
+function jaccardSim(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+
+// 综合相似度：中文标题 + 英文标题 + 摘要任一维度命中即视为同事件
+function isSameEvent(
+  a: { titleZh: string; titleEn: string; summary: string },
+  b: { titleZh: string; titleEn: string; summary: string }
+): boolean {
+  const zhSim = jaccardSim(bigramsOf(a.titleZh), bigramsOf(b.titleZh));
+  if (zhSim > 0.5) return true;
+  const enSim = jaccardSim(bigramsOf(a.titleEn), bigramsOf(b.titleEn));
+  if (enSim > 0.6) return true;
+  const sumSim = jaccardSim(bigramsOf(a.summary.slice(0, 120)), bigramsOf(b.summary.slice(0, 120)));
+  if (sumSim > 0.55) return true;
+  return false;
+}
+
+// ---------- 语义/标题相似度去重（同事件通稿合并，批次内）----------
+// 对本批次已 AI 摘要的情报做同事件聚类，合并为 1 条（保留 importance_score 更高者）
+function dedupByTitleSimilarity<T extends AiResult & { title: string }>(
   items: T[]
 ): { deduped: T[]; mergedCount: number } {
   if (items.length <= 1) return { deduped: items, mergedCount: 0 };
 
-  // 提取中文字符 bigram 集合（去除空白与标点）
-  function bigrams(text: string): Set<string> {
-    const clean = (text || "").replace(/[\s\p{P}A-Za-z0-9]/gu, "");
-    const set = new Set<string>();
-    for (let i = 0; i < clean.length - 1; i++) {
-      set.add(clean.slice(i, i + 2));
-    }
-    return set;
-  }
-  function jaccard(a: Set<string>, b: Set<string>): number {
-    if (a.size === 0 || b.size === 0) return 0;
-    let inter = 0;
-    for (const x of a) if (b.has(x)) inter++;
-    return inter / (a.size + b.size - inter);
-  }
-
   const kept: T[] = [];
   let mergedCount = 0;
   for (const item of items) {
-    const itemBi = bigrams(item.titleZh);
-    const idx = kept.findIndex((k) => jaccard(bigrams(k.titleZh), itemBi) > 0.7);
+    const idx = kept.findIndex((k) =>
+      isSameEvent(
+        { titleZh: k.titleZh, titleEn: k.title, summary: k.summaryZh },
+        { titleZh: item.titleZh, titleEn: item.title, summary: item.summaryZh }
+      )
+    );
     if (idx >= 0) {
-      // 命中重复：保留打分更高者（同分保留先到者），合并 source 标注
+      // 命中重复：保留打分更高者（同分保留先到者）
       mergedCount++;
       if ((item.importanceScore || 0) > (kept[idx].importanceScore || 0)) {
         kept[idx] = item;
@@ -414,9 +440,62 @@ function dedupByTitleSimilarity<T extends AiResult>(
     }
   }
   if (mergedCount > 0) {
-    console.log(`[cron] 标题相似度去重：${items.length} → ${kept.length} 条（合并 ${mergedCount} 条同事件通稿）`);
+    console.log(`[cron] 批次内同事件合并：${items.length} → ${kept.length} 条（合并 ${mergedCount} 条通稿）`);
   }
   return { deduped: kept, mergedCount };
+}
+
+// ---------- 跨批次语义去重：写入前与库内近 30 天数据比对 ----------
+// 解决「同一事件被多家媒体分批报道，URL 不同导致 source_url 去重失效」的核心缺陷
+async function deduplicateAgainstDatabase<T extends AiResult & { title: string }>(
+  client: any,
+  items: T[]
+): Promise<{ deduped: T[]; removed: number }> {
+  if (!client || items.length === 0) return { deduped: items, removed: 0 };
+
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data, error } = await client
+      .from("malaysia_intelligence")
+      .select("title_zh, title_en, summary_zh")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+      .limit(150);
+
+    if (error || !data || data.length === 0) {
+      return { deduped: items, removed: 0 };
+    }
+
+    const existing = (data as any[]).map((r) => ({
+      titleZh: String(r.title_zh || ""),
+      titleEn: String(r.title_en || ""),
+      summary: String(r.summary_zh || ""),
+    }));
+
+    let removed = 0;
+    const deduped = items.filter((item) => {
+      const dup = existing.some((ex) =>
+        isSameEvent(
+          { titleZh: ex.titleZh, titleEn: ex.titleEn, summary: ex.summary },
+          { titleZh: item.titleZh, titleEn: item.title, summary: item.summaryZh }
+        )
+      );
+      if (dup) {
+        removed++;
+        console.log(`[cron] 跨批次语义去重丢弃（库内已有同事件）：${item.titleZh}`);
+      }
+      return !dup;
+    });
+
+    if (removed > 0) {
+      console.log(`[cron] 跨批次语义去重：${items.length} → ${deduped.length} 条（丢弃 ${removed} 条与库内重复的同事件）`);
+    }
+    return { deduped, removed };
+  } catch (err: any) {
+    console.warn(`[cron] 跨批次语义去重异常（不影响主流程）：${err?.message || err}`);
+    return { deduped: items, removed: 0 };
+  }
 }
 
 // ---------- AI 摘要：单条调用 ----------
@@ -801,9 +880,25 @@ async function handleCron(req: NextRequest) {
 
   console.log(`[cron] AI 摘要完成：${summarized.length}/${deduped.length} 条`);
 
-  // 3.5 标题相似度去重：合并同事件通稿（如 Ninja Mart 8500 终端被多源报道）
+  // 3.5 批次内同事件合并：同一事件被多源报道时仅保留打分最高的 1 条
   const { deduped: titleDeduped, mergedCount } = dedupByTitleSimilarity(summarized);
-  const finalItems = titleDeduped;
+
+  // 3.6 跨批次语义去重：与库内近 30 天数据比对，丢弃同事件重复报道
+  const dbDedupClient =
+    supabaseAdmin || (dedupClient ?? null);
+  const { deduped: dbDeduped, removed: dbDupRemoved } = await deduplicateAgainstDatabase(
+    dbDedupClient,
+    titleDeduped
+  );
+
+  // 3.7 低价值过滤：importance_score <= 1 的情报不入库（避免低质通稿稀释内容质量）
+  const finalItems = dbDeduped.filter((item) => {
+    if ((item.importanceScore || 3) <= 1) {
+      console.log(`[cron] 低价值过滤丢弃（score<=1）：${item.titleZh}`);
+      return false;
+    }
+    return true;
+  });
 
   if (summarized.length === 0) {
     // AI 摘要全部失败时，注入兜底情报确保前台有内容
@@ -849,7 +944,7 @@ async function handleCron(req: NextRequest) {
 
   const duration = Date.now() - startedAt;
   console.log(
-    `[cron] 完成！RSS ${rawItems.length} → 去重 ${deduped.length} → AI摘要 ${summarized.length} → 标题去重 ${finalItems.length}（合并 ${mergedCount}）→ 写入 ${inserted}，耗时 ${duration}ms`
+    `[cron] 完成！RSS ${rawItems.length} → URL去重 ${deduped.length} → AI摘要 ${summarized.length} → 批次内合并 ${titleDeduped.length} → 跨批次去重 ${dbDeduped.length}（丢弃 ${dbDupRemoved}）→ 写入 ${inserted}，耗时 ${duration}ms`
   );
 
   // 构建内存数据（无论 DB 写入是否成功，都返回给前端渲染）
@@ -881,6 +976,7 @@ async function handleCron(req: NextRequest) {
         afterDedup: deduped.length,
         aiSummarized: summarized.length,
         titleDedupMerged: mergedCount,
+        dbDupRemoved,
         inserted,
       },
       data: memItems,
