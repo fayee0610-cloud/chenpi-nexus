@@ -32,27 +32,24 @@ const AI_CONFIG = {
   model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
 };
 
-// ---------- 东南亚实局 RSS 源（权重矩阵 40/30/20/10） ----------
-// 40% 本地零售/商超/消费/平台动态 / 30% 中企出海与电商 / 20% 展会商会 / 10% 宏观政策
-// 注：部分 RSS URL 需在部署后验证可用性，失败源会被独立 try-catch 静默跳过
+// ---------- 东南亚实局 RSS 源矩阵（垂直精准版 v3） ----------
+// 淘汰泛财经/大媒体通稿源，聚焦四大垂直方向：
+// 渠道与零售商超 / 电商平台与流量 / 中企出海与科技商业 / 本土文化与深度商业
+// 注：所有源独立 try-catch 错误隔离，失败源静默跳过不影响主流程
 const RSS_FEEDS = [
-  // ===== 40% 本地零售/商超/消费/平台动态 =====
-  { name: "Marketing Interactive", url: "https://www.marketing-interactive.com/feed/", topic: "消费趋势", weight: 40 },
-  { name: "Campaign Asia", url: "https://www.campaignasia.com/feed", topic: "消费趋势", weight: 40 },
-  { name: "Vulcan Post MY", url: "https://vulcanpost.com/feed/", topic: "消费趋势", weight: 40 },
-  { name: "Retail Asia", url: "https://www.retailasia.com/feed", topic: "零售/商超", weight: 40 },
-  { name: "Inside Retail Asia", url: "https://www.insideretail.asia/feed/", topic: "零售/商超", weight: 40 },
-  { name: "SoyaCincau", url: "https://www.soyacincau.com/feed/", topic: "科技消费", weight: 40 },
-  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "科技消费", weight: 40 },
-  // ===== 30% 中企出海大马 / 电商与平台动态 =====
-  { name: "KrAsia", url: "https://kr-asia.com/feed", topic: "中企出海", weight: 30 },
-  { name: "e27", url: "https://e27.co/feed/", topic: "电商/平台", weight: 30 },
-  { name: "TechNode", url: "https://technode.com/feed/", topic: "中企出海", weight: 30 },
-  // ===== 20% 展会与商会动态 =====
-  { name: "MATRADE News", url: "https://matrade.gov.my/feed/", topic: "展会商会", weight: 20 },
-  { name: "MIDA News", url: "https://www.mida.gov.my/feed/", topic: "展会商会", weight: 20 },
-  // ===== 10% 宏观与基建（仅高价值商业政策）=====
-  { name: "The Edge Malaysia Biz", url: "https://theedgemalaysia.com/rss/business", topic: "宏观政策", weight: 10 },
+  // ===== 渠道与零售商超 =====
+  { name: "Retail News Asia", url: "https://www.retailnews.asia/category/singapore-malaysia/feed/", topic: "零售/商超", weight: 40 },
+  { name: "Inside Retail Asia", url: "https://insideretail.asia/category/malaysia/feed/", topic: "零售/商超", weight: 40 },
+  { name: "Vulcan Post MY", url: "https://vulcanpost.com/category/malaysia/feed/", topic: "本土商业", weight: 40 },
+  // ===== 电商平台与流量 =====
+  { name: "SoyaCincau", url: "https://soyacincau.com/feed/", topic: "电商/平台", weight: 30 },
+  { name: "Marketing-Interactive MY", url: "https://www.marketing-interactive.com/my/rss/news", topic: "营销/消费", weight: 30 },
+  // ===== 中企出海与科技商业 =====
+  { name: "TechInAsia Malaysia", url: "https://www.techinasia.com/tag/malaysia/feed", topic: "中企出海", weight: 20 },
+  { name: "TechNode Global SEA", url: "https://technode.global/tag/malaysia/feed/", topic: "中企出海", weight: 20 },
+  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "科技消费", weight: 20 },
+  // ===== 本土文化与深度商业 =====
+  { name: "Business Today MY", url: "https://www.businesstoday.com.my/feed/", topic: "本土商业", weight: 10 },
 ] as const;
 
 // ---------- 关键词预过滤：客户端硬性丢弃无关新闻 ----------
@@ -92,6 +89,15 @@ const IRRELEVANT_KEYWORDS = [
   "quarterly results", "quarterly profit", "earnings report", "net profit rose",
   "dividend declared", "annual general meeting", "agm ",
   "appoints new", "new ceo", "new cfo", "board appointment",
+  // ===== 泛财经/大宗商品/无实操价值 =====
+  "usd/myr", "forex", "currency exchange rate",
+  "overnight policy rate", "interest rate hike",
+  "gdp growth", "gdp forecast", "economic outlook", "budget deficit",
+  "government revenue", "fiscal deficit", "public debt",
+  "flood", "flood victims", "landslide", "earthquake", "extreme weather",
+  // ===== 无大马市场关联的跨国科技巨头新闻 =====
+  "apple launches", "google announces", "meta reveals", "microsoft unveils",
+  "samsung galaxy", "iphone ", "ipad ", "pixel ", "galaxy s",
 ] as const;
 
 function isIrrelevant(item: RawFeedItem): boolean {
@@ -133,12 +139,24 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
 - 军事 / 国防采购 / 武装部队
 - 官员任免 / 内阁改组 / 政务人事
 - 房地产开发 / 房价 / 楼盘
-- 股市大盘 / 股票涨跌 / 指数收盘
+- 股市大盘 / 股票涨跌 / 指数收盘 / 林吉特汇率 / GDP 宏观数据
 - 原油 / 棕榈油 / 橡胶等大宗商品价格波动
 - 国外无关巨头人事变动（Tesla / Apple / Tata 等）
-- 通用社会新闻（天气 / 交通 / 犯罪 / 选举）
-- **产品召回 / 车辆召回 / 例行财报 / 高管任命等纯公关通稿**：此类新闻即使涉及大马市场，若无法提炼出「对中企出海大马的直接渠道/营销/合规启示」，一律返回 {"relevant": false}
+- 通用社会新闻（天气 / 交通 / 犯罪 / 选举 / 水灾）
+- **泛财经通稿**：与大马商超渠道、电商平台规则、中企落地动作、族群消费/清真合规四大领域无直接关联的宏观财经评论、企业例行财报、高管任命、产品召回公告，一律 {"relevant": false}
 - **通稿识别**：若内容为多媒體转载的同一事件公关稿（如某品牌发布会、某企业声明），且缺乏本土消费/渠道/出海实操增量信息，返回 {"relevant": false}
+
+【信息差价值硬性标准】
+提炼前自问：这条信息能否帮助一位中国消费品牌创始人在大马市场做出「更聪明的下一步动作」？
+- 若答案是"只是知道了一件事"（如某公司发财报、某车被召回），返回 {"relevant": false}
+- 若答案是"能指导渠道选择/营销打法/合规避坑/品类切入"，才继续提炼
+
+【marketing_takeaway 硬约束】
+- 严格聚焦于「该动态对中国企业/品牌进入大马市场的直接商业启示或防坑提示」
+- 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法、平台规则利用）
+- 禁止空话套话（如"建议持续关注""未来可期""值得关注"）
+- 必须包含至少 1 个具体动作或数字（如渠道名称、周期天数、成本区间、平台名）
+- 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
 
 【输出格式】
 若相关，必须输出以下完整 JSON（缺一不可）：
@@ -381,36 +399,56 @@ async function deduplicateBySourceUrl(
   }
 }
 
-// ---------- 相似度工具：bigram + Jaccard（模块级复用）----------
-// 保留中英文与数字（品牌名如 Ninja Mart / TikTok 是事件核心实体，不可剔除），仅去除空白与标点
-function bigramsOf(text: string): Set<string> {
-  const clean = (text || "").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
-  const set = new Set<string>();
-  for (let i = 0; i < clean.length - 1; i++) {
-    set.add(clean.slice(i, i + 2));
+// ---------- 相似度工具：复用共享算法库（与 /api/admin/dedupe-intelligence 同一套判定） ----------
+import { isSameEvent, clusterAndPickLosers, bigramsOf, jaccardSim, type EventSig } from "@/lib/intelDedup";
+
+// ---------- 近 N 小时库内已有事件签名（预抓取，一次查询多处复用） ----------
+async function fetchRecentEventSigs(client: any, hours: number): Promise<EventSig[]> {
+  if (!client) return [];
+  try {
+    const since = new Date(Date.now() - hours * 3600 * 1000);
+    const { data, error } = await client
+      .from("malaysia_intelligence")
+      .select("title_zh, title_en, summary_zh")
+      .gte("created_at", since.toISOString())
+      .limit(150);
+    if (error || !data) return [];
+    return (data as any[]).map((r) => ({
+      titleZh: String(r.title_zh || ""),
+      titleEn: String(r.title_en || ""),
+      summary: String(r.summary_zh || ""),
+    }));
+  } catch {
+    return [];
   }
-  return set;
 }
 
-function jaccardSim(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter++;
-  return inter / (a.size + b.size - inter);
-}
-
-// 综合相似度：中文标题 + 英文标题 + 摘要任一维度命中即视为同事件
-function isSameEvent(
-  a: { titleZh: string; titleEn: string; summary: string },
-  b: { titleZh: string; titleEn: string; summary: string }
-): boolean {
-  const zhSim = jaccardSim(bigramsOf(a.titleZh), bigramsOf(b.titleZh));
-  if (zhSim > 0.5) return true;
-  const enSim = jaccardSim(bigramsOf(a.titleEn), bigramsOf(b.titleEn));
-  if (enSim > 0.6) return true;
-  const sumSim = jaccardSim(bigramsOf(a.summary.slice(0, 120)), bigramsOf(b.summary.slice(0, 120)));
-  if (sumSim > 0.55) return true;
-  return false;
+// ---------- 预 AI 拦截：调用 DeepSeek 前，用原始英文标题与库内近 72h 事件比对 ----------
+// 命中同事件直接丢弃，不消耗 AI Token、不产生重复数据
+function prefilterRawAgainstDb(
+  rawItems: RawFeedItem[],
+  existing: EventSig[]
+): { kept: RawFeedItem[]; preBlocked: number } {
+  if (existing.length === 0) return { kept: rawItems, preBlocked: 0 };
+  let preBlocked = 0;
+  const kept = rawItems.filter((item) => {
+    const dup = existing.some((ex) => {
+      // 原始英文标题比对（此时还没有 AI 中文标题）
+      if (jaccardSim(bigramsOf(item.title), bigramsOf(ex.titleEn)) > 0.55) return true;
+      // 正文前 150 字与库内摘要比对（跨语言场景下互补）
+      if (jaccardSim(bigramsOf(item.content.slice(0, 150)), bigramsOf(ex.summary.slice(0, 150))) > 0.6) return true;
+      return false;
+    });
+    if (dup) {
+      preBlocked++;
+      console.log(`[cron] 预AI同事件拦截（库内 72h 已有）：${item.title.slice(0, 60)}`);
+    }
+    return !dup;
+  });
+  if (preBlocked > 0) {
+    console.log(`[cron] 预AI同事件拦截：${rawItems.length} → ${kept.length} 条（节省 ${preBlocked} 次 AI 调用）`);
+  }
+  return { kept, preBlocked };
 }
 
 // ---------- 语义/标题相似度去重（同事件通稿合并，批次内）----------
@@ -445,56 +483,69 @@ function dedupByTitleSimilarity<T extends AiResult & { title: string }>(
   return { deduped: kept, mergedCount };
 }
 
-// ---------- 跨批次语义去重：写入前与库内近 30 天数据比对 ----------
-// 解决「同一事件被多家媒体分批报道，URL 不同导致 source_url 去重失效」的核心缺陷
-async function deduplicateAgainstDatabase<T extends AiResult & { title: string }>(
-  client: any,
-  items: T[]
-): Promise<{ deduped: T[]; removed: number }> {
-  if (!client || items.length === 0) return { deduped: items, removed: 0 };
+// ---------- 写入前二次校验：AI 产出后与预抓取的库内事件签名比对 ----------
+function deduplicateAgainstDbSigs<T extends AiResult & { title: string }>(
+  items: T[],
+  existing: EventSig[]
+): { deduped: T[]; removed: number } {
+  if (existing.length === 0 || items.length === 0) return { deduped: items, removed: 0 };
+  let removed = 0;
+  const deduped = items.filter((item) => {
+    const dup = existing.some((ex) =>
+      isSameEvent(ex, { titleZh: item.titleZh, titleEn: item.title, summary: item.summaryZh })
+    );
+    if (dup) {
+      removed++;
+      console.log(`[cron] 写入前同事件拦截（库内已有）：${item.titleZh}`);
+    }
+    return !dup;
+  });
+  if (removed > 0) {
+    console.log(`[cron] 写入前二次校验：${items.length} → ${deduped.length} 条（拦截 ${removed} 条同事件）`);
+  }
+  return { deduped, removed };
+}
 
+// ---------- 自愈式历史清理：每次管道运行后自动执行 ----------
+// 扫描全表同事件重复数据，保留最优 1 条（featured → 高分 → 最新），物理删除其余
+// 幂等：无重复时 0 删除，可安全反复运行
+async function autoCleanIntelligence(client: any): Promise<{ scanned: number; deleted: number; clusters: number }> {
+  if (!client) return { scanned: 0, deleted: 0, clusters: 0 };
   try {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     const { data, error } = await client
       .from("malaysia_intelligence")
-      .select("title_zh, title_en, summary_zh")
-      .gte("created_at", thirtyDaysAgo.toISOString())
-      .limit(150);
+      .select("id, title_zh, title_en, summary_zh, importance_score, is_featured, created_at")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error || !data || data.length === 0) return { scanned: 0, deleted: 0, clusters: 0 };
 
-    if (error || !data || data.length === 0) {
-      return { deduped: items, removed: 0 };
+    const { loserIds, duplicateClusters } = clusterAndPickLosers(data as any[]);
+    if (loserIds.length === 0) {
+      console.log(`[cron] 自愈清理：扫描 ${data.length} 条，无重复，跳过删除`);
+      return { scanned: data.length, deleted: 0, clusters: 0 };
     }
 
-    const existing = (data as any[]).map((r) => ({
-      titleZh: String(r.title_zh || ""),
-      titleEn: String(r.title_en || ""),
-      summary: String(r.summary_zh || ""),
-    }));
-
-    let removed = 0;
-    const deduped = items.filter((item) => {
-      const dup = existing.some((ex) =>
-        isSameEvent(
-          { titleZh: ex.titleZh, titleEn: ex.titleEn, summary: ex.summary },
-          { titleZh: item.titleZh, titleEn: item.title, summary: item.summaryZh }
-        )
-      );
-      if (dup) {
-        removed++;
-        console.log(`[cron] 跨批次语义去重丢弃（库内已有同事件）：${item.titleZh}`);
+    let deleted = 0;
+    const BATCH = 100;
+    for (let i = 0; i < loserIds.length; i += BATCH) {
+      const batch = loserIds.slice(i, i + BATCH);
+      const { error: delErr } = await client
+        .from("malaysia_intelligence")
+        .delete()
+        .in("id", batch);
+      if (delErr) {
+        console.warn(`[cron] 自愈清理删除失败：${delErr.message}`);
+        break;
       }
-      return !dup;
-    });
-
-    if (removed > 0) {
-      console.log(`[cron] 跨批次语义去重：${items.length} → ${deduped.length} 条（丢弃 ${removed} 条与库内重复的同事件）`);
+      deleted += batch.length;
     }
-    return { deduped, removed };
+    console.log(
+      `[cron] 自愈清理完成：扫描 ${data.length} 条 → 合并 ${duplicateClusters} 组同事件 → 自动删除 ${deleted} 条重复历史数据`
+    );
+    return { scanned: data.length, deleted, clusters: duplicateClusters };
   } catch (err: any) {
-    console.warn(`[cron] 跨批次语义去重异常（不影响主流程）：${err?.message || err}`);
-    return { deduped: items, removed: 0 };
+    console.warn(`[cron] 自愈清理异常（不影响主流程）：${err?.message || err}`);
+    return { scanned: 0, deleted: 0, clusters: 0 };
   }
 }
 
@@ -852,10 +903,30 @@ async function handleCron(req: NextRequest) {
   const { deduped, duplicatesRemoved } = await deduplicateBySourceUrl(dedupClient, rawItems);
 
   if (deduped.length === 0) {
+    // 即使无新情报，也执行一次自愈清理，保证历史重复数据被自动清除
+    const earlyClean = await autoCleanIntelligence(supabaseAdmin || dedupClient);
     return NextResponse.json({
       success: true,
-      message: `无新情报（${duplicatesRemoved} 条重复已跳过）`,
-      stats: { fetched: rawItems.length, afterDedup: 0, aiSummarized: 0, inserted: 0 },
+      message: `无新情报（${duplicatesRemoved} 条重复已跳过）${earlyClean.deleted > 0 ? `，已自动清理 ${earlyClean.deleted} 条历史重复` : ""}`,
+      stats: { fetched: rawItems.length, afterDedup: 0, aiSummarized: 0, inserted: 0, autoCleanDeleted: earlyClean.deleted },
+      duration: Date.now() - startedAt,
+    });
+  }
+
+  // 2.5 预抓取库内近 72h 事件签名（一次查询，预AI拦截 + 写入前校验两处复用）
+  const sigClient = supabaseAdmin || dedupClient;
+  const recentSigs = await fetchRecentEventSigs(sigClient, 72);
+
+  // 2.6 预 AI 同事件拦截：调用 DeepSeek 前直接丢弃库内已有同事件，节省 Token
+  const { kept: preFiltered, preBlocked } = prefilterRawAgainstDb(deduped, recentSigs);
+
+  if (preFiltered.length === 0) {
+    // 同事件全部被拦截时，也执行自愈清理
+    const earlyClean = await autoCleanIntelligence(sigClient);
+    return NextResponse.json({
+      success: true,
+      message: `无新情报（URL 去重 ${duplicatesRemoved} 条 + 同事件拦截 ${preBlocked} 条）${earlyClean.deleted > 0 ? `，已自动清理 ${earlyClean.deleted} 条历史重复` : ""}`,
+      stats: { fetched: rawItems.length, afterDedup: 0, preBlocked, aiSummarized: 0, inserted: 0, autoCleanDeleted: earlyClean.deleted },
       duration: Date.now() - startedAt,
     });
   }
@@ -864,8 +935,8 @@ async function handleCron(req: NextRequest) {
   const MAX_CONCURRENT = 3;
   const summarized: Array<RawFeedItem & AiResult> = [];
 
-  for (let i = 0; i < deduped.length; i += MAX_CONCURRENT) {
-    const batch = deduped.slice(i, i + MAX_CONCURRENT);
+  for (let i = 0; i < preFiltered.length; i += MAX_CONCURRENT) {
+    const batch = preFiltered.slice(i, i + MAX_CONCURRENT);
     const results = await Promise.all(
       batch.map(async (item) => {
         const ai = await summarizeWithAI(item);
@@ -878,17 +949,15 @@ async function handleCron(req: NextRequest) {
     }
   }
 
-  console.log(`[cron] AI 摘要完成：${summarized.length}/${deduped.length} 条`);
+  console.log(`[cron] AI 摘要完成：${summarized.length}/${preFiltered.length} 条`);
 
   // 3.5 批次内同事件合并：同一事件被多源报道时仅保留打分最高的 1 条
   const { deduped: titleDeduped, mergedCount } = dedupByTitleSimilarity(summarized);
 
-  // 3.6 跨批次语义去重：与库内近 30 天数据比对，丢弃同事件重复报道
-  const dbDedupClient =
-    supabaseAdmin || (dedupClient ?? null);
-  const { deduped: dbDeduped, removed: dbDupRemoved } = await deduplicateAgainstDatabase(
-    dbDedupClient,
-    titleDeduped
+  // 3.6 写入前二次校验：AI 产出后与库内近 72h 事件签名比对（三维相似度）
+  const { deduped: dbDeduped, removed: dbDupRemoved } = deduplicateAgainstDbSigs(
+    titleDeduped,
+    recentSigs
   );
 
   // 3.7 低价值过滤：importance_score <= 1 的情报不入库（避免低质通稿稀释内容质量）
@@ -942,9 +1011,14 @@ async function handleCron(req: NextRequest) {
     }
   }
 
+  // 6. 自愈式历史清理：每次管道运行后自动扫描全表，合并同事件重复数据
+  // 保留最优 1 条（featured → 高分 → 最新），物理删除其余；幂等，无重复时 0 删除
+  const cleanClient = supabaseAdmin || sigClient;
+  const cleanResult = await autoCleanIntelligence(cleanClient);
+
   const duration = Date.now() - startedAt;
   console.log(
-    `[cron] 完成！RSS ${rawItems.length} → URL去重 ${deduped.length} → AI摘要 ${summarized.length} → 批次内合并 ${titleDeduped.length} → 跨批次去重 ${dbDeduped.length}（丢弃 ${dbDupRemoved}）→ 写入 ${inserted}，耗时 ${duration}ms`
+    `[cron] 完成！RSS ${rawItems.length} → URL去重 ${deduped.length} → 预AI拦截 ${preBlocked} → AI摘要 ${summarized.length} → 批次内合并 ${titleDeduped.length} → 写入前校验 ${dbDeduped.length}（拦截 ${dbDupRemoved}）→ 写入 ${inserted} → 自愈清理删除 ${cleanResult.deleted}，耗时 ${duration}ms`
   );
 
   // 构建内存数据（无论 DB 写入是否成功，都返回给前端渲染）
@@ -974,9 +1048,11 @@ async function handleCron(req: NextRequest) {
       stats: {
         fetched: rawItems.length,
         afterDedup: deduped.length,
+        preBlocked,
         aiSummarized: summarized.length,
         titleDedupMerged: mergedCount,
         dbDupRemoved,
+        autoCleanDeleted: cleanResult.deleted,
         inserted,
       },
       data: memItems,

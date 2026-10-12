@@ -14,37 +14,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { clusterAndPickLosers } from "@/lib/intelDedup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-// ---------- 相似度工具（与 fetch-intelligence 管道同一套算法） ----------
-function bigramsOf(text: string): Set<string> {
-  const clean = (text || "").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
-  const set = new Set<string>();
-  for (let i = 0; i < clean.length - 1; i++) {
-    set.add(clean.slice(i, i + 2));
-  }
-  return set;
-}
-
-function jaccardSim(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter++;
-  return inter / (a.size + b.size - inter);
-}
-
-function isSameEvent(
-  a: { titleZh: string; titleEn: string; summary: string },
-  b: { titleZh: string; titleEn: string; summary: string }
-): boolean {
-  if (jaccardSim(bigramsOf(a.titleZh), bigramsOf(b.titleZh)) > 0.5) return true;
-  if (jaccardSim(bigramsOf(a.titleEn), bigramsOf(b.titleEn)) > 0.6) return true;
-  if (jaccardSim(bigramsOf(a.summary.slice(0, 120)), bigramsOf(b.summary.slice(0, 120))) > 0.55) return true;
-  return false;
-}
 
 // ---------- 鉴权：admin_token cookie 或 CRON_SECRET ----------
 function isAuthorized(req: NextRequest): boolean {
@@ -101,50 +75,8 @@ async function handleDedupe(req: NextRequest) {
     return NextResponse.json({ success: true, message: "表内无数据", stats: { total: 0, clusters: 0, deleted: 0 } });
   }
 
-  // 2. 同事件聚类（贪心：按时间倒序遍历，命中已有簇则并入，否则开新簇）
-  const clusters: Row[][] = [];
-  for (const row of rows) {
-    const sig = {
-      titleZh: row.title_zh || "",
-      titleEn: row.title_en || "",
-      summary: row.summary_zh || "",
-    };
-    const hit = clusters.find((cluster) =>
-      isSameEvent(sig, {
-        titleZh: cluster[0].title_zh || "",
-        titleEn: cluster[0].title_en || "",
-        summary: cluster[0].summary_zh || "",
-      })
-    );
-    if (hit) hit.push(row);
-    else clusters.push([row]);
-  }
-
-  // 3. 每簇保留最优 1 条：is_featured 优先 → importance_score 最高 → created_at 最新
-  const toDelete: string[] = [];
-  const keptSample: string[] = [];
-  for (const cluster of clusters) {
-    if (cluster.length === 1) {
-      keptSample.push(cluster[0].title_zh || cluster[0].title_en || "");
-      continue;
-    }
-    const sorted = [...cluster].sort((a, b) => {
-      if ((b.is_featured ? 1 : 0) !== (a.is_featured ? 1 : 0)) {
-        return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
-      }
-      if ((b.importance_score || 3) !== (a.importance_score || 3)) {
-        return (b.importance_score || 3) - (a.importance_score || 3);
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-    const keeper = sorted[0];
-    keptSample.push(keeper.title_zh || keeper.title_en || "");
-    for (const loser of sorted.slice(1)) {
-      toDelete.push(loser.id);
-    }
-  }
-
-  const duplicateClusters = clusters.filter((c) => c.length > 1).length;
+  // 2-3. 同事件聚类 + 每簇保留最优 1 条（共享算法库，与抓取管道同一套判定）
+  const { loserIds: toDelete, duplicateClusters } = clusterAndPickLosers(rows);
 
   // 4. 删除（dry 模式仅预览）
   let deleted = 0;
