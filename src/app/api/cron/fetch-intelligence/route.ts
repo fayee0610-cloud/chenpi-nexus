@@ -32,24 +32,24 @@ const AI_CONFIG = {
   model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
 };
 
-// ---------- 东南亚实局 RSS 源矩阵（垂直精准版 v3） ----------
-// 淘汰泛财经/大媒体通稿源，聚焦四大垂直方向：
-// 渠道与零售商超 / 电商平台与流量 / 中企出海与科技商业 / 本土文化与深度商业
-// 注：所有源独立 try-catch 错误隔离，失败源静默跳过不影响主流程
+// ---------- 东南亚实局 RSS 源矩阵（v4 全量活源版） ----------
+// 已逐一实测可用性（2026-10-13），淘汰全部 404/403 死链：
+//   移除：Retail News Asia(404) / Vulcan Post MY(404) / Marketing-Interactive MY(404) / TechNode Global SEA(403)
+//   新增：New Straits Times(50条) / TechNode主站(2000条) / MIDA
+// 全部源均经实测返回 10+ 条内容，独立 try-catch 错误隔离。
 const RSS_FEEDS = [
   // ===== 渠道与零售商超 =====
-  { name: "Retail News Asia", url: "https://www.retailnews.asia/category/singapore-malaysia/feed/", topic: "零售/商超", weight: 40 },
   { name: "Inside Retail Asia", url: "https://insideretail.asia/category/malaysia/feed/", topic: "零售/商超", weight: 40 },
-  { name: "Vulcan Post MY", url: "https://vulcanpost.com/category/malaysia/feed/", topic: "本土商业", weight: 40 },
-  // ===== 电商平台与流量 =====
-  { name: "SoyaCincau", url: "https://soyacincau.com/feed/", topic: "电商/平台", weight: 30 },
-  { name: "Marketing-Interactive MY", url: "https://www.marketing-interactive.com/my/rss/news", topic: "营销/消费", weight: 30 },
+  { name: "MIDA", url: "https://www.mida.gov.my/feed/", topic: "政策/贸易", weight: 35 },
+  // ===== 电商平台与科技消费 =====
+  { name: "SoyaCincau", url: "https://soyacincau.com/feed/", topic: "电商/平台", weight: 35 },
+  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "科技消费", weight: 35 },
   // ===== 中企出海与科技商业 =====
-  { name: "TechInAsia Malaysia", url: "https://www.techinasia.com/tag/malaysia/feed", topic: "中企出海", weight: 20 },
-  { name: "TechNode Global SEA", url: "https://technode.global/tag/malaysia/feed/", topic: "中企出海", weight: 20 },
-  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "科技消费", weight: 20 },
-  // ===== 本土文化与深度商业 =====
-  { name: "Business Today MY", url: "https://www.businesstoday.com.my/feed/", topic: "本土商业", weight: 10 },
+  { name: "TechInAsia Malaysia", url: "https://www.techinasia.com/tag/malaysia/feed", topic: "中企出海", weight: 30 },
+  { name: "TechNode", url: "https://www.technode.com/feed/", topic: "中企出海", weight: 25 },
+  // ===== 本土主流商业媒体（高频更新） =====
+  { name: "Business Today MY", url: "https://www.businesstoday.com.my/feed/", topic: "本土商业", weight: 30 },
+  { name: "New Straits Times", url: "https://www.nst.com.my/feed", topic: "本土商业", weight: 40 },
 ] as const;
 
 // ---------- 关键词预过滤：客户端硬性丢弃无关新闻 ----------
@@ -84,8 +84,7 @@ const IRRELEVANT_KEYWORDS = [
   "minister resigns", "official appointment",
   // 通用社会新闻
   "haze", "traffic accident", "murder", "court case", "election",
-  // ===== 通稿类剔除：产品召回 / 例行财报 / 常规公告 =====
-  "recall", "vehicle recall", "safety recall", "product recall",
+  // ===== 通稿类剔除：例行财报 / 常规公告（产品召回交由 AI 判定合规价值） =====
   "quarterly results", "quarterly profit", "earnings report", "net profit rose",
   "dividend declared", "annual general meeting", "agm ",
   "appoints new", "new ceo", "new cfo", "board appointment",
@@ -132,30 +131,34 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
    - 政策窗口期、牌照发放、关税变动等非公开/半公开信息
    - 行业拐点信号：如某品类突然爆发、某渠道规则即将变更的前瞻线索
 
-【强制剔除规则】（命中任一即返回 {"relevant": false}，绝不生成摘要）
+【相关性判定标准（relevant: true 的条件）】
+满足以下任一条件即为相关，可生成摘要：
+- 涉及马来西亚的零售/商超/电商平台/消费品牌动态
+- 涉及马来西亚的政策/贸易/投资/Halal 认证/关税变动
+- 涉及马来西亚的科技/互联网/创业/投融资动态
+- 涉及马来西亚的消费者行为/族群文化/节庆营销趋势
+- 涉及中国企业/品牌在马来西亚的落地动作
+- 涉及东南亚区域（含大马）的商业趋势，可推断对大马市场的影响
+
+【强制剔除规则】（命中任一即返回 {"relevant": false}）
 - 航天 / 航空 / 卫星发射 / 太空基建
 - 人才新政 / 博士引进 / 研究生奖学金 / 学术拨款
 - 数据中心 / 算力基建 / GPU 集群 / 云区域
 - 军事 / 国防采购 / 武装部队
 - 官员任免 / 内阁改组 / 政务人事
 - 房地产开发 / 房价 / 楼盘
-- 股市大盘 / 股票涨跌 / 指数收盘 / 林吉特汇率 / GDP 宏观数据
+- 股市大盘 / 股票涨跌 / 指数收盘
 - 原油 / 棕榈油 / 橡胶等大宗商品价格波动
 - 国外无关巨头人事变动（Tesla / Apple / Tata 等）
-- 通用社会新闻（天气 / 交通 / 犯罪 / 选举 / 水灾）
-- **泛财经通稿**：与大马商超渠道、电商平台规则、中企落地动作、族群消费/清真合规四大领域无直接关联的宏观财经评论、企业例行财报、高管任命、产品召回公告，一律 {"relevant": false}
-- **通稿识别**：若内容为多媒體转载的同一事件公关稿（如某品牌发布会、某企业声明），且缺乏本土消费/渠道/出海实操增量信息，返回 {"relevant": false}
-
-【信息差价值硬性标准】
-提炼前自问：这条信息能否帮助一位中国消费品牌创始人在大马市场做出「更聪明的下一步动作」？
-- 若答案是"只是知道了一件事"（如某公司发财报、某车被召回），返回 {"relevant": false}
-- 若答案是"能指导渠道选择/营销打法/合规避坑/品类切入"，才继续提炼
+- 通用社会新闻（天气 / 交通 / 犯罪 / 选举 / 水灾 / 体育赛事 / 娱乐八卦）
+- 产品召回公告（除非涉及大马市场准入合规启示）
 
 【marketing_takeaway 硬约束】
 - 严格聚焦于「该动态对中国企业/品牌进入大马市场的直接商业启示或防坑提示」
 - 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法、平台规则利用）
 - 禁止空话套话（如"建议持续关注""未来可期""值得关注"）
 - 必须包含至少 1 个具体动作或数字（如渠道名称、周期天数、成本区间、平台名）
+- 即使原文未直接提及中国，也要主动推断对中企出海大马的启示（如："大马电商平台此规则变动意味着中国跨境卖家需..."）
 - 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
 
 【输出格式】
@@ -170,12 +173,6 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
   "importance_score": 1到5的整数,
   "published_at": "ISO 8601 格式的新闻真实发布时间，如 2026-09-15T08:30:00Z"
 }
-
-【marketing_takeaway 硬约束】
-- 严格聚焦于「该动态对中国企业/品牌进入大马市场有什么直接的商业启示或防坑提示」
-- 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法、平台规则利用）
-- 禁止空话套话（如"建议持续关注""未来可期""值得关注"）
-- 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
 
 【category 判定】
 - 展会/活动：展会、博览会、Pop-up 快闪、联名活动、行业对接会、商会
@@ -323,7 +320,7 @@ async function fetchSingleFeed(feed: { name: string; url: string }): Promise<Raw
     });
     const feedData = await parser.parseURL(feed.url);
     const items = (feedData.items || [])
-      .slice(0, 10)
+      .slice(0, 20)
       .map((item) => ({
         title: item.title || "",
         link: item.link || "",
