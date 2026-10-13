@@ -52,6 +52,20 @@ const RSS_FEEDS = [
   { name: "New Straits Times", url: "https://www.nst.com.my/feed", topic: "本土商业", weight: 40 },
 ] as const;
 
+// 源权重映射（Web Search 结果无固定源，用默认权重 25）
+const SOURCE_WEIGHT = new Map<string, number>(RSS_FEEDS.map((f) => [f.name, f.weight]));
+
+// ---------- AI 候选优先级评分：新鲜度优先 + 源权重加权 ----------
+// 保障「实时感知」优先提炼 24h 内的新鲜情报，而非高权重源的旧闻
+function candidateScore(item: RawFeedItem): number {
+  const w = SOURCE_WEIGHT.get(item.sourceName) ?? 25;
+  const ageH = item.pubDate
+    ? (Date.now() - new Date(item.pubDate).getTime()) / 3600000
+    : 72; // 无发布时间视为旧闻
+  const freshness = ageH < 24 ? 30 : ageH < 48 ? 15 : 0;
+  return w + freshness;
+}
+
 // ---------- 关键词预过滤：客户端硬性丢弃无关新闻 ----------
 // 命中标题/内容任一关键词即丢弃，不进入 AI 提炼环节（节省 Token）
 const IRRELEVANT_KEYWORDS = [
@@ -315,7 +329,7 @@ type RawFeedItem = {
 async function fetchSingleFeed(feed: { name: string; url: string }): Promise<RawFeedItem[]> {
   try {
     const parser = new Parser({
-      timeout: 15000,
+      timeout: 12000, // 8 源并行抓取，单源 12s 足够；压缩最坏尾部延迟
       headers: BROWSER_HEADERS,
     });
     const feedData = await parser.parseURL(feed.url);
@@ -560,7 +574,7 @@ type AiResult = {
 async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
   if (!AI_CONFIG.apiKey) return null;
 
-  const { controller, cleanup } = createTimeoutController(30000);
+  const { controller, cleanup } = createTimeoutController(18000); // 单条上限 18s，防挂起拖垮整体预算
 
   try {
     const contentPreview = item.content.slice(0, 1500);
@@ -928,12 +942,30 @@ async function handleCron(req: NextRequest) {
     });
   }
 
-  // 3. AI 中文摘要（并发控制：最多 3 条同时请求）
-  const MAX_CONCURRENT = 3;
+  // 2.8 延迟预算控制（根因修复）：8 源 × 20 条全量进 AI 曾导致 150s+ 耗时，
+  // 触发 Vercel 60s maxDuration 强杀（504 感知超时）。现按「新鲜度 + 源权重」
+  // 只取前 30 条进入 AI；未处理的候选留待下一轮抓取（URL 去重天然保证不重复）。
+  const AI_CANDIDATE_CAP = 30;
+  const aiCandidates =
+    preFiltered.length > AI_CANDIDATE_CAP
+      ? [...preFiltered].sort((a, b) => candidateScore(b) - candidateScore(a)).slice(0, AI_CANDIDATE_CAP)
+      : preFiltered;
+  if (preFiltered.length > AI_CANDIDATE_CAP) {
+    console.log(`[cron] 延迟预算：候选 ${preFiltered.length} 条 → 按新鲜度/权重取前 ${AI_CANDIDATE_CAP} 条进 AI`);
+  }
+
+  // 3. AI 中文摘要（并发 6 + 截止时间护栏，确保总耗时确定性落在 Vercel 60s 之内）
+  const AI_CONCURRENCY = 6;
+  const AI_DEADLINE_MS = 36000; // AI 阶段截止线（自函数启动起算），预留 ~20s 给写入+滚动淘汰+自愈清理
   const summarized: Array<RawFeedItem & AiResult> = [];
 
-  for (let i = 0; i < preFiltered.length; i += MAX_CONCURRENT) {
-    const batch = preFiltered.slice(i, i + MAX_CONCURRENT);
+  for (let i = 0; i < aiCandidates.length; i += AI_CONCURRENCY) {
+    // 截止护栏：超预算立即收尾，剩余候选交给下一轮（宁缺毋超时）
+    if (Date.now() - startedAt > AI_DEADLINE_MS) {
+      console.warn(`[cron] AI 阶段达到延迟预算 ${AI_DEADLINE_MS}ms，提前收尾：已处理 ${i}/${aiCandidates.length} 条`);
+      break;
+    }
+    const batch = aiCandidates.slice(i, i + AI_CONCURRENCY);
     const results = await Promise.all(
       batch.map(async (item) => {
         const ai = await summarizeWithAI(item);
@@ -1010,8 +1042,12 @@ async function handleCron(req: NextRequest) {
 
   // 6. 自愈式历史清理：每次管道运行后自动扫描全表，合并同事件重复数据
   // 保留最优 1 条（featured → 高分 → 最新），物理删除其余；幂等，无重复时 0 删除
+  // 时间护栏：临近 60s 上限时跳过本轮（清理幂等，下一轮自动补做），确保响应必达
   const cleanClient = supabaseAdmin || sigClient;
-  const cleanResult = await autoCleanIntelligence(cleanClient);
+  const cleanResult =
+    Date.now() - startedAt < 50000
+      ? await autoCleanIntelligence(cleanClient)
+      : { scanned: 0, deleted: 0, clusters: 0 };
 
   const duration = Date.now() - startedAt;
   console.log(
