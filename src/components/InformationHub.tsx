@@ -244,10 +244,16 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const isHomeMode = typeof showLimit === "number" && showLimit > 0;
   const currentLimit = isHomeMode ? showLimit! : (showAll ? EXPANDED_LIMIT : DEFAULT_LIMIT);
 
-  // 分类筛选 + AI 价值打分降序排序（高价值商业情报自动靠前）
+  // 分类筛选 + 原新闻发布时间倒序排序（真实时序优先，避免同批次抓取全部挤在一起）
+  // importanceScore 仅在发布时间相同时作为二次排序依据
   const filteredItems = items
     .filter((item) => activeCategory === "全部" || item.category === activeCategory)
-    .sort((a, b) => (b.importanceScore || 3) - (a.importanceScore || 3));
+    .sort((a, b) => {
+      const timeA = new Date(a.publishedAt || 0).getTime();
+      const timeB = new Date(b.publishedAt || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      return (b.importanceScore || 3) - (a.importanceScore || 3);
+    });
 
   const displayItems = filteredItems.slice(0, currentLimit);
   const hasMore = !isHomeMode && !showAll && filteredItems.length > DEFAULT_LIMIT;

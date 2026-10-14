@@ -915,8 +915,8 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
     const { data, error } = await supabase
       .from("malaysia_intelligence")
       .select("id,title_zh,title_en,title,category,summary_zh,source_name,source_url,published_at,is_published,is_featured,tags,created_at")
-      .gte("created_at", sevenDaysAgoISO)
-      .order("created_at", { ascending: false })
+      .gte("published_at", sevenDaysAgoISO)
+      .order("published_at", { ascending: false })
       .range(0, 19);
 
     // 若 schema 不匹配（如 tags 列缺失），降级为基础列查询
@@ -927,8 +927,8 @@ export async function fetchInsightsHub(): Promise<InsightHubItem[]> {
       const basic = await supabase
         .from("malaysia_intelligence")
         .select("id,title_zh,title_en,title,category,summary_zh,source_name,source_url,published_at,is_published,is_featured,created_at")
-        .gte("created_at", sevenDaysAgo.toISOString())
-        .order("created_at", { ascending: false })
+        .gte("published_at", sevenDaysAgo.toISOString())
+        .order("published_at", { ascending: false })
         .range(0, 19);
       if (basic.error || !basic.data) return [];
       return basic.data
@@ -994,13 +994,13 @@ function safeParseTags(raw: string): string[] {
 export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaIntelligence[]> {
   if (!supabase) return [];
   try {
-    // 按 created_at DESC 排序（入库时间倒序），确保最新抓取的情报排在最前
-    // published_at 仅用于卡片显示（新闻原始发布时间），不用于排序
+    // 按 published_at DESC 排序（新闻原始发布时间倒序），确保真实时序最新的情报排在最前
+    // 同批抓取的多条新闻各自保留不同的原发布时间，自然拉开时序避免挤压
     const { data, error } = await supabase
       .from("malaysia_intelligence")
       .select("*")
       .eq("is_published", true)
-      .order("created_at", { ascending: false })
+      .order("published_at", { ascending: false })
       .limit(limit);
 
     if (error) {
