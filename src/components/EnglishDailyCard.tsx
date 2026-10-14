@@ -6,7 +6,6 @@ import {
   Volume2,
   Flame,
   CheckCircle2,
-  Sparkles,
   Globe,
   Mic,
   MicOff,
@@ -15,12 +14,12 @@ import {
   RotateCcw,
   Headphones,
   Target,
-  MessageSquare,
   ArrowLeft,
   ArrowRight,
   Zap,
-  BookOpen,
   Download,
+  BookOpen,
+  MessageSquare,
 } from "lucide-react";
 import {
   getEnglishLessonByDay,
@@ -255,14 +254,14 @@ export default function EnglishDailyCard() {
     if (!ctx) return;
 
     canvas.width = 800;
-    canvas.height = 450;
+    canvas.height = 520;
 
     // 背景渐变
-    const gradient = ctx.createLinearGradient(0, 0, 800, 450);
+    const gradient = ctx.createLinearGradient(0, 0, 800, 520);
     gradient.addColorStop(0, "#0f0f23");
     gradient.addColorStop(1, "#1a1a2e");
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 800, 450);
+    ctx.fillRect(0, 0, 800, 520);
 
     // 顶部装饰线
     ctx.fillStyle = "#a855f7";
@@ -274,35 +273,57 @@ export default function EnglishDailyCard() {
     ctx.fillText(`Day ${lesson.day}`, 120, 78);
 
     // 标题
-    ctx.font = "700 22px Inter, sans-serif";
+    ctx.font = "700 20px Inter, sans-serif";
     ctx.fillStyle = "#f1f5f9";
-    const titleLines = wrapText(ctx, lesson.title, 60, 130, 680, 32);
-    let y = 130 + titleLines * 32;
+    const titleLines = wrapText(ctx, lesson.title, 60, 120, 680, 28);
+    let y = 120 + titleLines * 28;
 
-    // 核心表达
-    ctx.font = "500 16px Inter, sans-serif";
+    // 主打金句
+    ctx.font = "500 14px Inter, sans-serif";
     ctx.fillStyle = "#cbd5e1";
-    y += 20;
-    ctx.fillText("Core Expression:", 60, y);
-    ctx.font = "600 18px Inter, sans-serif";
+    y += 15;
+    ctx.fillText("Power Phrase:", 60, y);
+    ctx.font = "600 17px Inter, sans-serif";
     ctx.fillStyle = "#e2e8f0";
-    y += 30;
-    const exprLines = wrapText(ctx, `"${lesson.targetExpression.english}"`, 60, y, 680, 28);
-    y += exprLines * 28 + 15;
+    y += 26;
+    const exprLines = wrapText(ctx, `"${lesson.targetExpression.english}"`, 60, y, 680, 26);
+    y += exprLines * 26 + 12;
 
     // 中文释义
-    ctx.font = "400 14px Inter, sans-serif";
+    ctx.font = "400 13px Inter, sans-serif";
     ctx.fillStyle = "#94a3b8";
-    y += 10;
-    const cnLines = wrapText(ctx, lesson.targetExpression.chinese, 60, y, 680, 24);
-    y += cnLines * 24 + 20;
+    const cnLines = wrapText(ctx, lesson.targetExpression.chinese, 60, y, 680, 22);
+    y += cnLines * 22 + 15;
+
+    // 备选变体
+    ctx.font = "500 14px Inter, sans-serif";
+    ctx.fillStyle = "#cbd5e1";
+    ctx.fillText("Alternative:", 60, y);
+    ctx.font = "500 15px Inter, sans-serif";
+    ctx.fillStyle = "#d1d5db";
+    y += 24;
+    const altLines = wrapText(ctx, `"${lesson.alternativeExpression.english}"`, 60, y, 680, 24);
+    y += altLines * 24 + 12;
+
+    // 词汇速查
+    ctx.font = "500 13px Inter, sans-serif";
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText("Glossary:", 60, y);
+    ctx.font = "400 13px Inter, sans-serif";
+    ctx.fillStyle = "#a5b4fc";
+    y += 22;
+    const glossaryText = lesson.glossaryItems
+      .map((g) => `${g.term} = ${g.fullForm}`)
+      .join("  ·  ");
+    const glLines = wrapText(ctx, glossaryText, 60, y, 680, 22);
+    y += glLines * 22 + 10;
 
     // 底部品牌
     ctx.font = "500 12px Inter, sans-serif";
     ctx.fillStyle = "#64748b";
-    ctx.fillText("陈皮同学 · 东南亚实局", 60, 410);
+    ctx.fillText("陈皮同学 · 东南亚实局", 60, 490);
     ctx.fillStyle = "#a855f7";
-    ctx.fillText("Global Business English Challenge", 560, 410);
+    ctx.fillText("Global Business English Challenge", 540, 490);
 
     // 下载
     canvas.toBlob((blob) => {
@@ -347,60 +368,60 @@ export default function EnglishDailyCard() {
 
   const categoryColor =
     lesson.category === "Listening"
-      ? "bg-blue-500/15 text-blue-300 border-blue-500/25"
-      : "bg-emerald-500/15 text-emerald-300 border-emerald-500/25";
+      ? "bg-blue-500/15 text-blue-700 border-blue-500/25 dark:text-blue-300"
+      : "bg-emerald-500/15 text-emerald-700 border-emerald-500/25 dark:text-emerald-300";
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/15 via-zinc-900/50 to-cyan-950/15 p-5 sm:p-6 shadow-[0_20px_60px_-25px_rgba(59,130,246,0.25)] backdrop-blur-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 dark:shadow-[0_20px_60px_-25px_rgba(59,130,246,0.25)] dark:backdrop-blur-sm">
       {/* 顶部：主题 + 打卡状态 */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15 text-blue-300">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
             <Globe className="h-4 w-4" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-zinc-400">
               <Headphones className="h-3 w-3" />
               Business English
-              <span className="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">
+              <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-600 dark:bg-zinc-800 dark:text-zinc-400">
                 Day {lesson.day}
               </span>
               <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium border ${categoryColor}`}>
                 {lesson.category === "Listening" ? "听力驯化" : "口语护甲"}
               </span>
             </div>
-            <div className="text-sm font-semibold text-zinc-100">{lesson.title}</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-zinc-100">{lesson.title}</div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 rounded-full border border-orange-500/25 bg-orange-500/10 px-3 py-1">
-          <Flame className="h-3.5 w-3.5 text-orange-400" />
-          <span className="text-xs font-semibold text-orange-300">连续 {checkin.streak} 天</span>
+        <div className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 dark:border-orange-500/25 dark:bg-orange-500/10">
+          <Flame className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />
+          <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">连续 {checkin.streak} 天</span>
         </div>
       </div>
 
       {/* 场景描述 */}
-      <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
         <div className="flex items-start gap-2">
-          <Target className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
-          <p className="text-[11px] leading-relaxed text-zinc-400">{lesson.sceneContext}</p>
+          <Target className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-zinc-500" />
+          <p className="text-[11px] leading-relaxed text-slate-600 dark:text-zinc-400">{lesson.sceneContext}</p>
         </div>
       </div>
 
-      {/* 音频播放器 */}
-      <div className="mb-4 rounded-xl border border-blue-500/15 bg-blue-950/10 p-3">
+      {/* 主打控场金句（Main Power Phrase） */}
+      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-500/15 dark:bg-blue-950/10">
         <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
-            <Volume2 className="h-3 w-3 text-blue-400" />
-            听力磨耳朵
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-zinc-400">
+            <Volume2 className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+            主打控场金句 · 听力磨耳朵
           </div>
           {/* 语速切换 */}
-          <div className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/60 p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900/60">
             <button
               onClick={() => setSpeechRate(0.8)}
               className={`rounded px-2 py-0.5 text-[10px] font-medium transition-all ${
                 speechRate === 0.8
-                  ? "bg-blue-500/20 text-blue-300"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                  : "text-slate-500 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300"
               }`}
             >
               0.8x
@@ -409,8 +430,8 @@ export default function EnglishDailyCard() {
               onClick={() => setSpeechRate(1.0)}
               className={`rounded px-2 py-0.5 text-[10px] font-medium transition-all ${
                 speechRate === 1.0
-                  ? "bg-blue-500/20 text-blue-300"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                  : "text-slate-500 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300"
               }`}
             >
               1.0x
@@ -420,44 +441,94 @@ export default function EnglishDailyCard() {
 
         <button
           onClick={() => handlePlay(lesson.targetExpression.english)}
-          className="flex w-full items-center gap-3 rounded-lg border border-blue-500/10 bg-zinc-950/40 px-3 py-2.5 transition-colors hover:border-blue-500/25"
+          className="flex w-full items-center gap-3 rounded-lg border border-blue-200 bg-white px-3 py-2.5 transition-colors hover:border-blue-300 dark:border-blue-500/10 dark:bg-zinc-950/40 dark:hover:border-blue-500/25"
         >
           <div
             className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${
-              playing ? "bg-blue-500/25 text-blue-300" : "bg-blue-500/15 text-blue-400"
+              playing
+                ? "bg-blue-200 text-blue-700 dark:bg-blue-500/25 dark:text-blue-300"
+                : "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400"
             }`}
           >
             {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 ml-0.5" />}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <p className="truncate text-sm font-medium text-zinc-100">
+            <p className="truncate text-sm font-semibold text-slate-900 dark:text-zinc-100">
               {lesson.targetExpression.english}
             </p>
-            <p className="truncate text-[11px] text-zinc-500">{lesson.targetExpression.chinese}</p>
+            <p className="truncate text-[11px] text-slate-500 dark:text-zinc-500">{lesson.targetExpression.chinese}</p>
           </div>
         </button>
       </div>
 
       {/* 连读/变音拆解 */}
       <div className="mb-4">
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
-          <Zap className="h-3 w-3 text-amber-400" />
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-zinc-400">
+          <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
           连读 / 弱读 / 吞音拆解
         </div>
-        <div className="rounded-xl border-l-2 border-amber-500/40 bg-zinc-950/40 p-3">
-          <p className="font-mono text-[11px] leading-relaxed text-amber-200/80">
+        <div className="rounded-xl border-l-2 border-amber-400 bg-amber-50/50 p-3 dark:border-amber-500/40 dark:bg-zinc-950/40">
+          <p className="font-mono text-[11px] font-medium leading-relaxed text-amber-800 dark:text-amber-200/80">
             {lesson.targetExpression.phoneticAndLinking}
           </p>
         </div>
       </div>
 
+      {/* 备选/同义变体句 */}
+      <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-500/15 dark:bg-violet-950/10">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-zinc-400">
+          <MessageSquare className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+          备选变体句 · 不同语气
+        </div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium leading-relaxed text-slate-800 dark:text-zinc-200">
+              {lesson.alternativeExpression.english}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-zinc-500">
+              {lesson.alternativeExpression.chinese}
+            </p>
+          </div>
+          <button
+            onClick={() => handlePlay(lesson.alternativeExpression.english)}
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-violet-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-violet-500/15 dark:hover:text-violet-300"
+            aria-label="朗读变体句"
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 高频商务缩写与词汇速查 */}
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-zinc-400">
+          <BookOpen className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+          高频缩写与黑话速查 Glossary
+        </div>
+        <div className="space-y-2">
+          {lesson.glossaryItems.map((item, idx) => (
+            <div
+              key={idx}
+              className="rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-zinc-800/50 dark:bg-zinc-900/30"
+            >
+              <div className="flex items-baseline gap-2">
+                <span className="text-[13px] font-bold text-slate-900 dark:text-zinc-100">{item.term}</span>
+                <span className="text-[11px] text-indigo-600 dark:text-indigo-400">{item.fullForm}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-600 dark:text-zinc-400">{item.meaning}</p>
+              <p className="mt-0.5 text-[10px] text-slate-400 dark:text-zinc-600">{item.exampleScene}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* 实战商业启示 */}
-      <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-3">
+      <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50/50 p-3 dark:border-cyan-500/20 dark:bg-cyan-950/10">
         <div className="flex items-start gap-2">
           <span className="text-sm">💼</span>
           <div>
-            <div className="mb-1 text-[11px] font-medium text-cyan-300">实战商业启示</div>
-            <p className="text-[11px] leading-relaxed text-cyan-200/80">{lesson.businessTakeaway}</p>
+            <div className="mb-1 text-[11px] font-medium text-cyan-700 dark:text-cyan-300">实战商业启示</div>
+            <p className="text-[11px] leading-relaxed text-cyan-800 dark:text-cyan-200/80">{lesson.businessTakeaway}</p>
           </div>
         </div>
       </div>
@@ -465,14 +536,14 @@ export default function EnglishDailyCard() {
       {/* 影子跟读（Shadowing） */}
       <div className="mb-5">
         <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
-            <Mic className="h-3 w-3 text-emerald-400" />
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-zinc-400">
+            <Mic className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
             影子跟读 Shadowing
           </div>
           {/* 分享按钮 */}
           <button
             onClick={handleShareCard}
-            className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[10px] text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300"
             title="生成今日金句卡片"
           >
             <Download className="h-3 w-3" />
@@ -484,15 +555,15 @@ export default function EnglishDailyCard() {
           {lesson.shadowingPractice.map((sentence, idx) => (
             <div
               key={idx}
-              className="rounded-xl border border-emerald-500/15 bg-zinc-950/40 p-3"
+              className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-500/15 dark:bg-zinc-950/40"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium leading-relaxed text-zinc-100">{sentence}</p>
+                  <p className="text-[13px] font-medium leading-relaxed text-slate-800 dark:text-zinc-100">{sentence}</p>
                 </div>
                 <button
                   onClick={() => handlePlay(sentence)}
-                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300"
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-emerald-100 hover:text-emerald-600 dark:text-zinc-500 dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300"
                   aria-label="朗读例句"
                 >
                   <Volume2 className="h-3.5 w-3.5" />
@@ -507,7 +578,7 @@ export default function EnglishDailyCard() {
           {!recording ? (
             <button
               onClick={startRecording}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
             >
               <Mic className="h-3.5 w-3.5" />
               开始录音
@@ -515,7 +586,7 @@ export default function EnglishDailyCard() {
           ) : (
             <button
               onClick={stopRecording}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/20 px-3 py-1.5 text-[11px] font-medium text-red-300 transition-colors animate-pulse"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-100 px-3 py-1.5 text-[11px] font-medium text-red-700 transition-colors animate-pulse dark:border-red-500/40 dark:bg-red-500/20 dark:text-red-300"
             >
               <MicOff className="h-3.5 w-3.5" />
               停止录音
@@ -526,14 +597,14 @@ export default function EnglishDailyCard() {
             <>
               <button
                 onClick={playRecording}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-600 transition-colors hover:bg-emerald-100 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
               >
                 <Play className="h-3 w-3" />
                 回放
               </button>
               <button
                 onClick={clearRecording}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-zinc-800"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
                 <RotateCcw className="h-3 w-3" />
                 重录
@@ -550,14 +621,14 @@ export default function EnglishDailyCard() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setOffset((o) => o - 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300"
             aria-label="上一天"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setOffset((o) => o + 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300"
             aria-label="下一天"
           >
             <ArrowRight className="h-3.5 w-3.5" />
@@ -565,7 +636,7 @@ export default function EnglishDailyCard() {
           {offset !== 0 && (
             <button
               onClick={() => setOffset(0)}
-              className="ml-1 rounded-md bg-blue-500/10 px-2 py-1 text-[10px] text-blue-300 hover:bg-blue-500/20"
+              className="ml-1 rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
             >
               回到今日
             </button>
@@ -577,9 +648,9 @@ export default function EnglishDailyCard() {
           disabled={checkedIn || offset !== 0}
           className={`relative inline-flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-semibold transition-all ${
             checkedIn
-              ? "cursor-default bg-green-500/15 text-green-300"
+              ? "cursor-default bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
               : offset !== 0
-                ? "cursor-not-allowed bg-zinc-800 text-zinc-600"
+                ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-zinc-800 dark:text-zinc-600"
                 : "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-[0_8px_25px_-8px_rgba(59,130,246,0.5)] hover:-translate-y-0.5 hover:shadow-[0_12px_35px_-8px_rgba(59,130,246,0.6)]"
           }`}
         >
@@ -630,8 +701,8 @@ export default function EnglishDailyCard() {
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             className="absolute inset-x-0 top-1/2 z-10 flex justify-center"
           >
-            <div className="rounded-xl border border-green-500/40 bg-zinc-950/95 px-5 py-3 text-center shadow-[0_0_30px_rgba(34,197,94,0.3)] backdrop-blur-sm">
-              <div className="flex items-center gap-2 text-sm font-bold text-green-400">
+            <div className="rounded-xl border border-green-300 bg-white/95 px-5 py-3 text-center shadow-[0_0_30px_rgba(34,197,94,0.2)] backdrop-blur-sm dark:border-green-500/40 dark:bg-zinc-950/95 dark:shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+              <div className="flex items-center gap-2 text-sm font-bold text-green-600 dark:text-green-400">
                 <CheckCircle2 className="h-4 w-4" />
                 打卡成功！连续 {checkin.streak} 天 🔥
               </div>
