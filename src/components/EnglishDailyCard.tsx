@@ -22,11 +22,42 @@ import {
   MessageSquare,
 } from "lucide-react";
 import {
-  getEnglishLessonByDay,
   getUTC8DateKey,
   getYesterdayDateKey,
   type EnglishLesson,
 } from "@/data/englishLessons";
+
+// ---------- Supabase 课程数据类型（与 english_daily_lessons 表对齐） ----------
+interface ApiLesson {
+  id: string;
+  date: string;
+  day_number: number;
+  category: string;
+  title: string;
+  scene_context: string;
+  audio_url: string;
+  target_expression: { english: string; phoneticAndLinking: string; chinese: string };
+  alternative_expression: { english: string; phoneticAndLinking: string; chinese: string };
+  business_takeaway: string;
+  shadowing_practice: string[];
+  glossary_items: Array<{ term: string; fullForm: string; meaning: string; exampleScene: string }>;
+}
+
+// 将 API 数据映射为组件内部 EnglishLesson 格式
+function mapApiLesson(row: ApiLesson): EnglishLesson {
+  return {
+    day: row.day_number,
+    title: row.title,
+    category: row.category as "Listening" | "Speaking",
+    sceneContext: row.scene_context,
+    audioUrl: row.audio_url || "",
+    targetExpression: row.target_expression,
+    alternativeExpression: row.alternative_expression,
+    businessTakeaway: row.business_takeaway,
+    shadowingPractice: row.shadowing_practice,
+    glossaryItems: row.glossary_items,
+  };
+}
 
 // ---------- 语音朗读：Web Speech API（英语 en-US） ----------
 function speak(text: string, rate = 1.0) {
@@ -63,7 +94,7 @@ function loadCheckinState(): CheckinState | null {
       if (!parsed.progressDay || typeof parsed.progressDay !== "number" || parsed.progressDay < 1) {
         parsed.progressDay = 1;
       }
-      if (parsed.progressDay > 7) parsed.progressDay = 7;
+      if (parsed.progressDay > 90) parsed.progressDay = 90;
       if (typeof parsed.streak !== "number" || parsed.streak < 0) parsed.streak = 0;
       if (typeof parsed.dayResolvedDate !== "string") parsed.dayResolvedDate = "";
       return parsed;
@@ -91,7 +122,7 @@ function resolveProgressDay(): { day: number; state: CheckinState; checkedInToda
 
   const currentProgress =
     typeof stored.progressDay === "number" && stored.progressDay >= 1
-      ? Math.min(stored.progressDay, 7)
+      ? Math.min(stored.progressDay, 90)
       : 1;
 
   if (stored.lastDate === today) {
@@ -103,7 +134,7 @@ function resolveProgressDay(): { day: number; state: CheckinState; checkedInToda
   }
 
   if (stored.lastDate === yesterday) {
-    const nextDay = Math.min(currentProgress + 1, 7);
+    const nextDay = Math.min(currentProgress + 1, 90);
     const updated: CheckinState = { ...stored, progressDay: nextDay, dayResolvedDate: today };
     saveCheckinState(updated);
     return { day: nextDay, state: updated, checkedInToday: false };
@@ -117,7 +148,9 @@ function resolveProgressDay(): { day: number; state: CheckinState; checkedInToda
 // ---------- 主组件 ----------
 export default function EnglishDailyCard() {
   const [progressDay, setProgressDay] = useState(1);
-  const [lesson, setLesson] = useState<EnglishLesson>(() => getEnglishLessonByDay(1));
+  const [allLessons, setAllLessons] = useState<EnglishLesson[]>([]);
+  const [lesson, setLesson] = useState<EnglishLesson | null>(null);
+  const [loading, setLoading] = useState(true);
   const [checkin, setCheckin] = useState<CheckinState>({
     lastDate: "",
     streak: 0,
@@ -137,28 +170,48 @@ export default function EnglishDailyCard() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 初始化
+  // 初始化：从 API 拉取全部课程 + 解析打卡进度
   useEffect(() => {
-    const { day, state, checkedInToday } = resolveProgressDay();
-    setProgressDay(day);
-    setLesson(getEnglishLessonByDay(day));
-    setCheckin(state);
-    setCheckedIn(checkedInToday);
+    async function init() {
+      try {
+        const res = await fetch("/api/english-lessons");
+        if (res.ok) {
+          const json = await res.json();
+          const lessons = (json.lessons || []).map(mapApiLesson);
+          setAllLessons(lessons);
+          // 根据打卡进度找到当前课程
+          const { day, state, checkedInToday } = resolveProgressDay();
+          setProgressDay(day);
+          const target = lessons.find((l: EnglishLesson) => l.day === day) || lessons[0];
+          setLesson(target || null);
+          setCheckin(state);
+          setCheckedIn(checkedInToday);
+        }
+      } catch (err) {
+        console.warn("[EnglishDailyCard] API 拉取失败:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.getVoices();
     }
   }, []);
 
-  // 翻页 offset
+  // 翻页 offset：从已加载的课程列表中查找
   const [offset, setOffset] = useState(0);
   useEffect(() => {
+    if (!allLessons.length) return;
+    let targetDay: number;
     if (offset === 0) {
-      setLesson(getEnglishLessonByDay(progressDay));
+      targetDay = progressDay;
     } else {
-      const targetDay = (((progressDay - 1 + offset) % 7) + 7) % 7 + 1;
-      setLesson(getEnglishLessonByDay(targetDay));
+      targetDay = (((progressDay - 1 + offset) % allLessons.length) + allLessons.length) % allLessons.length + 1;
     }
-  }, [offset, progressDay]);
+    const found = allLessons.find((l) => l.day === targetDay);
+    if (found) setLesson(found);
+  }, [offset, progressDay, allLessons]);
 
   // 打卡
   const handleCheckin = useCallback(() => {
@@ -249,6 +302,7 @@ export default function EnglishDailyCard() {
 
   // 生成金句分享卡片（下载为图片）
   const handleShareCard = useCallback(() => {
+    if (!lesson) return;
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -364,6 +418,24 @@ export default function EnglishDailyCard() {
     ctx.fillText(line.trim(), x, y);
     lines++;
     return lines;
+  }
+
+  // 加载中 / 数据不可用状态
+  if (loading || !lesson) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/50">
+        <div className="text-center">
+          {loading ? (
+            <>
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600 dark:border-zinc-700 dark:border-t-blue-400" />
+              <p className="text-sm text-slate-500 dark:text-zinc-400">正在加载课程...</p>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-zinc-400">课程数据同步中，请稍后刷新重试</p>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const categoryColor =
