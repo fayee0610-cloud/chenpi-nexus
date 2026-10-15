@@ -46,7 +46,9 @@ export default function Mascot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // 发送消息（SSE 流式响应 + 打字机效果）
+  // 发送消息（SSE 流式响应 + 15s 超时自愈 + 打字机效果）
+  const CHAT_TIMEOUT_MS = 15_000; // 首包/静默超时：15 秒
+
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -60,11 +62,37 @@ export default function Mascot() {
     const aiMsgIndex = messages.length + 1;
     setMessages((prev) => [...prev, { role: "ai", content: "" }]);
 
+    // 超时护栏：首包 15s 未达 或 流中静默 15s → 主动中止，绝不永久卡死
+    const controller = new AbortController();
+    let abortedByTimeout = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const onTimeout = () => {
+      abortedByTimeout = true;
+      controller.abort();
+    };
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(onTimeout, CHAT_TIMEOUT_MS);
+    };
+    timer = setTimeout(onTimeout, CHAT_TIMEOUT_MS);
+
+    // 更新 AI 消息内容的辅助函数
+    const patchAiMessage = (content: string) => {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next[aiMsgIndex]) {
+          next[aiMsgIndex] = { ...next[aiMsgIndex], content };
+        }
+        return next;
+      });
+    };
+
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
+        signal: controller.signal,
       });
 
       // 频次限制：429 响应
@@ -87,44 +115,43 @@ export default function Mascot() {
         const { done, value } = await reader.read();
         if (done) break;
 
+        // 收到数据块 → 重置静默看门狗
+        resetTimer();
+
         const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
 
         // 实时更新 AI 消息内容
-        setMessages((prev) => {
-          const next = [...prev];
-          if (next[aiMsgIndex]) {
-            next[aiMsgIndex] = { ...next[aiMsgIndex], content: fullText };
-          }
-          return next;
-        });
+        patchAiMessage(fullText);
       }
 
       // 流结束后，如果内容为空，显示兜底提示
       if (!fullText.trim()) {
-        setMessages((prev) => {
-          const next = [...prev];
-          if (next[aiMsgIndex]) {
-            next[aiMsgIndex] = {
-              ...next[aiMsgIndex],
-              content: "陈皮 AI 正在充电中，请稍后再试或通过【联系我】直接与陈皮本人沟通。",
-            };
-          }
-          return next;
-        });
+        patchAiMessage("非常抱歉，网络连接稍有波动，请再试一次~");
       }
-    } catch {
+    } catch (err) {
+      const isAbort =
+        abortedByTimeout ||
+        (err instanceof DOMException && err.name === "AbortError");
       setMessages((prev) => {
         const next = [...prev];
         if (next[aiMsgIndex]) {
+          const existing = next[aiMsgIndex].content;
+          // 已有部分内容则保留并追加中断提示；完全无内容则显示错误文案
           next[aiMsgIndex] = {
             ...next[aiMsgIndex],
-            content: "网络开小差了，稍后再试一次？",
+            content: existing?.trim()
+              ? `${existing}\n\n（连接中断，回答可能不完整，欢迎再问我一次~）`
+              : isAbort
+                ? "回复超时：陈皮 AI 响应过久，请换个问题再试一次~"
+                : "非常抱歉，网络连接稍有波动，请再试一次~",
           };
         }
         return next;
       });
     } finally {
+      // 无论成功/失败/超时，必须恢复交互状态
+      clearTimeout(timer);
       setLoading(false);
     }
   }, [loading, messages.length]);

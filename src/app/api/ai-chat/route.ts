@@ -1,7 +1,15 @@
 // ============================================================
-// /api/ai-chat — 陈皮 AI 对话接口（流式版）
+// /api/ai-chat — 陈皮 AI 对话接口（流式自愈版）
 // OpenAI 兼容格式（DeepSeek / OpenRouter / SiliconFlow 通用）
 // RAG Light：拉取 Supabase 全站内容作为知识库 + SSE 流式输出 + 本地降级
+//
+// 【自愈护栏设计】（2026-10-15 卡死故障重构）
+// 1. 知识库加载 6s 超时 → 超时后以通用人设继续，绝不挂起
+// 2. LLM 建连 15s 超时（AbortController）→ 超时降级为本地回复
+// 3. 流式静默 12s 看门狗 → DeepSeek 假死（200 但只发 keep-alive
+//    不吐字）时，主动向流内注入兜底回复后关闭，前端绝不卡死
+// 4. 全程 50s 总时长熔断，预留 Vercel 60s 函数上限安全余量
+// 5. 全链路 console 诊断日志（消息 / 知识库 / LLM 状态码与耗时）
 // ============================================================
 
 import { NextRequest } from "next/server";
@@ -9,6 +17,13 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// ---------- 超时与熔断常量 ----------
+const KB_TIMEOUT_MS = 6_000; // 知识库检索整体超时
+const LLM_CONNECT_TIMEOUT_MS = 15_000; // LLM 建连（首字节）超时
+const LLM_STREAM_IDLE_TIMEOUT_MS = 12_000; // 流式静默看门狗（须小于前端 15s）
+const LLM_STREAM_TOTAL_TIMEOUT_MS = 50_000; // 单次流式总时长熔断
 
 // ---------- 环境变量读取（统一 AI_ 前缀，兼容旧变量） ----------
 const AI_CONFIG = {
@@ -26,7 +41,7 @@ function getSupabase() {
 }
 
 // ---------- 拉取知识库上下文（含实时大马市场情报） ----------
-async function fetchKnowledgeBase(): Promise<string> {
+async function fetchKnowledgeBaseRaw(): Promise<string> {
   const supabase = getSupabase();
   if (!supabase) return "（知识库暂未加载，请以陈皮 AI 通用人设回复）";
 
@@ -58,8 +73,8 @@ async function fetchKnowledgeBase(): Promise<string> {
     } else {
       kb += "## 最新马来西亚商业情报\n（近 7 天暂无新情报，可参考下方案例与洞察数据回答）\n\n";
     }
-  } catch {
-    // malaysia_intelligence 表可能未配置或字段缺失，跳过
+  } catch (err) {
+    console.warn("[ai-chat] 知识库-情报检索失败:", (err as Error).message);
   }
 
   // 2. 实战案例（含商业交付指标）
@@ -84,8 +99,8 @@ async function fetchKnowledgeBase(): Promise<string> {
       }
       kb += "\n";
     }
-  } catch {
-    kb += "（实战案例数据加载失败，跳过）\n\n";
+  } catch (err) {
+    console.warn("[ai-chat] 知识库-案例检索失败:", (err as Error).message);
   }
 
   // 3. 深度洞察文章（最新 10 条摘要）
@@ -106,11 +121,29 @@ async function fetchKnowledgeBase(): Promise<string> {
         }
       }
     }
-  } catch {
-    kb += "（深度文章数据加载失败，跳过）\n";
+  } catch (err) {
+    console.warn("[ai-chat] 知识库-洞察检索失败:", (err as Error).message);
   }
 
   return kb;
+}
+
+// ---------- 知识库安全包装：6s 超时降级，绝不阻塞主链路 ----------
+async function fetchKnowledgeBase(): Promise<string> {
+  const t0 = Date.now();
+  try {
+    const kb = await Promise.race([
+      fetchKnowledgeBaseRaw(),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("KB_TIMEOUT")), KB_TIMEOUT_MS)
+      ),
+    ]);
+    console.log(`[ai-chat] 知识库就绪: ${kb.length} chars (${Date.now() - t0}ms)`);
+    return kb;
+  } catch (err) {
+    console.warn(`[ai-chat] 知识库超时/失败 (${Date.now() - t0}ms):`, (err as Error).message);
+    return "（知识库加载超时，请以陈皮 AI 通用人设回复）";
+  }
 }
 
 // ---------- 陈皮 AI 核心人设 System Prompt ----------
@@ -167,39 +200,55 @@ function buildSystemPrompt(kb: string): string {
 ${kb}`;
 }
 
-// ---------- SSE 流式 LLM 调用（OpenAI 兼容格式，注入人设 + Few-Shot） ----------
+// ---------- SSE 流式 LLM 调用（带建连超时 + 静默看门狗 + 总时长熔断） ----------
 async function streamLLM(
   systemPrompt: string,
   userMessage: string,
-  controller: AbortController
+  clientSignal: AbortSignal
 ): Promise<ReadableStream> {
   if (!AI_CONFIG.apiKey) throw new Error("NO_API_KEY");
 
-  const res = await fetch(`${AI_CONFIG.baseURL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${AI_CONFIG.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: AI_CONFIG.model,
-      stream: true,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...FEW_SHOT_EXAMPLES,
-        { role: "user", content: userMessage },
-      ],
-      temperature: 0.6,
-      max_tokens: 2048,
-    }),
-    signal: controller.signal,
-  });
+  // 上游中止控制器：客户端断开 / 建连超时 / 总时长熔断 三路汇聚
+  const upstream = new AbortController();
+  const onClientAbort = () => upstream.abort();
+  clientSignal.addEventListener("abort", onClientAbort);
 
-  if (!res.ok) {
-    throw new Error(`LLM_ERROR_${res.status}`);
+  const t0 = Date.now();
+  const connectTimer = setTimeout(() => upstream.abort(), LLM_CONNECT_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${AI_CONFIG.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${AI_CONFIG.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: AI_CONFIG.model,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...FEW_SHOT_EXAMPLES,
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.6,
+        max_tokens: 2048,
+      }),
+      signal: upstream.signal,
+    });
+  } finally {
+    clearTimeout(connectTimer);
   }
 
+  console.log(`[ai-chat] LLM 响应头: HTTP ${res.status} (${Date.now() - t0}ms)`);
+
+  if (!res.ok) {
+    upstream.abort();
+    throw new Error(`LLM_ERROR_${res.status}`);
+  }
   if (!res.body) {
+    upstream.abort();
     throw new Error("NO_RESPONSE_BODY");
   }
 
@@ -208,10 +257,35 @@ async function streamLLM(
   let buffer = "";
 
   const stream = new ReadableStream({
-    async start(controller) {
+    async start(ctrl) {
+      const streamT0 = Date.now();
+      let hasContent = false;
+      let totalChars = 0;
+      const encoder = new TextEncoder();
+
+      // 总时长熔断
+      const totalTimer = setTimeout(() => {
+        console.warn(`[ai-chat] 流式总时长熔断 (${LLM_STREAM_TOTAL_TIMEOUT_MS}ms)`);
+        upstream.abort();
+      }, LLM_STREAM_TOTAL_TIMEOUT_MS);
+
+      // 单次读取 + 静默看门狗
+      const readWithIdleWatchdog = () => {
+        let idleTimer: ReturnType<typeof setTimeout>;
+        const timeoutP = new Promise<never>((_, reject) => {
+          idleTimer = setTimeout(
+            () => reject(new Error("STREAM_IDLE_TIMEOUT")),
+            LLM_STREAM_IDLE_TIMEOUT_MS
+          );
+        });
+        return Promise.race([reader.read(), timeoutP]).finally(() =>
+          clearTimeout(idleTimer)
+        );
+      };
+
       try {
         while (true) {
-          const { done, value } = await reader.read();
+          const { done, value } = await readWithIdleWatchdog();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -220,11 +294,18 @@ async function streamLLM(
 
           for (const line of lines) {
             const trimmed = line.trim();
+            // 跳过 SSE 注释行（如 DeepSeek 的 ": keep-alive" 假死心跳）
             if (!trimmed || !trimmed.startsWith("data:")) continue;
 
             const dataStr = trimmed.slice(5).trim();
             if (dataStr === "[DONE]") {
-              controller.close();
+              console.log(`[ai-chat] 流式完成: ${totalChars} chars (${Date.now() - streamT0}ms)`);
+              if (!hasContent) {
+                // 上游正常结束但零内容 → 注入兜底
+                ctrl.enqueue(encoder.encode(fallbackReply(userMessage)));
+                console.warn("[ai-chat] 上游零内容，已注入本地兜底回复");
+              }
+              ctrl.close();
               return;
             }
 
@@ -232,24 +313,46 @@ async function streamLLM(
               const data = JSON.parse(dataStr);
               const content = data.choices?.[0]?.delta?.content;
               if (content) {
-                controller.enqueue(new TextEncoder().encode(content));
+                hasContent = true;
+                totalChars += content.length;
+                ctrl.enqueue(encoder.encode(content));
               }
             } catch {
               // 跳过非 JSON 行
             }
           }
         }
-        controller.close();
-      } catch (err: any) {
-        if (err.name === "AbortError") {
-          controller.close();
-        } else {
-          controller.error(err);
+
+        // 上游自然结束
+        console.log(`[ai-chat] 流式结束: ${totalChars} chars (${Date.now() - streamT0}ms)`);
+        if (!hasContent) {
+          ctrl.enqueue(encoder.encode(fallbackReply(userMessage)));
+          console.warn("[ai-chat] 上游空流，已注入本地兜底回复");
         }
+        ctrl.close();
+      } catch (err: any) {
+        // 静默超时 / 中止 / 读取异常 → 绝不把错误抛给前端，注入兜底后关闭
+        console.warn(`[ai-chat] 流式中断 (${err.message})，已输出 ${totalChars} chars`);
+        try {
+          if (hasContent && totalChars > 0) {
+            ctrl.enqueue(
+              encoder.encode("\n\n（网络波动，回答可能不完整，欢迎再问我一次~）")
+            );
+          } else {
+            ctrl.enqueue(encoder.encode(fallbackReply(userMessage)));
+          }
+          ctrl.close();
+        } catch {
+          /* 流已关闭，忽略 */
+        }
+        upstream.abort();
+      } finally {
+        clearTimeout(totalTimer);
+        clientSignal.removeEventListener("abort", onClientAbort);
       }
     },
     cancel() {
-      controller.abort();
+      upstream.abort();
     },
   });
 
@@ -282,7 +385,7 @@ function fallbackReply(message: string): string {
     return "推荐你去「深度洞察」模块，那里有陈皮同学的深度输出：\n\n- 关于 **OPC 超级个体**的增长方法论\n- 关于 **AI 自动化流程**的实战拆解\n- 关于 **品牌策略**的反共识思考\n\n每篇都值得细读。";
   }
 
-  return "陈皮 AI 正在充电中，请稍后再试或通过【联系我】直接与陈皮本人沟通。\n\n你也可以试试问我：\n- 陈皮的主要背景与实战项目经历？\n- 如何看待 AI 对营销流程的重塑？\n- 品牌出海如何做到战术级市场穿透？";
+  return "非常抱歉，网络连接稍有波动，请再试一次~\n\n你也可以试试问我：\n- 陈皮的主要背景与实战项目经历？\n- 如何看待 AI 对营销流程的重塑？\n- 品牌出海如何做到战术级市场穿透？";
 }
 
 // ---------- 频次限制：未登录用户 3 次/天 ----------
@@ -330,11 +433,29 @@ function buildUsageCookie(currentCount: number): string {
   return `ai_chat_usage=${encodeURIComponent(value)}; Path=/; Max-Age=86400; SameSite=Lax`;
 }
 
+// ---------- 兜底 SSE 响应构造器 ----------
+function buildFallbackStream(message: string, setCookieHeader: string): Response {
+  const reply = fallbackReply(message);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(ctrl) {
+      ctrl.enqueue(encoder.encode(reply));
+      ctrl.close();
+    },
+  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Stream-Mode": "fallback",
+  };
+  if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
+  return new Response(stream, { headers });
+}
+
 // ---------- 主路由：SSE 流式响应 ----------
 export async function POST(req: NextRequest) {
-  const controller = new AbortController();
-  // 客户端断开时中止请求
-  req.signal.addEventListener("abort", () => controller.abort());
+  const reqT0 = Date.now();
 
   try {
     const { message } = await req.json();
@@ -345,9 +466,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    console.log(`[ai-chat] 收到消息 (${message.length} chars): "${message.slice(0, 100)}"`);
+
     // 频次限制检查
     const rateCheck = checkRateLimit(req);
     if (!rateCheck.allowed) {
+      console.log("[ai-chat] 触发频次限制");
       return new Response(
         JSON.stringify({ error: "RATE_LIMIT_EXCEEDED", message: "今日对话次数已达上限（3次/天）" }),
         {
@@ -371,13 +495,13 @@ export async function POST(req: NextRequest) {
       ? ""
       : buildUsageCookie(currentCount);
 
-    // 1. 拉取知识库
+    // 1. 拉取知识库（6s 超时降级）
     const kb = await fetchKnowledgeBase();
     const systemPrompt = buildSystemPrompt(kb);
 
-    // 2. 尝试流式调用 LLM
+    // 2. 尝试流式调用 LLM（建连 15s 超时 + 流内看门狗）
     try {
-      const stream = await streamLLM(systemPrompt, message, controller);
+      const stream = await streamLLM(systemPrompt, message, req.signal);
       const headers: Record<string, string> = {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
@@ -385,44 +509,15 @@ export async function POST(req: NextRequest) {
         "X-Stream-Mode": "llm",
       };
       if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
+      console.log(`[ai-chat] 流式响应已建立 (${Date.now() - reqT0}ms)`);
       return new Response(stream, { headers });
     } catch (err) {
-      console.log("[ai-chat] LLM 降级:", (err as Error).message);
-      const reply = fallbackReply(message);
-      // 降级模式也用 SSE 推送，保持前端处理一致
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(ctrl) {
-          ctrl.enqueue(encoder.encode(reply));
-          ctrl.close();
-        },
-      });
-      const headers: Record<string, string> = {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "X-Stream-Mode": "fallback",
-      };
-      if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
-      return new Response(stream, { headers });
+      console.warn(`[ai-chat] LLM 建连失败，降级本地回复: ${(err as Error).message} (${Date.now() - reqT0}ms)`);
+      return buildFallbackStream(message, setCookieHeader);
     }
   } catch (err) {
-    console.error("[ai-chat] 致命错误:", err);
-    const reply = fallbackReply("");
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      start(ctrl) {
-        ctrl.enqueue(encoder.encode(reply));
-        ctrl.close();
-      },
-    });
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "X-Stream-Mode": "fallback",
-      },
-    });
+    // 全局兜底：任何未预期异常都必须返回可用响应，绝不 500 挂起
+    console.error(`[ai-chat] 致命错误 (${Date.now() - reqT0}ms):`, err);
+    return buildFallbackStream("", "");
   }
 }
