@@ -3,6 +3,8 @@
 // 所有静态文本、作品、深度洞察、庇护所初始数据集中于此
 // ============================================================
 
+import { FORTUNE_LIBRARY } from "./fortuneContent";
+
 // ========== 类型定义 ==========
 
 export interface ContentBlock {
@@ -483,72 +485,8 @@ export const sanctuary = {
     "今日宜：把那个出海脑洞说出来，也许有人懂",
   ],
 
-  // 分类金句库：基于情绪分类，每条为固定 3 行语意数组
-  fortuneLibrary: {
-    inspiration: {
-      label: "灵感爆棚",
-      icon: "💡",
-      color: "text-purple-400 border-purple-500/40 bg-purple-500/10",
-      themeColor: "neon-green",
-      highlightColor: "#10B981",
-      quotes: [
-        { id: "ins-1", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["AI 不是替代你的想象力，", "而是放大你灵感的", "AI 杠杆。"], highlightIndex: 2 },
-        { id: "ins-2", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["最大的商业机会，", "往往藏在旧行业与新工具的", "断层缝隙里。"], highlightIndex: 2 },
-        { id: "ins-3", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["不要用战术上的勤奋，", "掩盖战略上的", "偷懒与恐惧。"], highlightIndex: 2 },
-        { id: "ins-4", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["品牌不是一句空洞的口号，", "而是每一个交付细节中", "复利的信任。"], highlightIndex: 2 },
-        { id: "ins-5", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["大马 68% 穆斯林消费圈，", "是 Halal 认证背后", "真实的商业金矿。"], highlightIndex: 2 },
-        { id: "ins-6", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["Kopitiam 里的一杯拉茶，", "可能比十页 PPT", "更能打通本土渠道。"], highlightIndex: 2 },
-        { id: "ins-7", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["TikTok 不是娱乐场，", "是大马年轻人", "消费决策的入口。"], highlightIndex: 2 },
-        { id: "ins-8", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["出海不是复制国内打法，", "而是用本土语言", "讲好中国品牌故事。"], highlightIndex: 2 },
-        { id: "ins-9", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["双峰塔下的每一次握手，", "都是政商资源", "与商业落地的桥梁。"], highlightIndex: 2 },
-        { id: "ins-10", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["AI 情报不是让你更聪明，", "而是让你比对手", "早三天看见趋势。"], highlightIndex: 2 },
-        { id: "ins-11", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["清真认证不是门槛，", "而是进入主流市场的", "入场券。"], highlightIndex: 2 },
-        { id: "ins-12", category: "💡 灵感爆棚", themeColor: "neon-green", lines: ["本土代理不是外包，", "是你在大马市场", "最可靠的眼睛和手脚。"], highlightIndex: 2 },
-      ],
-    },
-    growth: {
-      label: "破局焦虑",
-      icon: "🚀",
-      color: "text-blue-400 border-blue-500/40 bg-blue-500/10",
-      themeColor: "amber-gold",
-      highlightColor: "#F59E0B",
-      quotes: [
-        { id: "gro-1", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["破局的唯一方式，", "不是做得更多，", "而是砍掉 80% 的伪需求。"], highlightIndex: 2 },
-        { id: "gro-2", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["焦虑源于不确定性，", "而终结焦虑的唯一解，", "是极速交付。"], highlightIndex: 2 },
-        { id: "gro-3", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["种一棵树最好的时间是十年前，", "其次是现在，", "用 AI 敏捷把树种出来。"], highlightIndex: 2 },
-        { id: "gro-4", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["与其在红海里卷低价，", "不如用数字独立站", "重新定义产品价值。"], highlightIndex: 2 },
-        { id: "gro-5", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["Halal 认证卡住了？", "找对 JAKIM 代理，", "周期可以缩短一半。"], highlightIndex: 2 },
-        { id: "gro-6", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["本土渠道打不开？", "先喝三杯拉茶，", "人脉比合同先走一步。"], highlightIndex: 2 },
-        { id: "gro-7", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["政策看不懂？", "别硬啃英文公告，", "找本地商会翻译+解读。"], highlightIndex: 2 },
-        { id: "gro-8", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["TikTok 投流没转化？", "换本土达人讲方言，", "转化率立刻翻倍。"], highlightIndex: 2 },
-        { id: "gro-9", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["回款慢、账期长？", "用信用证 + 本地保理，", "现金流不再卡脖子。"], highlightIndex: 2 },
-        { id: "gro-10", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["团队水土不服？", "招 1 个本地运营，", "胜过 10 个远程支援。"], highlightIndex: 2 },
-        { id: "gro-11", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["别等万事俱备，", "大马市场的窗口期，", "比你想象的更短。"], highlightIndex: 2 },
-        { id: "gro-12", category: "🚀 破局焦虑", themeColor: "amber-gold", lines: ["焦虑的反义词是具体，", "把大目标拆成今日可执行的，", "一步就破局。"], highlightIndex: 2 },
-      ],
-    },
-    healing: {
-      label: "策略疗愈",
-      icon: "🌿",
-      color: "text-green-400 border-green-500/40 bg-green-500/10",
-      themeColor: "electric-blue",
-      highlightColor: "#3B82F6",
-      quotes: [
-        { id: "hea-1", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["允许自己是个超级个体，", "但要像大军团一样", "思考与呼吸。"], highlightIndex: 0 },
-        { id: "hea-2", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["AI 时代的温度，", "来自于算法之外，", "你对人性的极致洞察。"], highlightIndex: 2 },
-        { id: "hea-3", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["深夜的每一个脑洞，", "都是你在数字世界里", "安放灵魂的角落。"], highlightIndex: 2 },
-        { id: "hea-4", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["不必向所有人解释你的路线，", "AI 时代的轻舟，", "已过万重山。"], highlightIndex: 2 },
-        { id: "hea-5", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["大马的慢，不是落后，", "是另一种节奏的智慧，", "学会与它同频。"], highlightIndex: 2 },
-        { id: "hea-6", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["做品牌就像种榴莲，", "前三年看不见果，", "第四年满树金黄。"], highlightIndex: 2 },
-        { id: "hea-7", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["出海不是逃离，", "是把自己放在更大的坐标系里，", "重新丈量价值。"], highlightIndex: 2 },
-        { id: "hea-8", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["策略的尽头是常识，", "回到用户真实需求，", "一切焦虑自解。"], highlightIndex: 2 },
-        { id: "hea-9", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["允许试错，", "大马市场的容错率，", "比你想象的高。"], highlightIndex: 2 },
-        { id: "hea-10", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["Boleh 不是口号，", "是大马人骨子里的乐观，", "也是出海者该有的心态。"], highlightIndex: 2 },
-        { id: "hea-11", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["别急着做大，", "先把一个本地渠道做深做透，", "再谈规模。"], highlightIndex: 2 },
-        { id: "hea-12", category: "🌿 策略疗愈", themeColor: "electric-blue", lines: ["策略的疗愈，", "是承认自己不完美，", "然后用 AI 补上短板。"], highlightIndex: 2 },
-      ],
-    },
-  },
+  // 分类金句库：新版抗内耗高信号文案（从 fortuneContent 导入）
+  fortuneLibrary: FORTUNE_LIBRARY,
 
   incenses: [
     { id: "1", emoji: "📈", name: "大马询盘暴涨", color: "text-emerald-400", glowClass: "shadow-emerald-500/40", borderClass: "hover:border-emerald-500/50", count: 128 },

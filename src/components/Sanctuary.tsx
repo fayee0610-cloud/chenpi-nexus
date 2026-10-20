@@ -25,6 +25,7 @@ import { toPng } from "html-to-image";
 import { QRCodeSVG } from "qrcode.react";
 import { siteData } from "@/data/siteData";
 import type { Incense, SanctuaryPost } from "@/data/siteData";
+import type { FortuneQuote } from "@/data/fortuneContent";
 import {
   fetchSanctuaryPosts,
   createSanctuaryPost,
@@ -491,7 +492,7 @@ export default function Sanctuary({
   const [buffId, setBuffId] = useState(0);
   const [showFortune, setShowFortune] = useState(false);
   const [fortuneCategory, setFortuneCategory] = useState<"inspiration" | "growth" | "healing">("inspiration");
-  const [currentQuote, setCurrentQuote] = useState<{ lines: string[]; highlightIndex?: number } | null>(null);
+  const [currentQuote, setCurrentQuote] = useState<FortuneQuote | null>(null);
   const [fortuneTheme, setFortuneTheme] = useState<FortuneTheme>(FORTUNE_THEMES[0]);
   const [fortuneSerial, setFortuneSerial] = useState<string>("");
   const [fortuneHash, setFortuneHash] = useState<string>("");
@@ -518,6 +519,8 @@ export default function Sanctuary({
   const INCENSE_COOLDOWN_MS = 500; // 500ms 防刷
   // 上香 Toast 提示
   const [incenseToast, setIncenseToast] = useState<string | null>(null);
+  // 防重复：记录上一次抽到的签文 id，换一张时避免连续重复
+  const lastQuoteIdRef = useRef<string>("");
   const fortuneRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fartIdRef = useRef(4);
@@ -578,9 +581,9 @@ export default function Sanctuary({
   }, []);
 
   // 上香逻辑
-  // 从指定分类抽取一条金句（rand 缺省时随机，传入 seeded random 则确定性锁定今日签文）
+  // 从指定分类抽取一条签文（rand 缺省时随机，传入 seeded random 则确定性锁定今日签文）
   const pickRandomQuote = useCallback(
-    (category: "inspiration" | "growth" | "healing", rand: () => number = Math.random) => {
+    (category: "inspiration" | "growth" | "healing", rand: () => number = Math.random): FortuneQuote => {
       const pool = siteData.sanctuary.fortuneLibrary[category].quotes;
       return pool[Math.floor(rand() * pool.length)];
     },
@@ -593,7 +596,9 @@ export default function Sanctuary({
     const dateKey = getUTC8DateKey();
     const seed = hashSeed(`${dateKey}|${fortuneCategory}`);
     const rand = createSeededRandom(seed);
-    setCurrentQuote(pickRandomQuote(fortuneCategory, rand));
+    const quote = pickRandomQuote(fortuneCategory, rand);
+    setCurrentQuote(quote);
+    lastQuoteIdRef.current = quote.id;
     setFortuneTheme(FORTUNE_THEMES[Math.floor(rand() * FORTUNE_THEMES.length)]);
     setFortuneSerial(genSerial(rand));
     setFortuneHash(genHash(rand));
@@ -621,9 +626,16 @@ export default function Sanctuary({
     });
   }, []);
 
-  // 【重新求签】手动抽卡：使用 Math.random() 真随机，突破今日锁定
+  // 【重新求签】手动抽卡：使用 Math.random() 真随机，突破今日锁定；防连续重复
   const handleChangeQuote = useCallback(() => {
-    setCurrentQuote(pickRandomQuote(fortuneCategory));
+    const pool = siteData.sanctuary.fortuneLibrary[fortuneCategory].quotes;
+    let quote = pickRandomQuote(fortuneCategory);
+    // 若与上次相同且池内有余量，重抽一次
+    if (quote.id === lastQuoteIdRef.current && pool.length > 1) {
+      quote = pool[Math.floor(Math.random() * pool.length)];
+    }
+    setCurrentQuote(quote);
+    lastQuoteIdRef.current = quote.id;
     setFortuneTheme(FORTUNE_THEMES[Math.floor(Math.random() * FORTUNE_THEMES.length)]);
     setFortuneSerial(genSerial());
     setFortuneHash(genHash());
@@ -635,7 +647,9 @@ export default function Sanctuary({
     const dateKey = getUTC8DateKey();
     const seed = hashSeed(`${dateKey}|${cat}`);
     const rand = createSeededRandom(seed);
-    setCurrentQuote(pickRandomQuote(cat, rand));
+    const quote = pickRandomQuote(cat, rand);
+    setCurrentQuote(quote);
+    lastQuoteIdRef.current = quote.id;
   }, [pickRandomQuote]);
 
   // -------- 每日上香防刷：每个板块每天最多上香 1 次 --------
@@ -1394,8 +1408,8 @@ export default function Sanctuary({
                     </span>
                   </div>
 
-                  {/* 中部：三行短诗（现代诗排版） */}
-                  <div className="relative my-8 flex flex-1 items-center justify-center">
+                  {/* 中部：标题 + 主签文 + 深度拆解 + 落地方案 */}
+                  <div className="relative my-5 flex flex-1 flex-col justify-center">
                     {/* 极淡柔光背景 */}
                     <div
                       className="absolute inset-0 rounded-2xl"
@@ -1403,6 +1417,16 @@ export default function Sanctuary({
                         background: `radial-gradient(ellipse at center, ${fortuneTheme.primary}0A 0%, transparent 70%)`,
                       }}
                     />
+
+                    {/* 卡片标题 */}
+                    <div className="relative z-10 mb-3 text-center">
+                      <span
+                        className="text-[11px] font-semibold tracking-widest uppercase"
+                        style={{ color: siteData.sanctuary.fortuneLibrary[fortuneCategory].highlightColor }}
+                      >
+                        {currentQuote.title}
+                      </span>
+                    </div>
 
                     {/* 双引号浮标 - 上 */}
                     <span
@@ -1412,9 +1436,9 @@ export default function Sanctuary({
                       "
                     </span>
 
-                    {/* 三行诗内容（逐行渲染，highlightIndex 行荧光高亮） */}
+                    {/* 主签文内容（逐行渲染，highlightIndex 行荧光高亮） */}
                     <div className="relative z-10 w-full px-5">
-                      {currentQuote.lines.map((line, i) => {
+                      {currentQuote.punchline.map((line, i) => {
                         const isHighlight = i === currentQuote.highlightIndex;
                         const highlightColor = siteData.sanctuary.fortuneLibrary[fortuneCategory].highlightColor;
                         return (
@@ -1423,7 +1447,7 @@ export default function Sanctuary({
                             className="text-center"
                             style={{
                               fontSize: "19px",
-                              lineHeight: 2.2,
+                              lineHeight: 2.0,
                               letterSpacing: "0.05em",
                               fontWeight: isHighlight ? 500 : 400,
                               color: isHighlight ? highlightColor : "rgba(255,255,255,0.85)",
@@ -1434,6 +1458,35 @@ export default function Sanctuary({
                           </p>
                         );
                       })}
+                    </div>
+
+                    {/* 深度拆解 */}
+                    <div className="relative z-10 mt-4 px-6">
+                      <p
+                        className="text-center text-[11px] leading-relaxed"
+                        style={{ color: "rgba(255,255,255,0.45)" }}
+                      >
+                        {currentQuote.insight}
+                      </p>
+                    </div>
+
+                    {/* 落地方案 */}
+                    <div className="relative z-10 mt-3 px-6">
+                      <div
+                        className="rounded-lg border px-3 py-2"
+                        style={{
+                          borderColor: `${fortuneTheme.primary}30`,
+                          background: `${fortuneTheme.primary}08`,
+                        }}
+                      >
+                        <p
+                          className="text-center text-[10px] leading-relaxed"
+                          style={{ color: `${fortuneTheme.tagText}CC` }}
+                        >
+                          <span className="mr-1 font-semibold">今日微动作</span>
+                          {currentQuote.action}
+                        </p>
+                      </div>
                     </div>
 
                     {/* 双引号浮标 - 下 */}
