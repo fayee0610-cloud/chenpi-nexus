@@ -991,6 +991,13 @@ function safeParseTags(raw: string): string[] {
   return raw.split(",").map((s: string) => s.trim()).filter(Boolean);
 }
 
+// 旧分类体系（四分类）向后映射到行业八分类；旧数据随滚动淘汰自然消失
+function normalizeLegacyIntelCategory(cat: string): string {
+  if (cat === "渠道/分销") return "渠道/电商";
+  if (cat === "消费趋势") return "美妆/消费";
+  return cat;
+}
+
 export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaIntelligence[]> {
   if (!supabase) return [];
   try {
@@ -1022,7 +1029,7 @@ export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaInt
       createdAt: row.created_at || "",
       isPublished: row.is_published !== false,
       isFeatured: row.is_featured ?? false,
-      category: row.category || "政策/贸易",
+      category: normalizeLegacyIntelCategory(row.category) || "政策/贸易",
       tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === "string" ? safeParseTags(row.tags) : []),
       importanceScore: typeof row.importance_score === "number" ? row.importance_score : 3,
     })) as MalaysiaIntelligence[];

@@ -208,7 +208,7 @@ export interface MalaysiaIntelligence {
   createdAt: string;     // 入库时间
   isPublished: boolean;
   isFeatured?: boolean;
-  category?: string;     // 分类：展会/活动 | 渠道/分销 | 政策/贸易 | 消费趋势
+  category?: string;     // 行业赛道八分类：政策/贸易 | 渠道/电商 | 清真/食品 | 美妆/消费 | 农业/B2B | 3C数码 | 金融/科技 | 展会/活动
   tags?: string[];       // 结构化标签（如 JAKIM清真 / FMCG / 达人营销）
   importanceScore?: number; // AI 评估情报价值 1-5
 }

@@ -34,6 +34,15 @@ const SOURCE_STYLES: Record<string, { border: string; bg: string; text: string }
   "New Straits Times": { border: "border-cyan-500/30", bg: "bg-cyan-500/10", text: "text-cyan-400" },
   "The Edge Malaysia": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
   "Malay Mail Money": { border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
+  // v5 多源配衡新增信源
+  "FMT Business": { border: "border-red-500/30", bg: "bg-red-500/10", text: "text-red-400" },
+  "Vulcan Post": { border: "border-violet-500/30", bg: "bg-violet-500/10", text: "text-violet-400" },
+  "Google News Policy": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "Google News Halal": { border: "border-lime-500/30", bg: "bg-lime-500/10", text: "text-lime-400" },
+  "Google News Food": { border: "border-orange-500/30", bg: "bg-orange-500/10", text: "text-orange-400" },
+  "Google News Beauty": { border: "border-pink-500/30", bg: "bg-pink-500/10", text: "text-pink-400" },
+  "Google News AgriB2B": { border: "border-teal-500/30", bg: "bg-teal-500/10", text: "text-teal-400" },
+  "Google News Commerce": { border: "border-yellow-500/30", bg: "bg-yellow-500/10", text: "text-yellow-400" },
 };
 
 const DEFAULT_SOURCE_STYLE = { border: "border-zinc-700", bg: "bg-zinc-800/50", text: "text-zinc-400" };
@@ -42,8 +51,8 @@ const DEFAULT_SOURCE_STYLE = { border: "border-zinc-700", bg: "bg-zinc-800/50", 
 const DEFAULT_LIMIT = 6;
 const EXPANDED_LIMIT = 18;
 
-// 分类筛选 Tab（与后端 category 字段对齐）
-const CATEGORY_TABS = ["全部", "展会/活动", "渠道/分销", "政策/贸易", "消费趋势"];
+// 分类筛选 Tab（与后端 category 字段对齐：行业赛道八分类）
+const CATEGORY_TABS = ["全部", "政策/贸易", "清真/食品", "美妆/消费", "农业/B2B", "3C数码", "渠道/电商", "金融/科技", "展会/活动"];
 
 // AI 情报价值打分标签（1-5 分）
 function getImportanceBadge(score?: number): { label: string; className: string } | null {
@@ -266,7 +275,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
           东南亚实局
         </h2>
         <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-500">
-          全自动聚合大马核心财经媒体，AI 实时提炼中文摘要与商业启示
+          聚合大马官方机构、财经大报与垂直行业情报，AI 按行业提炼中文摘要与商业启示
         </p>
 
         {/* ⚡ 实时感知按钮 */}

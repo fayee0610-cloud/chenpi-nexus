@@ -81,6 +81,9 @@ export const SEARCH_QUERY_MATRIX: { topic: string; weight: number; queries: stri
       "Malaysia MIDA investment incentive 2026",
       "Malaysia halal certification JAKIM 2026",
       "Malaysia cross-border e-commerce policy",
+      "Malaysia beauty cosmetics brand launch 2026",
+      "Malaysia FMCG food brand distribution 2026",
+      "Malaysia agriculture agritech export 2026",
     ],
   },
 ];

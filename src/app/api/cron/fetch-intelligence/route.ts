@@ -1,7 +1,8 @@
 // ============================================================
 // /api/cron/fetch-intelligence — 马来西亚商业情报全自动聚合
 //
-// 流水线：RSS 抓取 → source_url 去重 → AI 中文摘要+商业启示 → 写入 malaysia_intelligence
+// 流水线：RSS 抓取 → source_url 去重 → 预AI同事件拦截 → 行业配额选取
+//        → AI 中文摘要+商业启示（按真实行业） → 批次内合并 → 类目配平 → 写入
 //
 // 触发方式：
 //   1. Vercel Cron（每天 UTC 00:00 = 北京时间 08:00）
@@ -12,6 +13,7 @@
 //   - 超时防护：AbortController 50s 超时
 //   - 权限放行：x-vercel-cron 头 / CRON_SECRET 双重校验
 //   - 去重：对比 malaysia_intelligence 表的 source_url
+//   - 行业配额：预 AI 单桶 ≤40%，写入前单分类 ≤6 条，防单一行业刷屏
 //   - 写入兜底：Service Role → Anon Key 降级写入
 // ============================================================
 
@@ -32,24 +34,48 @@ const AI_CONFIG = {
   model: process.env.AI_MODEL_NAME || (process.env.DEEPSEEK_API_KEY ? "deepseek-chat" : "gpt-4o-mini"),
 };
 
-// ---------- 东南亚实局 RSS 源矩阵（v4 全量活源版） ----------
-// 已逐一实测可用性（2026-10-13），淘汰全部 404/403 死链：
-//   移除：Retail News Asia(404) / Vulcan Post MY(404) / Marketing-Interactive MY(404) / TechNode Global SEA(403)
-//   新增：New Straits Times(50条) / TechNode主站(2000条) / MIDA
-// 全部源均经实测返回 10+ 条内容，独立 try-catch 错误隔离。
+// ---------- 东南亚实局 RSS 源矩阵（v5 多源配衡版） ----------
+// 目标：破解来源偏科（3C 数码独大），补齐官方政策 / 宏观财经 / 清真食品 / 美妆消费 / 农业 B2B 等垂直赛道。
+// 可用性实测（2026-10-22，本地代理环境逐一验证）：
+//   直连 RSS 死链（404）：MATRADE / Bernama / The Edge / The Star / Malay Mail / DigitalNewsAsia / FoodNavigator / CosmeticsDesign / NST商业频道
+//   解法：官方与垂直赛道统一改用 Google News RSS 聚合检索（when:2d 限定近 48h，聚合 Bernama/The Edge/The Star/NST 等）
+//   移除：TechNode（中国全域科技源，3C 噪音占比过高）、NST 头版直连（国际时政/体育噪音占比过高，改由 GN 商业/经济检索定向聚合）
+//   降权：SoyaCincau / Lowyat.NET 权重 35 → 12，仅作 3C 数码桶内补充信源
+// 行业配额：源级 bucket 提示 + 标题关键词分桶 → 预 AI 单桶 ≤40%，写入前单分类 ≤6 条
+
+// 行业赛道八分类（与 AI category 输出、前端分类 Tab 三方对齐）
+export const INDUSTRY_BUCKETS = [
+  "政策/贸易", "渠道/电商", "清真/食品", "美妆/消费",
+  "农业/B2B", "3C数码", "金融/科技", "展会/活动",
+] as const;
+type IndustryBucket = (typeof INDUSTRY_BUCKETS)[number];
+
+// Google News RSS 聚合检索（my 区域，限定近 2 天）
+const GN_MY = (query: string) =>
+  `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:2d`)}&hl=en-MY&gl=MY&ceid=MY:en`;
+
 const RSS_FEEDS = [
-  // ===== 渠道与零售商超 =====
-  { name: "Inside Retail Asia", url: "https://insideretail.asia/category/malaysia/feed/", topic: "零售/商超", weight: 40 },
-  { name: "MIDA", url: "https://www.mida.gov.my/feed/", topic: "政策/贸易", weight: 35 },
-  // ===== 电商平台与科技消费 =====
-  { name: "SoyaCincau", url: "https://soyacincau.com/feed/", topic: "电商/平台", weight: 35 },
-  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "科技消费", weight: 35 },
-  // ===== 中企出海与科技商业 =====
-  { name: "TechInAsia Malaysia", url: "https://www.techinasia.com/tag/malaysia/feed", topic: "中企出海", weight: 30 },
-  { name: "TechNode", url: "https://www.technode.com/feed/", topic: "中企出海", weight: 25 },
-  // ===== 本土主流商业媒体（高频更新） =====
+  // ===== 官方与政策 =====
+  { name: "MIDA", url: "https://www.mida.gov.my/feed/", topic: "政策/贸易", weight: 40, bucket: "政策/贸易" },
+  { name: "Google News Policy", url: GN_MY('Malaysia MIDA OR MATRADE OR "trade policy"'), topic: "政策/贸易", weight: 35, bucket: "政策/贸易" },
+  // ===== 宏观财经大报（覆盖面广，靠关键词分桶）=====
+  { name: "FMT Business", url: "https://www.freemalaysiatoday.com/category/business/feed/", topic: "宏观财经", weight: 35 },
+  { name: "Google News Business", url: GN_MY("Malaysia business"), topic: "宏观财经", weight: 35 },
+  { name: "Google News Economy", url: GN_MY("Malaysia economy trade investment"), topic: "宏观经济", weight: 30 },
   { name: "Business Today MY", url: "https://www.businesstoday.com.my/feed/", topic: "本土商业", weight: 30 },
-  { name: "New Straits Times", url: "https://www.nst.com.my/feed", topic: "本土商业", weight: 40 },
+  { name: "Vulcan Post", url: "https://vulcanpost.com/feed/", topic: "创业科技", weight: 25 },
+  // ===== 垂直行业（Google News 聚合检索，补齐缺失赛道）=====
+  { name: "Google News Halal", url: GN_MY("Malaysia halal JAKIM certification"), topic: "清真产业", weight: 30, bucket: "清真/食品" },
+  { name: "Google News Food", url: GN_MY("Malaysia food beverage FMCG brand"), topic: "食品饮料", weight: 30, bucket: "清真/食品" },
+  { name: "Google News Beauty", url: GN_MY("Malaysia cosmetics beauty skincare brand"), topic: "美妆护肤", weight: 30, bucket: "美妆/消费" },
+  { name: "Google News AgriB2B", url: GN_MY("Malaysia agriculture agritech export manufacturing"), topic: "农业/B2B", weight: 30, bucket: "农业/B2B" },
+  { name: "Google News Commerce", url: GN_MY("Malaysia Shopee TikTok Shop Lazada retail"), topic: "电商渠道", weight: 30, bucket: "渠道/电商" },
+  // ===== 零售与创投 =====
+  { name: "Inside Retail Asia", url: "https://insideretail.asia/category/malaysia/feed/", topic: "零售/商超", weight: 35, bucket: "渠道/电商" },
+  { name: "TechInAsia Malaysia", url: "https://www.techinasia.com/tag/malaysia/feed", topic: "创投科技", weight: 25, bucket: "金融/科技" },
+  // ===== 3C 数码（降权限流：仅作配额桶内的补充信源）=====
+  { name: "SoyaCincau", url: "https://soyacincau.com/feed/", topic: "3C数码", weight: 12, bucket: "3C数码" },
+  { name: "Lowyat.NET", url: "https://www.lowyat.net/feed/", topic: "3C数码", weight: 12, bucket: "3C数码" },
 ] as const;
 
 // 源权重映射（Web Search 结果无固定源，用默认权重 25）
@@ -111,11 +137,100 @@ const IRRELEVANT_KEYWORDS = [
   // ===== 无大马市场关联的跨国科技巨头新闻 =====
   "apple launches", "google announces", "meta reveals", "microsoft unveils",
   "samsung galaxy", "iphone ", "ipad ", "pixel ", "galaxy s",
+  // ===== 游戏硬件/娱乐硬件（非商业情报）=====
+  "playstation", "xbox", "nintendo", "rtx", "geforce", "radeon", "gaming laptop", "console",
+  // ===== 国际时政/体育赛事（非商业情报）=====
+  "football", "badminton", "premier league", "la liga", "olympic", "world cup",
+  "parliament", "protest", "riot", "court ruling", "arrested",
 ] as const;
 
 function isIrrelevant(item: RawFeedItem): boolean {
   const text = `${item.title} ${item.content}`.toLowerCase();
   return IRRELEVANT_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+// ---------- 行业分桶（预 AI 配额用） ----------
+// 优先级：标题关键词 > 源级 bucket 提示 > 默认政策/贸易
+// 关键词顺序即判定优先级：行业专属词（3C 品牌/清真/美妆）先于泛商业词
+const BUCKET_KEYWORDS: Array<[IndustryBucket, string[]]> = [
+  ["3C数码", ["smartphone", "phone ", "smartwatch", "wearable", "earbuds", "tablet", "laptop", "gadget", "drone", "5g", "headphone", "iphone", "android", "oppo", "xiaomi", "samsung", "vivo", "honor", "huawei", "dji", "coros", "garmin", "g-shock", "power bank", "smart ring", "router", "notebook"]],
+  ["清真/食品", ["halal", "jakim", "food ", "beverage", "snack", "coffee", "restaurant", "f&b", "foodpanda", "kitchen", "grocer", "durian", "spice"]],
+  ["美妆/消费", ["cosmetic", "beauty", "skincare", "makeup", "fragrance", "personal care", "fashion", "apparel", "furniture", "toy", "baby ", "k-beauty", "jewellery", "watch brand"]],
+  ["农业/B2B", ["agriculture", "agritech", "farm", "plantation", "manufactur", "factory", "semiconductor", "machinery", "steel", "cement", "industrial", "oem", "odm", "e&e", "chemical"]],
+  ["金融/科技", ["fintech", "payment", "e-wallet", "ewallet", "digital bank", "banking", "insurance", "takaful", "startup", "funding", "venture", "saas", "bnpl", "capital", "ai "]],
+  ["渠道/电商", ["shopee", "lazada", "tiktok shop", "e-commerce", "ecommerce", "retail", "supermarket", "hypermarket", "mall", "watsons", "guardian", "aeon", "7-eleven", "logistics", "delivery", "warehouse", "store"]],
+  ["展会/活动", ["exhibition", "expo", "trade fair", "conference", "summit", "pop-up", "showcase"]],
+  ["政策/贸易", ["mida", "matrade", "miti", "ministry", "government", "tariff", "tax incentive", "investment", "rcep", "cptpp", "trade", "export", "budget", "subsidy", "regulation", "policy"]],
+];
+
+// 源名 → 源级 bucket 提示（仅垂直/官方源配置，宏观大报留空靠关键词）
+const FEED_BUCKET = new Map<string, IndustryBucket>(
+  RSS_FEEDS.filter((f) => "bucket" in f).map((f) => [f.name, f.bucket as IndustryBucket])
+);
+
+function classifyBucket(item: RawFeedItem): IndustryBucket {
+  const text = ` ${item.title.toLowerCase()} `;
+  for (const [bucket, kws] of BUCKET_KEYWORDS) {
+    if (kws.some((kw) => text.includes(kw))) return bucket;
+  }
+  return FEED_BUCKET.get(item.sourceName) || "政策/贸易";
+}
+
+// ---------- 类目配额选取：轮流从各行业桶取最高分候选，防单一行业霸屏 ----------
+// 单桶占比上限 40%（30 条 → 单桶 ≤12 条）；一轮配额未满时二轮按分数补齐保底
+const BUCKET_SHARE_CAP = 0.4;
+
+function selectBalancedCandidates(items: RawFeedItem[], cap: number): RawFeedItem[] {
+  const sorted = [...items].sort((a, b) => candidateScore(b) - candidateScore(a));
+  if (sorted.length <= cap) return sorted;
+  const bucketCap = Math.max(4, Math.ceil(cap * BUCKET_SHARE_CAP));
+
+  const result: RawFeedItem[] = [];
+  const usedPerBucket = new Map<IndustryBucket, number>();
+  for (const item of sorted) {
+    if (result.length >= cap) break;
+    const bucket = classifyBucket(item);
+    const used = usedPerBucket.get(bucket) || 0;
+    if (used < bucketCap) {
+      result.push(item);
+      usedPerBucket.set(bucket, used + 1);
+    }
+  }
+  // 二轮：垂直桶枯竭时按分数补齐保底（仅极端单边行情触发，且有写入配平兜底）
+  if (result.length < cap) {
+    const chosen = new Set(result);
+    for (const item of sorted) {
+      if (result.length >= cap) break;
+      if (!chosen.has(item)) result.push(item);
+    }
+  }
+  const dist = new Map<IndustryBucket, number>();
+  for (const item of result) dist.set(classifyBucket(item), (dist.get(classifyBucket(item)) || 0) + 1);
+  console.log(`[cron] 行业配额选取：${sorted.length} → ${result.length} 条，桶分布：${[...dist].map(([b, n]) => `${b}:${n}`).join(" ")}`);
+  return result;
+}
+
+// ---------- 批次内类目配平：写入前单分类最多 N 条，超出按打分淘汰 ----------
+// 保证滚动窗口内行业均衡，严禁单一分类（如 3C 数码）刷屏
+const CATEGORY_BATCH_CAP = 6;
+
+function enforceCategoryBalance<T extends AiResult>(items: T[]): { kept: T[]; dropped: T[] } {
+  if (items.length === 0) return { kept: items, dropped: [] };
+  const byCat = new Map<string, T[]>();
+  for (const item of [...items].sort((a, b) => (b.importanceScore || 0) - (a.importanceScore || 0))) {
+    const arr = byCat.get(item.category) || [];
+    if (arr.length < CATEGORY_BATCH_CAP) {
+      arr.push(item);
+      byCat.set(item.category, arr);
+    }
+  }
+  const keptSet = new Set([...byCat.values()].flat());
+  const kept = items.filter((i) => keptSet.has(i));
+  const dropped = items.filter((i) => !keptSet.has(i));
+  if (dropped.length > 0) {
+    console.log(`[cron] 批次类目配平：${items.length} → ${kept.length} 条（单分类上限 ${CATEGORY_BATCH_CAP}，配额淘汰 ${dropped.length} 条）`);
+  }
+  return { kept, dropped };
 }
 
 // ---------- AI 中文提炼 Prompt（四大核心偏好 + 信息差深度 + 商业启示） ----------
@@ -172,8 +287,20 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
 - 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法、平台规则利用）
 - 禁止空话套话（如"建议持续关注""未来可期""值得关注"）
 - 必须包含至少 1 个具体动作或数字（如渠道名称、周期天数、成本区间、平台名）
-- 即使原文未直接提及中国，也要主动推断对中企出海大马的启示（如："大马电商平台此规则变动意味着中国跨境卖家需..."）
-- 示例："出海美妆品牌可参考此联名玩法，借力大马本土 IP 在 Shopee 做限量首发，配合 TikTok 达人种草，预计冷启动 2-3 周可实现 GMV 破零。"
+- 即使原文未直接提及中国，也要主动推断对中企出海大马的启示
+
+【行业绑定铁律（反模板）】
+- 必须基于文章真实的所属行业来分析商业启示，category 归入哪个行业，启示就必须围绕该行业的渠道、认证、供应链与合规抓手展开
+- 严禁对所有行业套用 3C 数码模板：非数码行业禁止输出"中国 3C 品牌可借鉴""消费电子品牌应……"类措辞
+- 各行业启示必须使用该行业的专属抓手，参考抓手库：
+  * 清真/食品 → JAKIM 认证周期与互认、清真包装与仓储、清真专用货架与商超渠道、中东/东盟清真出口
+  * 美妆/消费 → NPRA 告知、Watsons/Guardian 选品与进场、KOL 种草、Shopee/TikTok 美妆大促节点
+  * 农业/B2B → MATRADE INSP 采购商对接、SIRIM 标准认证、OEM/ODM 工厂落地、原料采购与供应链
+  * 政策/贸易 → MIDA 税务优惠与 Principal Hub、RCEP 原产地累积、关税窗口期、牌照与合规时限
+  * 渠道/电商 → 平台佣金与流量规则、本土仓与物流时效、线下进场费与 SKU 上架、大促节奏
+  * 3C数码 → SIRIM 认证、经销商与授权维修体系、本土电商首发、配件生态捆绑
+  * 金融/科技 → BNM 牌照门槛、支付合规、BNPL 监管、与银行/钱包的合作模式
+- 示例（非 3C 行业正确示范）："出海食品品牌应以此为契机申请 JAKIM 清真认证（周期 45-90 天），借大马互认体系打通印尼与中东市场，并优先进驻 Lotus's 清真专区货架。"
 
 【输出格式】
 若相关，必须输出以下完整 JSON（缺一不可）：
@@ -181,18 +308,22 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
   "relevant": true,
   "title_zh": "中文标题20字内",
   "summary_zh": "100字高密度中文摘要，直击核心事实与关键数据",
-  "category": "展会/活动 | 渠道/分销 | 政策/贸易 | 消费趋势（四选一）",
+  "category": "政策/贸易 | 渠道/电商 | 清真/食品 | 美妆/消费 | 农业/B2B | 3C数码 | 金融/科技 | 展会/活动（八选一）",
   "marketing_takeaway": "该动态对中国企业/品牌进入大马市场的直接商业启示或防坑提示，必须可执行、有具体抓手，50-120字",
   "tags": ["2-4个标签，如 JAKIM清真 / FMCG / TikTok Shop / 达人营销 / 线下渠道"],
   "importance_score": 1到5的整数,
   "published_at": "ISO 8601 格式的新闻真实发布时间，如 2026-09-15T08:30:00Z"
 }
 
-【category 判定】
-- 展会/活动：展会、博览会、Pop-up 快闪、联名活动、行业对接会、商会
-- 渠道/分销：零售渠道（Watsons/Guardian/Lotus's/AEON）、分销商、电商平台（Shopee/TikTok Shop/Lazada）、线下门店拓展、物流仓储
-- 政策/贸易：投资优惠（MIDA）、关税、Halal 准入、跨境电商政策、中马产业合作
-- 消费趋势：品牌营销案例、消费品类动态、KOL/达人案例、消费者行为、三大族群消费差异
+【category 判定（行业赛道八分类，按文章真实所属行业归类）】
+- 政策/贸易：MIDA/MATRADE 投资与贸易政策、关税、认证准入、中马产业合作、政府激励
+- 渠道/电商：零售渠道（Watsons/Guardian/Lotus's/AEON）、分销商、电商平台（Shopee/TikTok Shop/Lazada）、物流仓储、门店拓展
+- 清真/食品：Halal 产业、JAKIM 认证、食品饮料品牌、餐饮、农产品食品加工
+- 美妆/消费：美妆护肤、个护日化、服饰家居、母婴玩具等消费品行业动态
+- 农业/B2B：农业科技、种植养殖、制造业、工业品、大宗供应链、OEM/ODM
+- 3C数码：手机/穿戴/电脑/配件/智能家居等消费电子行业动态
+- 金融/科技：支付、数字银行、金融科技、SaaS、数字经济、创投融资
+- 展会/活动：展会、博览会、Pop-up 快闪、行业对接会、商会活动
 
 【importance_score 判定（1-5 整数）】
 - 5 分：头部品牌出海战役 / 重大政策落地 / 首个案例（极稀缺，每日≤1 条）
@@ -271,7 +402,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "TikTok Shop 大马 GMV 暴涨 280%：跨境中国品牌主导 FMCG",
     summaryZh: "TikTok Shop 大马 GMV 同比增长 280%，中国跨境美妆、零食品牌占据 45% 市场份额。直播带货 + 本土仓发货模式成为 FMCG 品牌快速验证大马市场的核心渠道。",
     keyTakeaway: "建议美妆/零食出海品牌优先布局 TikTok Shop 大马本土店 + MFP 计划（马来西亚跨境合作伙伴），3 个月可验证市场需求，初期试错成本 <RM 5 万。",
-    category: "消费趋势",
+    category: "美妆/消费",
     tags: ["TikTok Shop", "FMCG", "达人营销", "跨境电商"],
     importanceScore: 4,
   },
@@ -297,7 +428,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "Shopee 大马启动中国跨境孵化计划：新品牌前 6 月零佣金",
     summaryZh: "Shopee 大马推出中国跨境品牌孵化计划，新入驻中国 FMCG 品牌享前 6 个月零佣金 + 专属流量扶持 + 本土运营顾问。目标 2026 年引入 500 个优质中国品牌。",
     keyTakeaway: "建议新锐消费品牌（美妆/家居/3C 配件）优先申请 Shopee 跨境孵化计划，6 个月零成本验证大马市场 PMF，再决定是否长期投入本土化运营。",
-    category: "渠道/分销",
+    category: "渠道/电商",
     tags: ["Shopee", "跨境电商", "FMCG", "孵化计划"],
     importanceScore: 4,
   },
@@ -329,14 +460,32 @@ type RawFeedItem = {
 async function fetchSingleFeed(feed: { name: string; url: string }): Promise<RawFeedItem[]> {
   try {
     const parser = new Parser({
-      timeout: 12000, // 8 源并行抓取，单源 12s 足够；压缩最坏尾部延迟
+      timeout: 12000, // 并行抓取，单源 12s 足够；压缩最坏尾部延迟
       headers: BROWSER_HEADERS,
     });
-    const feedData = await parser.parseURL(feed.url);
+    // Google News 需走独立 fetch：parseURL 基于 http 模块不感知系统代理，
+    // 且 GN 返回量大，fetch + parseString 可精确控制超时
+    let feedData;
+    const isGoogleNews = feed.url.includes("news.google.com");
+    if (isGoogleNews) {
+      const { controller, cleanup } = createTimeoutController(12000);
+      try {
+        const res = await fetch(feed.url, { headers: BROWSER_HEADERS, signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        feedData = await parser.parseString(await res.text());
+      } finally {
+        cleanup();
+      }
+    } else {
+      feedData = await parser.parseURL(feed.url);
+    }
     const items = (feedData.items || [])
       .slice(0, 20)
       .map((item) => ({
-        title: item.title || "",
+        // GN 标题统一带「 - 媒体名」后缀，剥离（仅对 GN 源执行，避免误截普通标题）
+        title: isGoogleNews
+          ? (item.title || "").replace(/\s+-\s+[^-]+$/, "").trim()
+          : item.title || "",
         link: item.link || "",
         pubDate: item.pubDate || item.isoDate || "",
         content: item.contentSnippet || item.content || item["content:encoded"] || "",
@@ -562,7 +711,7 @@ type AiResult = {
   titleZh: string;
   summaryZh: string;
   keyTakeaway: string; // 映射 DB key_takeaway 列（语义=marketing_takeaway 营销启示）
-  category: string; // 展会/活动 | 渠道/分销 | 政策/贸易 | 消费趋势
+  category: string; // 行业赛道八分类：政策/贸易 | 渠道/电商 | 清真/食品 | 美妆/消费 | 农业/B2B | 3C数码 | 金融/科技 | 展会/活动
   tags: string[]; // 结构化标签
   importanceScore: number; // 1-5 商业价值打分
   publishedAt?: string; // AI 提取的真实发布时间（ISO），空则由后端降级
@@ -617,9 +766,9 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
       return null;
     }
 
-    // 归一化 category：四分类，非法值兜底为「政策/贸易」
+    // 归一化 category：行业八分类，非法值兜底为「政策/贸易」
     const rawCat = String(parsed.category || "").trim();
-    const validCats = ["展会/活动", "渠道/分销", "政策/贸易", "消费趋势"];
+    const validCats: string[] = [...INDUSTRY_BUCKETS];
     const category = validCats.includes(rawCat) ? rawCat : "政策/贸易";
     // 归一化 tags：必须是字符串数组
     let tags: string[] = [];
@@ -939,17 +1088,11 @@ async function handleCron(req: NextRequest) {
     });
   }
 
-  // 2.8 延迟预算控制（根因修复）：8 源 × 20 条全量进 AI 曾导致 150s+ 耗时，
-  // 触发 Vercel 60s maxDuration 强杀（504 感知超时）。现按「新鲜度 + 源权重」
-  // 只取前 30 条进入 AI；未处理的候选留待下一轮抓取（URL 去重天然保证不重复）。
+  // 2.8 延迟预算 + 行业配额控制：候选按「新鲜度+源权重」打分后，按行业桶配额选取
+  // （单桶 ≤40%），既控 60s 预算，又防 3C 数码等单一行业霸占 AI 提炼名额；
+  // 未处理的候选留待下一轮抓取（URL 去重天然保证不重复）。
   const AI_CANDIDATE_CAP = 30;
-  const aiCandidates =
-    preFiltered.length > AI_CANDIDATE_CAP
-      ? [...preFiltered].sort((a, b) => candidateScore(b) - candidateScore(a)).slice(0, AI_CANDIDATE_CAP)
-      : preFiltered;
-  if (preFiltered.length > AI_CANDIDATE_CAP) {
-    console.log(`[cron] 延迟预算：候选 ${preFiltered.length} 条 → 按新鲜度/权重取前 ${AI_CANDIDATE_CAP} 条进 AI`);
-  }
+  const aiCandidates = selectBalancedCandidates(preFiltered, AI_CANDIDATE_CAP);
 
   // 3. AI 中文摘要（并发 6 + 截止时间护栏，确保总耗时确定性落在 Vercel 60s 之内）
   const AI_CONCURRENCY = 6;
@@ -987,13 +1130,16 @@ async function handleCron(req: NextRequest) {
   );
 
   // 3.7 低价值过滤：importance_score <= 1 的情报不入库（避免低质通稿稀释内容质量）
-  const finalItems = dbDeduped.filter((item) => {
+  const lowValueFiltered = dbDeduped.filter((item) => {
     if ((item.importanceScore || 3) <= 1) {
       console.log(`[cron] 低价值过滤丢弃（score<=1）：${item.titleZh}`);
       return false;
     }
     return true;
   });
+
+  // 3.8 批次内类目配平：写入前单分类最多 6 条，严禁单一行业（如 3C 数码）刷屏
+  const { kept: finalItems, dropped: quotaDropped } = enforceCategoryBalance(lowValueFiltered);
 
   if (summarized.length === 0) {
     // AI 摘要全部失败时，注入兜底情报确保前台有内容
@@ -1048,7 +1194,7 @@ async function handleCron(req: NextRequest) {
 
   const duration = Date.now() - startedAt;
   console.log(
-    `[cron] 完成！RSS ${rawItems.length} → URL去重 ${deduped.length} → 预AI拦截 ${preBlocked} → AI摘要 ${summarized.length} → 批次内合并 ${titleDeduped.length} → 写入前校验 ${dbDeduped.length}（拦截 ${dbDupRemoved}）→ 写入 ${inserted} → 自愈清理删除 ${cleanResult.deleted}，耗时 ${duration}ms`
+    `[cron] 完成！RSS ${rawItems.length} → URL去重 ${deduped.length} → 预AI拦截 ${preBlocked} → AI摘要 ${summarized.length} → 批次内合并 ${titleDeduped.length} → 写入前校验 ${dbDeduped.length}（拦截 ${dbDupRemoved}）→ 类目配平淘汰 ${quotaDropped.length} → 写入 ${inserted} → 自愈清理删除 ${cleanResult.deleted}，耗时 ${duration}ms`
   );
 
   // 构建内存数据（无论 DB 写入是否成功，都返回给前端渲染）
@@ -1082,6 +1228,7 @@ async function handleCron(req: NextRequest) {
         aiSummarized: summarized.length,
         titleDedupMerged: mergedCount,
         dbDupRemoved,
+        quotaDropped: quotaDropped.length,
         autoCleanDeleted: cleanResult.deleted,
         inserted,
       },
