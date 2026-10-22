@@ -411,7 +411,7 @@ async function deduplicateBySourceUrl(
 }
 
 // ---------- 相似度工具：复用共享算法库（与 /api/admin/dedupe-intelligence 同一套判定） ----------
-import { isSameEvent, clusterAndPickLosers, bigramsOf, jaccardSim, type EventSig } from "@/lib/intelDedup";
+import { isSameEvent, isSameEventRaw, clusterAndPickLosers, type EventSig } from "@/lib/intelDedup";
 
 // ---------- 近 N 小时库内已有事件签名（预抓取，一次查询多处复用） ----------
 async function fetchRecentEventSigs(client: any, hours: number): Promise<EventSig[]> {
@@ -443,13 +443,10 @@ function prefilterRawAgainstDb(
   if (existing.length === 0) return { kept: rawItems, preBlocked: 0 };
   let preBlocked = 0;
   const kept = rawItems.filter((item) => {
-    const dup = existing.some((ex) => {
-      // 原始英文标题比对（此时还没有 AI 中文标题）
-      if (jaccardSim(bigramsOf(item.title), bigramsOf(ex.titleEn)) > 0.55) return true;
-      // 正文前 150 字与库内摘要比对（跨语言场景下互补）
-      if (jaccardSim(bigramsOf(item.content.slice(0, 150)), bigramsOf(ex.summary.slice(0, 150))) > 0.6) return true;
-      return false;
-    });
+    const dup = existing.some((ex) =>
+      // 实体词重叠为主信号，英文标题/正文 bigram 为兜底（与库内同事件判定同一套算法）
+      isSameEventRaw(item.title, item.content, ex)
+    );
     if (dup) {
       preBlocked++;
       console.log(`[cron] 预AI同事件拦截（库内 72h 已有）：${item.title.slice(0, 60)}`);
