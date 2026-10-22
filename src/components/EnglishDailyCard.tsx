@@ -15,17 +15,14 @@ import {
   Headphones,
   Target,
   ArrowLeft,
-  ArrowRight,
   Zap,
   Download,
   BookOpen,
   MessageSquare,
 } from "lucide-react";
-import {
-  getUTC8DateKey,
-  getYesterdayDateKey,
-  type EnglishLesson,
-} from "@/data/englishLessons";
+import type { EnglishLesson } from "@/data/englishLessons";
+import { useCheckin } from "@/hooks/useCheckin";
+import { getUTC8DateKey } from "@/lib/checkinProgress";
 
 // ---------- Supabase 课程数据类型（与 english_daily_lessons 表对齐） ----------
 interface ApiLesson {
@@ -75,89 +72,14 @@ function speak(text: string, rate = 1.0) {
   window.speechSynthesis.speak(utter);
 }
 
-// ---------- 打卡状态 ----------
-interface CheckinState {
-  lastDate: string;
-  streak: number;
-  progressDay: number;
-  dayResolvedDate: string;
-}
-
-const STORAGE_KEY = "english_checkin_state";
-
-function loadCheckinState(): CheckinState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (!parsed.progressDay || typeof parsed.progressDay !== "number" || parsed.progressDay < 1) {
-        parsed.progressDay = 1;
-      }
-      if (parsed.progressDay > 90) parsed.progressDay = 90;
-      if (typeof parsed.streak !== "number" || parsed.streak < 0) parsed.streak = 0;
-      if (typeof parsed.dayResolvedDate !== "string") parsed.dayResolvedDate = "";
-      return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-function saveCheckinState(state: CheckinState) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function resolveProgressDay(): { day: number; state: CheckinState; checkedInToday: boolean } {
-  const today = getUTC8DateKey();
-  const yesterday = getYesterdayDateKey();
-  const stored = loadCheckinState();
-
-  if (!stored) {
-    const fresh: CheckinState = { lastDate: "", streak: 0, progressDay: 1, dayResolvedDate: today };
-    return { day: 1, state: fresh, checkedInToday: false };
-  }
-
-  const currentProgress =
-    typeof stored.progressDay === "number" && stored.progressDay >= 1
-      ? Math.min(stored.progressDay, 90)
-      : 1;
-
-  if (stored.lastDate === today) {
-    return { day: currentProgress, state: stored, checkedInToday: true };
-  }
-
-  if (stored.dayResolvedDate === today) {
-    return { day: currentProgress, state: stored, checkedInToday: false };
-  }
-
-  if (stored.lastDate === yesterday) {
-    const nextDay = Math.min(currentProgress + 1, 90);
-    const updated: CheckinState = { ...stored, progressDay: nextDay, dayResolvedDate: today };
-    saveCheckinState(updated);
-    return { day: nextDay, state: updated, checkedInToday: false };
-  }
-
-  const resolved: CheckinState = { ...stored, dayResolvedDate: today };
-  saveCheckinState(resolved);
-  return { day: currentProgress, state: resolved, checkedInToday: false };
-}
-
 // ---------- 主组件 ----------
 export default function EnglishDailyCard() {
-  const [progressDay, setProgressDay] = useState(1);
+  // 进度由数据库打卡记录派生：progressDay = 打卡天数 + 1，打卡即解锁下一课
+  const { progressDay, streak, checkedInToday: checkedIn, loading: checkinLoading, submitting, degraded, checkin } = useCheckin("english");
+
   const [allLessons, setAllLessons] = useState<EnglishLesson[]>([]);
   const [lesson, setLesson] = useState<EnglishLesson | null>(null);
   const [loading, setLoading] = useState(true);
-  const [checkin, setCheckin] = useState<CheckinState>({
-    lastDate: "",
-    streak: 0,
-    progressDay: 1,
-    dayResolvedDate: "",
-  });
-  const [checkedIn, setCheckedIn] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   // 音频播放状态
@@ -170,7 +92,7 @@ export default function EnglishDailyCard() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 初始化：从 API 拉取全部课程 + 解析打卡进度
+  // 初始化：从 API 拉取全部课程
   useEffect(() => {
     async function init() {
       try {
@@ -179,13 +101,7 @@ export default function EnglishDailyCard() {
           const json = await res.json();
           const lessons = (json.lessons || []).map(mapApiLesson);
           setAllLessons(lessons);
-          // 根据打卡进度找到当前课程
-          const { day, state, checkedInToday } = resolveProgressDay();
-          setProgressDay(day);
-          const target = lessons.find((l: EnglishLesson) => l.day === day) || lessons[0];
-          setLesson(target || null);
-          setCheckin(state);
-          setCheckedIn(checkedInToday);
+          setLesson(lessons[0] || null);
         }
       } catch (err) {
         console.warn("[EnglishDailyCard] API 拉取失败:", err);
@@ -199,40 +115,27 @@ export default function EnglishDailyCard() {
     }
   }, []);
 
-  // 翻页 offset：从已加载的课程列表中查找
+  // 展示天数 = 进度天 + 浏览偏移（offset ≤ 0，仅可回看已解锁课程）
   const [offset, setOffset] = useState(0);
   useEffect(() => {
     if (!allLessons.length) return;
-    let targetDay: number;
-    if (offset === 0) {
-      targetDay = progressDay;
-    } else {
-      targetDay = (((progressDay - 1 + offset) % allLessons.length) + allLessons.length) % allLessons.length + 1;
-    }
-    const found = allLessons.find((l) => l.day === targetDay);
+    const targetDay = Math.max(1, progressDay + offset);
+    const found = allLessons.find((l: EnglishLesson) => l.day === targetDay);
     if (found) setLesson(found);
   }, [offset, progressDay, allLessons]);
 
-  // 打卡
-  const handleCheckin = useCallback(() => {
-    if (checkedIn) return;
-    const today = getUTC8DateKey();
-    const yesterday = getYesterdayDateKey();
-    const prev = loadCheckinState();
-    const wasConsecutive = prev?.lastDate === yesterday;
-    const newStreak = wasConsecutive ? (prev?.streak || 0) + 1 : 1;
-    const next: CheckinState = {
-      lastDate: today,
-      streak: newStreak,
-      progressDay,
-      dayResolvedDate: today,
-    };
-    saveCheckinState(next);
-    setCheckin(next);
-    setCheckedIn(true);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 2500);
-  }, [checkedIn, progressDay]);
+  // 最小 offset：只能回看到 Day 1（不可预览未解锁课程）
+  const minOffset = 1 - progressDay;
+
+  // 打卡（幂等：服务端 unique 索引去重）
+  const handleCheckin = useCallback(async () => {
+    if (checkedIn || submitting) return;
+    const ok = await checkin();
+    if (ok) {
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2500);
+    }
+  }, [checkedIn, submitting, checkin]);
 
   // 播放/暂停（TTS 模拟音频）
   const handlePlay = useCallback(
@@ -420,8 +323,8 @@ export default function EnglishDailyCard() {
     return lines;
   }
 
-  // 加载中 / 数据不可用状态
-  if (loading || !lesson) {
+  // 加载中 / 数据不可用状态（等待课程与打卡进度都就绪，避免 Day 1 闪烁）
+  if (loading || checkinLoading || !lesson) {
     return (
       <div className="flex min-h-[400px] items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/50">
         <div className="text-center">
@@ -467,7 +370,7 @@ export default function EnglishDailyCard() {
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 dark:border-orange-500/25 dark:bg-orange-500/10">
           <Flame className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />
-          <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">连续 {checkin.streak} 天</span>
+          <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">连续 {streak} 天</span>
         </div>
       </div>
 
@@ -692,38 +595,39 @@ export default function EnglishDailyCard() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setOffset((o) => o - 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300"
+            onClick={() => setOffset((o) => Math.max(minOffset, o - 1))}
+            disabled={offset <= minOffset}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300"
             aria-label="上一天"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
           </button>
-          <button
-            onClick={() => setOffset((o) => o + 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300"
-            aria-label="下一天"
-          >
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-          {offset !== 0 && (
+          {offset < 0 && (
             <button
               onClick={() => setOffset(0)}
-              className="ml-1 rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
+              className="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
             >
               回到今日
             </button>
+          )}
+          {!checkinLoading && (
+            <span className="ml-1 text-[10px] text-slate-500 dark:text-zinc-500">
+              已解锁 {Math.min(progressDay, 90)}/90 天
+            </span>
           )}
         </div>
 
         <button
           onClick={handleCheckin}
-          disabled={checkedIn || offset !== 0}
+          disabled={checkedIn || submitting || offset !== 0}
           className={`relative inline-flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-semibold transition-all ${
             checkedIn
               ? "cursor-default bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-              : offset !== 0
-                ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-zinc-800 dark:text-zinc-600"
-                : "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-[0_8px_25px_-8px_rgba(59,130,246,0.5)] hover:-translate-y-0.5 hover:shadow-[0_12px_35px_-8px_rgba(59,130,246,0.6)]"
+              : submitting
+                ? "cursor-wait bg-slate-200 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400"
+                : offset !== 0
+                  ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-zinc-800 dark:text-zinc-600"
+                  : "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-[0_8px_25px_-8px_rgba(59,130,246,0.5)] hover:-translate-y-0.5 hover:shadow-[0_12px_35px_-8px_rgba(59,130,246,0.6)]"
           }`}
         >
           {checkedIn ? (
@@ -731,6 +635,8 @@ export default function EnglishDailyCard() {
               <CheckCircle2 className="h-4 w-4" />
               今日已打卡
             </>
+          ) : submitting ? (
+            "打卡中..."
           ) : offset !== 0 ? (
             "浏览模式"
           ) : (
@@ -776,12 +682,19 @@ export default function EnglishDailyCard() {
             <div className="rounded-xl border border-green-300 bg-white/95 px-5 py-3 text-center shadow-[0_0_30px_rgba(34,197,94,0.2)] backdrop-blur-sm dark:border-green-500/40 dark:bg-zinc-950/95 dark:shadow-[0_0_30px_rgba(34,197,94,0.3)]">
               <div className="flex items-center gap-2 text-sm font-bold text-green-600 dark:text-green-400">
                 <CheckCircle2 className="h-4 w-4" />
-                打卡成功！连续 {checkin.streak} 天 🔥
+                打卡成功！已解锁 Day {Math.min(progressDay, 90)}，连续 {streak} 天 🔥
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 数据降级提示：数据库不可用时打卡无法持久化 */}
+      {degraded && !checkinLoading && (
+        <p className="mt-3 text-center text-[10px] text-amber-600 dark:text-amber-500/70">
+          打卡数据同步暂不可用，进度可能无法保存，请稍后重试
+        </p>
+      )}
     </div>
   );
 }
