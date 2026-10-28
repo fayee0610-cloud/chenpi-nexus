@@ -228,6 +228,17 @@ function selectBalancedCandidates(
     const reserve = reservedMin.get(bucket as IndustryBucket) || 0;
     if (reserve > 0 && used(bucket) < reserve) push(item);
   }
+  // 一轮半：社区轨道保底预留（在 30% 上限内优先保证贴地舆情进入 AI 提炼，
+  // 防止 Reddit/Lowyat 因权重 18 低于主流源 25-40 而被系统性挤出候选池）
+  const COMMUNITY_FLOOR = Math.min(trackCap, Math.floor(cap * 0.2)); // 30 候选 → 保底 6 条
+  if (communityUsed < COMMUNITY_FLOOR) {
+    for (const item of sorted) {
+      if (communityUsed >= COMMUNITY_FLOOR || result.length >= cap) break;
+      if (item.track !== "community" || result.includes(item)) continue;
+      push(item);
+    }
+    console.log(`[cron] 社区轨道保底预留：${COMMUNITY_FLOOR} 条（Reddit/Lowyat 优先进入 AI 提炼）`);
+  }
   // 二轮：全局按分数填充，尊重单桶 40% + 社区轨道 30% 上限
   for (const item of sorted) {
     if (result.length >= cap) break;

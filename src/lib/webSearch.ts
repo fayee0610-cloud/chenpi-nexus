@@ -60,7 +60,7 @@ export const SEARCH_QUERY_MATRIX: { topic: string; weight: number; queries: stri
       'Malaysia "brand campaign" 2026',
       "马来西亚 品牌营销 案例 2026",
       "site:campaignasia.com Malaysia",
-      "Malaysia pop-up store launch",
+      "Malaysia FMCG retail brand news 2026",
       "Malaysia FMCG brand collaboration",
     ],
   },
@@ -139,7 +139,9 @@ async function searchWithTavily(apiKey: string, query: string): Promise<WebSearc
       link: String(r.url || ""),
       content: String(r.content || "").slice(0, 1500),
       sourceName: extractDomain(r.url),
-      pubDate: new Date().toISOString(),
+      // Tavily 不返回真实发布时间：置空避免「伪装新鲜」——否则常青促销页
+      // （如品牌官方 pop-up store 页面）会凭当前时间拿满新鲜度分，挤掉真新闻
+      pubDate: "",
     })).filter((r: WebSearchResult) => r.link);
   } catch (err: any) {
     console.warn(`[webSearch] Tavily 异常: ${err?.message || err}`);
@@ -167,7 +169,8 @@ async function searchWithSerper(apiKey: string, query: string): Promise<WebSearc
       link: String(r.link || ""),
       content: String(r.snippet || "").slice(0, 1500),
       sourceName: extractDomain(r.link),
-      pubDate: new Date().toISOString(),
+      // 同 Tavily：Serper 无真实发布时间，置空防常青页伪装新鲜
+      pubDate: "",
     })).filter((r: WebSearchResult) => r.link);
   } catch (err: any) {
     console.warn(`[webSearch] Serper 异常: ${err?.message || err}`);
