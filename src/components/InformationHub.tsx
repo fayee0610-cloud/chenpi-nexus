@@ -43,13 +43,106 @@ const SOURCE_STYLES: Record<string, { border: string; bg: string; text: string }
   "Google News Beauty": { border: "border-pink-500/30", bg: "bg-pink-500/10", text: "text-pink-400" },
   "Google News AgriB2B": { border: "border-teal-500/30", bg: "bg-teal-500/10", text: "text-teal-400" },
   "Google News Commerce": { border: "border-yellow-500/30", bg: "bg-yellow-500/10", text: "text-yellow-400" },
+  // v6 双轨制新增信源
+  "MIDA": { border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  "Google News Business": { border: "border-blue-500/30", bg: "bg-blue-500/10", text: "text-blue-400" },
+  "Google News Economy": { border: "border-sky-500/30", bg: "bg-sky-500/10", text: "text-sky-400" },
+  "Business Today MY": { border: "border-orange-500/30", bg: "bg-orange-500/10", text: "text-orange-400" },
+  "Google News Social": { border: "border-fuchsia-500/30", bg: "bg-fuchsia-500/10", text: "text-fuchsia-400" },
+  "Inside Retail Asia": { border: "border-yellow-500/30", bg: "bg-yellow-500/10", text: "text-yellow-400" },
+  "TechInAsia Malaysia": { border: "border-indigo-500/30", bg: "bg-indigo-500/10", text: "text-indigo-400" },
+  "SoyaCincau": { border: "border-green-500/30", bg: "bg-green-500/10", text: "text-green-400" },
+  "Lowyat.NET": { border: "border-lime-500/30", bg: "bg-lime-500/10", text: "text-lime-400" },
+  "Reddit r/malaysia": { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-300" },
+  "Reddit MalaysianPF": { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-300" },
+  "Google News Lowyat": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400" },
 };
 
 const DEFAULT_SOURCE_STYLE = { border: "border-zinc-700", bg: "bg-zinc-800/50", text: "text-zinc-400" };
 
-// 默认展示 6 条，展开后最多 18 条
+// v6 双轨制：来源属性静态映射（零 DDL——track 不入库，按 sourceName 前端判定）
+// 🏛️ 官方政策（MIDA/MATRADE 等） / 📊 财经主流（大报与垂直媒体） / 💬 本地舆情（Reddit/Lowyat 论坛）
+type SourceTrack = "official" | "business" | "community";
+const SOURCE_TRACK: Record<string, SourceTrack> = {
+  // 官方政策轨道
+  "MIDA": "official",
+  "MIDA Official": "official",
+  "MIDA News": "official",
+  "MATRADE News": "official",
+  "Google News Policy": "official",
+  // 财经主流轨道
+  "FMT Business": "business",
+  "Google News Business": "business",
+  "Google News Economy": "business",
+  "Business Today MY": "business",
+  "Vulcan Post": "business",
+  "Google News Halal": "business",
+  "Google News Food": "business",
+  "Google News Beauty": "business",
+  "Google News AgriB2B": "business",
+  "Google News Commerce": "business",
+  "Google News Social": "business",
+  "Inside Retail Asia": "business",
+  "TechInAsia Malaysia": "business",
+  "SoyaCincau": "business",
+  "Lowyat.NET": "business",
+  "The Star Business": "business",
+  "Bernama Business": "business",
+  "New Straits Times Biz": "business",
+  "The Edge Malaysia": "business",
+  "Malay Mail Money": "business",
+  // 本地舆情轨道
+  "Reddit r/malaysia": "community",
+  "Reddit MalaysianPF": "community",
+  "Google News Lowyat": "community",
+};
+
+const TRACK_BADGE: Record<SourceTrack, { label: string; className: string }> = {
+  official: { label: "🏛️ 官方政策", className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" },
+  business: { label: "📊 财经主流", className: "border-sky-500/40 bg-sky-500/10 text-sky-300" },
+  community: { label: "💬 本地舆情", className: "border-rose-500/40 bg-rose-500/10 text-rose-300" },
+};
+
+// 未匹配到映射的来源：Google News 系默认财经主流，其余不展示徽章
+function getTrack(sourceName?: string): SourceTrack | null {
+  if (!sourceName) return null;
+  if (SOURCE_TRACK[sourceName]) return SOURCE_TRACK[sourceName];
+  if (sourceName.startsWith("Google News")) return "business";
+  return null;
+}
+
+// 默认展示 6 条，展开后最多 18 条；数据池拉 60 条（保底类目补位的弹药库）
 const DEFAULT_LIMIT = 6;
 const EXPANDED_LIMIT = 18;
+const FETCH_POOL = 60;
+
+// v6 保底类目清单：与后端 QUOTA_CATS 对齐（核心出海板块前台至少可见 1 条）
+const QUOTA_DISPLAY_CATS = ["政策/贸易", "清真/食品", "美妆/消费", "农业/B2B", "3C数码", "渠道/电商"];
+
+// v6 保底配额展示补位：全部视图的默认窗口（18 条）若缺失某保底类目，
+// 将该类目最新 1 条提升入窗口（等量置换窗口尾部最旧条目，不丢弃数据，仅顺延）
+function backfillQuota(pool: MalaysiaIntelligence[]): MalaysiaIntelligence[] {
+  if (pool.length <= EXPANDED_LIMIT) return pool;
+  const windowItems = pool.slice(0, EXPANDED_LIMIT);
+  const windowCats = new Set(windowItems.map((i) => i.category));
+  const missing = QUOTA_DISPLAY_CATS.filter((c) => !windowCats.has(c));
+  if (missing.length === 0) return pool;
+  const used = new Set(windowItems.map((i) => i.id));
+  const picks: MalaysiaIntelligence[] = [];
+  for (const cat of missing) {
+    const pick = pool.find((i) => i.category === cat && !used.has(i.id));
+    if (pick) {
+      picks.push(pick);
+      used.add(pick.id);
+    }
+  }
+  if (picks.length === 0) return pool;
+  const keepCount = Math.max(EXPANDED_LIMIT - picks.length, DEFAULT_LIMIT);
+  const kept = windowItems.slice(0, keepCount);
+  const keptIds = new Set(kept.map((i) => i.id));
+  const rest = pool.filter((i) => !keptIds.has(i.id));
+  return [...kept, ...picks, ...rest];
+}
 
 // 分类筛选 Tab（与后端 category 字段对齐：行业赛道八分类）
 const CATEGORY_TABS = ["全部", "政策/贸易", "清真/食品", "美妆/消费", "农业/B2B", "3C数码", "渠道/电商", "金融/科技", "展会/活动"];
@@ -92,7 +185,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const loadData = async (silent = false): Promise<MalaysiaIntelligence[]> => {
     try {
       if (!silent) setLoading(true);
-      const data = await fetchMalaysiaIntelligence(EXPANDED_LIMIT);
+      const data = await fetchMalaysiaIntelligence(FETCH_POOL);
       setItems(data);
       return data;
     } catch (err: any) {
@@ -109,7 +202,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
     (async () => {
       try {
         setLoading(true);
-        const data = await fetchMalaysiaIntelligence(EXPANDED_LIMIT);
+        const data = await fetchMalaysiaIntelligence(FETCH_POOL);
         if (mounted) setItems(data);
       } catch (err) {
         console.warn("[InformationHub] 首次加载失败:", err);
@@ -253,16 +346,20 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const isHomeMode = typeof showLimit === "number" && showLimit > 0;
   const currentLimit = isHomeMode ? showLimit! : (showAll ? EXPANDED_LIMIT : DEFAULT_LIMIT);
 
-  // 分类筛选 + 原新闻发布时间倒序排序（真实时序优先，避免同批次抓取全部挤在一起）
+  // 原新闻发布时间倒序排序（真实时序优先，避免同批次抓取全部挤在一起）
   // importanceScore 仅在发布时间相同时作为二次排序依据
-  const filteredItems = items
-    .filter((item) => activeCategory === "全部" || item.category === activeCategory)
-    .sort((a, b) => {
-      const timeA = new Date(a.publishedAt || 0).getTime();
-      const timeB = new Date(b.publishedAt || 0).getTime();
-      if (timeB !== timeA) return timeB - timeA;
-      return (b.importanceScore || 3) - (a.importanceScore || 3);
-    });
+  const sortedItems = [...items].sort((a, b) => {
+    const timeA = new Date(a.publishedAt || 0).getTime();
+    const timeB = new Date(b.publishedAt || 0).getTime();
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.importanceScore || 3) - (a.importanceScore || 3);
+  });
+
+  // v6 保底配额展示：全部视图按保底类目补位重排（防单一分类霸屏）；分类视图维持纯时间序
+  const filteredItems =
+    activeCategory === "全部"
+      ? backfillQuota(sortedItems)
+      : sortedItems.filter((item) => item.category === activeCategory);
 
   const displayItems = filteredItems.slice(0, currentLimit);
   const hasMore = !isHomeMode && !showAll && filteredItems.length > DEFAULT_LIMIT;
@@ -275,7 +372,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
           东南亚实局
         </h2>
         <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-500">
-          聚合大马官方机构、财经大报与垂直行业情报，AI 按行业提炼中文摘要与商业启示
+          聚合大马官方机构、财经大报、垂直行业与本地社区舆情（双轨制），AI 按行业提炼中文摘要与商业启示
         </p>
 
         {/* ⚡ 实时感知按钮 */}
@@ -381,6 +478,17 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                           {item.category}
                         </span>
                       )}
+                      {(() => {
+                        // v6 双轨制：来源属性徽章（🏛️ 官方政策 / 📊 财经主流 / 💬 本地舆情）
+                        const track = getTrack(item.sourceName);
+                        if (!track) return null;
+                        const tb = TRACK_BADGE[track];
+                        return (
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${tb.className}`}>
+                            {tb.label}
+                          </span>
+                        );
+                      })()}
                       {(() => {
                         const badge = getImportanceBadge(item.importanceScore);
                         if (!badge) return null;
@@ -595,6 +703,17 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                     {selectedItem.category}
                   </span>
                 )}
+                {(() => {
+                  // v6 双轨制：详情弹窗同步展示来源属性徽章
+                  const track = getTrack(selectedItem.sourceName);
+                  if (!track) return null;
+                  const tb = TRACK_BADGE[track];
+                  return (
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tb.className}`}>
+                      {tb.label}
+                    </span>
+                  );
+                })()}
                 <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
                   <Clock className="h-3 w-3" />
                   {formatDate(selectedItem.publishedAt)}
