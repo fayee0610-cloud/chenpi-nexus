@@ -1279,7 +1279,17 @@ async function handleCron(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `⚡ 已加载 ${FALLBACK_INTELLIGENCE.length} 条大马商业情报`,
-      stats: { fetched: rawItems.length, afterDedup: deduped.length, aiSummarized: 0, inserted: fbInserted, fallback: true },
+      stats: {
+        fetched: rawItems.length,
+        afterDedup: deduped.length,
+        aiSummarized: 0,
+        aiRejected,
+        aiFailed,
+        communityFetched: rawItems.filter((i) => i.track === "community").length,
+        communityCandidates: aiCandidates.filter((i) => i.track === "community").length,
+        inserted: fbInserted,
+        fallback: true,
+      },
       data: fbData,
       duration: Date.now() - startedAt,
     });
