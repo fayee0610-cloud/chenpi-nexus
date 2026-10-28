@@ -55,6 +55,7 @@ const SOURCE_STYLES: Record<string, { border: string; bg: string; text: string }
   "Lowyat.NET": { border: "border-lime-500/30", bg: "bg-lime-500/10", text: "text-lime-400" },
   "Reddit r/malaysia": { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-300" },
   "Reddit MalaysianPF": { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-300" },
+  "Google News Reddit MY": { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-300" },
   "Google News Lowyat": { border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400" },
 };
 
@@ -94,6 +95,7 @@ const SOURCE_TRACK: Record<string, SourceTrack> = {
   // 本地舆情轨道
   "Reddit r/malaysia": "community",
   "Reddit MalaysianPF": "community",
+  "Google News Reddit MY": "community",
   "Google News Lowyat": "community",
 };
 

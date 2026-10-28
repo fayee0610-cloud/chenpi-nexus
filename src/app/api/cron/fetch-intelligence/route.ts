@@ -90,6 +90,9 @@ const RSS_FEEDS = [
   // ===== 次轨道 · 贴地舆情（≤30% 配额，AI 降噪后入库）=====
   { name: "Reddit r/malaysia", url: "https://www.reddit.com/r/malaysia/top/.rss?t=day", topic: "本地舆情", weight: 18, track: "community" },
   { name: "Reddit MalaysianPF", url: "https://www.reddit.com/r/MalaysianPF/top/.rss?t=day", topic: "本地舆情", weight: 18, track: "community" },
+  // Reddit 原生 RSS 在数据中心出口 IP（Vercel AWS / 本地代理）易被 403 反爬，
+  // 用 GN site: 适配器做同主题兜底（与 Lowyat 同一模式，GN 出口已验证稳定）
+  { name: "Google News Reddit MY", url: GN_MY("site:reddit.com/r/malaysia OR site:reddit.com/r/MalaysianPF", 3), topic: "论坛舆情", weight: 15, track: "community" },
   { name: "Google News Lowyat", url: GN_MY("site:forum.lowyat.net", 7), topic: "论坛舆情", weight: 15, track: "community" },
   // ===== 次轨道 · 3C 数码（降权限流：仅作配额桶内的补充信源）=====
   { name: "SoyaCincau", url: "https://soyacincau.com/feed/", topic: "3C数码", weight: 12, bucket: "3C数码", track: "business" },
@@ -818,7 +821,8 @@ type AiResult = {
   publishedAt?: string; // AI 提取的真实发布时间（ISO），空则由后端降级
 };
 
-async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
+// 返回值三态：AiResult（提炼成功）/ "rejected"（AI 判定不相关，降噪生效）/ null（调用失败）
+async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | "rejected" | null> {
   if (!AI_CONFIG.apiKey) return null;
 
   const { controller, cleanup } = createTimeoutController(18000); // 单条上限 18s，防挂起拖垮整体预算
@@ -864,7 +868,7 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | null> {
     // AI 相关性过滤：不相关新闻直接丢弃，不生成卡片
     if (parsed.relevant === false) {
       console.log(`[cron] AI 过滤丢弃（不相关）：${item.title}`);
-      return null;
+      return "rejected";
     }
 
     // 归一化 category：行业八分类，非法值兜底为「政策/贸易」
@@ -1201,6 +1205,8 @@ async function handleCron(req: NextRequest) {
   const AI_CONCURRENCY = 6;
   const AI_DEADLINE_MS = 36000; // AI 阶段截止线（自函数启动起算），预留 ~20s 给写入+滚动淘汰+自愈清理
   const summarized: Array<RawFeedItem & AiResult> = [];
+  let aiRejected = 0; // AI 判定不相关（含社区降噪剔除）
+  let aiFailed = 0; // AI 调用失败（超时/HTTP 错误/解析异常）
 
   for (let i = 0; i < aiCandidates.length; i += AI_CONCURRENCY) {
     // 截止护栏：超预算立即收尾，剩余候选交给下一轮（宁缺毋超时）
@@ -1211,9 +1217,16 @@ async function handleCron(req: NextRequest) {
     const batch = aiCandidates.slice(i, i + AI_CONCURRENCY);
     const results = await Promise.all(
       batch.map(async (item) => {
-        const ai = await summarizeWithAI(item);
-        if (!ai) return null;
-        return { ...item, ...ai };
+        const r = await summarizeWithAI(item);
+        if (r === "rejected") {
+          aiRejected++;
+          return null;
+        }
+        if (!r) {
+          aiFailed++;
+          return null;
+        }
+        return { ...item, ...r };
       })
     );
     for (const r of results) {
@@ -1221,7 +1234,7 @@ async function handleCron(req: NextRequest) {
     }
   }
 
-  console.log(`[cron] AI 摘要完成：${summarized.length}/${preFiltered.length} 条`);
+  console.log(`[cron] AI 摘要完成：${summarized.length}/${preFiltered.length} 条（降噪剔除 ${aiRejected}，调用失败 ${aiFailed}）`);
 
   // 3.5 批次内同事件合并：同一事件被多源报道时仅保留打分最高的 1 条
   const { deduped: titleDeduped, mergedCount } = dedupByTitleSimilarity(summarized);
@@ -1350,6 +1363,10 @@ async function handleCron(req: NextRequest) {
         sourceCounts,
         communityCount,
         missingQuotaCats,
+        communityFetched: rawItems.filter((i) => i.track === "community").length,
+        communityCandidates: aiCandidates.filter((i) => i.track === "community").length,
+        aiRejected,
+        aiFailed,
       },
       data: memItems,
       errors: errors.slice(0, 10),
