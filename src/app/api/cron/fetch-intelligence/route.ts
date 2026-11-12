@@ -54,6 +54,12 @@ type QuotaBucket = IndustryBucket | "本地舆情";
 // 类目保底清单：近 60 条中数量 <2 的保底类目，预 AI 各预留 2 个名额（兜底抓取）
 const QUOTA_CATS: IndustryBucket[] = ["政策/贸易", "清真/食品", "美妆/消费", "农业/B2B", "3C数码", "渠道/电商"];
 
+// 四维雷达标签（AI 输出 + DB category + 前端 Tab 三方对齐）
+// 注意：预 AI 配额选取仍走 IndustryBucket 伪分类（QUOTA_CATS），两者解耦——
+// 行业伪分类管"候选池配额"，雷达标签管"呈现视角"
+export const RADAR_TAGS = ["政策合规绿通", "社团与展会洞察", "标杆品牌出海追踪", "贴地消费与渠道营销"] as const;
+type RadarTag = (typeof RADAR_TAGS)[number];
+
 // 来源轨道（前端卡片属性标签：🏛️ 官方政策 / 📊 财经主流 / 💬 本地舆情）
 type SourceTrack = "official" | "business" | "community";
 export const TRACK_LABEL: Record<SourceTrack, string> = {
@@ -82,6 +88,9 @@ const RSS_FEEDS = [
   { name: "Google News Beauty", url: GN_MY("Malaysia cosmetics beauty skincare brand"), topic: "美妆护肤", weight: 30, bucket: "美妆/消费", track: "business" },
   { name: "Google News AgriB2B", url: GN_MY("Malaysia agriculture agritech export manufacturing"), topic: "农业/B2B", weight: 30, bucket: "农业/B2B", track: "business" },
   { name: "Google News Commerce", url: GN_MY("Malaysia Shopee TikTok Shop Lazada retail"), topic: "电商渠道", weight: 30, bucket: "渠道/电商", track: "business" },
+  // ===== 主轨道 · 展会与商会资源（GTM 社团与展会洞察供给）=====
+  { name: "Google News Events", url: GN_MY('Malaysia (MITEC OR "trade exhibition" OR expo OR "trade mission")'), topic: "展会对接", weight: 28, bucket: "展会/活动", track: "business" },
+  { name: "Google News PUCM", url: GN_MY('Malaysia (PUCM OR "chamber of commerce" OR "business council") China'), topic: "商会资源", weight: 25, bucket: "展会/活动", track: "business" },
   // ===== 主轨道 · 社媒趋势适配器（间接监听 TikTok/FB 社媒爆点舆情）=====
   { name: "Google News Social", url: GN_MY('Malaysia (TikTok Shop OR "viral product" OR bestseller)'), topic: "社媒趋势", weight: 25, track: "business" },
   // ===== 主轨道 · 零售与创投 =====
@@ -328,6 +337,13 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
 - 涉及中国企业/品牌在马来西亚的落地动作
 - 涉及东南亚区域（含大马）的商业趋势，可推断对大马市场的影响
 
+【高价值三问（GTM 降噪门槛，在相关性判定之上叠加）】
+即使内容"涉及大马商业"，若以下三条全为否，仍必须返回 {"relevant": false}：
+1. 可参考的实操动作？——读者能从中抄到选品/定价/渠道/营销的具体打法
+2. 可规避的合规风险？——涉及认证、牌照、关税、准入红线或真实踩坑案例
+3. 可利用的渠道资源？——涉及官方对接（MIDA/MATRADE/PUCM）、展会、商会、分销商网络
+强制不作为情报呈现（即使形式上"相关"）：纯本地财报流水账、无实质信息的公关通稿、与实操无关的宏观大饼（如"GDP 将增长 X%""贸易额创新高"类无动作指引的报道）
+
 【强制剔除规则】（命中任一即返回 {"relevant": false}）
 - 航天 / 航空 / 卫星发射 / 太空基建
 - 人才新政 / 博士引进 / 研究生奖学金 / 学术拨款
@@ -341,24 +357,24 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
 - 通用社会新闻（天气 / 交通 / 犯罪 / 选举 / 水灾 / 体育赛事 / 娱乐八卦）
 - 产品召回公告（除非涉及大马市场准入合规启示）
 
-【marketing_takeaway 硬约束】
-- 严格聚焦于「该动态对中国企业/品牌进入大马市场的直接商业启示或防坑提示」
-- 必须给出可落地建议（如：渠道选择、认证周期、品类机会、避坑点、可借鉴的营销手法、平台规则利用）
-- 禁止空话套话（如"建议持续关注""未来可期""值得关注"）
-- 必须包含至少 1 个具体动作或数字（如渠道名称、周期天数、成本区间、平台名）
-- 即使原文未直接提及中国，也要主动推断对中企出海大马的启示
+【marketing_takeaway 硬约束（咨询师视角，拒绝 toxic positivity）】
+- 必须直击痛点，明确回答：「这件事对出海企业的选品、合规周期、定价、渠道谈判或本地代理意味着什么？下一步该怎么做？」
+- 语气客观、犀利、克制：有风险说风险、有门槛说门槛，严禁盲目乐观（禁止"前景广阔""未来可期""值得期待"类假大空措辞）
+- 必须包含至少 1 个具体动作 + 1 个可核对数字（渠道名称、认证周期天数、成本区间、平台佣金比例、门槛金额）
+- 套路示范："若走本土代理模式，SIRIM 认证周期约 4-6 周、费用 RM 3-8 万；建议先用 MATRADE INSP 免费对接 3 家分销商验证报价，再决定是否设点，切勿直接签独家代理。"
 
 【行业绑定铁律（反模板）】
-- 必须基于文章真实的所属行业来分析商业启示，category 归入哪个行业，启示就必须围绕该行业的渠道、认证、供应链与合规抓手展开
-- 严禁对所有行业套用 3C 数码模板：非数码行业禁止输出"中国 3C 品牌可借鉴""消费电子品牌应……"类措辞
-- 各行业启示必须使用该行业的专属抓手，参考抓手库：
-  * 清真/食品 → JAKIM 认证周期与互认、清真包装与仓储、清真专用货架与商超渠道、中东/东盟清真出口
-  * 美妆/消费 → NPRA 告知、Watsons/Guardian 选品与进场、KOL 种草、Shopee/TikTok 美妆大促节点
-  * 农业/B2B → MATRADE INSP 采购商对接、SIRIM 标准认证、OEM/ODM 工厂落地、原料采购与供应链
-  * 政策/贸易 → MIDA 税务优惠与 Principal Hub、RCEP 原产地累积、关税窗口期、牌照与合规时限
-  * 渠道/电商 → 平台佣金与流量规则、本土仓与物流时效、线下进场费与 SKU 上架、大促节奏
-  * 3C数码 → SIRIM 认证、经销商与授权维修体系、本土电商首发、配件生态捆绑
-  * 金融/科技 → BNM 牌照门槛、支付合规、BNPL 监管、与银行/钱包的合作模式
+- category 归入哪个雷达标签，启示就必须围绕该标签的核心决策维度展开：
+  * 政策合规绿通 → 认证周期、费用区间、省钱账、合规时限
+  * 社团与展会洞察 → 对接路径、报名/入会方式、资源获取成本
+  * 标杆品牌出海追踪 → 选品/本地化/渠道动作拆解与可复制打法
+  * 贴地消费与渠道营销 → 节庆错峰、达人实测、分销分层、渠道玩法
+- 标杆品牌出海追踪内部，必须基于文章真实赛道使用专属抓手（严禁全赛道套同一模板）：
+  * 清真食品/FMCG → JAKIM 认证周期与互认、清真货架与商超渠道、中东/东盟出口
+  * 美妆护肤 → NPRA 告知、Watsons/Guardian 选品进场、KOL 种草、平台大促节点
+  * 农业/B2B → MATRADE INSP 采购商对接、SIRIM 标准、OEM/ODM 落地、供应链
+  * 消费电子/3C → SIRIM 认证、经销商与授权维修体系、电商首发、配件捆绑
+  * 金融/科技 → BNM 牌照门槛、支付合规、与银行/钱包合作模式
 - 示例（非 3C 行业正确示范）："出海食品品牌应以此为契机申请 JAKIM 清真认证（周期 45-90 天），借大马互认体系打通印尼与中东市场，并优先进驻 Lotus's 清真专区货架。"
 
 【本地舆情源降噪（来源标签为 💬 本地舆情 时生效）】
@@ -374,22 +390,18 @@ const AI_SYSTEM_PROMPT = `你是一位专精于【大马 GTM 策略 / B2B 品牌
   "relevant": true,
   "title_zh": "中文标题20字内",
   "summary_zh": "100字高密度中文摘要，直击核心事实与关键数据",
-  "category": "政策/贸易 | 渠道/电商 | 清真/食品 | 美妆/消费 | 农业/B2B | 3C数码 | 金融/科技 | 展会/活动（八选一）",
+  "category": "政策合规绿通 | 社团与展会洞察 | 标杆品牌出海追踪 | 贴地消费与渠道营销（四选一）",
   "marketing_takeaway": "该动态对中国企业/品牌进入大马市场的直接商业启示或防坑提示，必须可执行、有具体抓手，50-120字",
   "tags": ["2-4个标签，如 JAKIM清真 / FMCG / TikTok Shop / 达人营销 / 线下渠道"],
   "importance_score": 1到5的整数,
   "published_at": "ISO 8601 格式的新闻真实发布时间，如 2026-09-15T08:30:00Z"
 }
 
-【category 判定（行业赛道八分类，按文章真实所属行业归类）】
-- 政策/贸易：MIDA/MATRADE 投资与贸易政策、关税、认证准入、中马产业合作、政府激励
-- 渠道/电商：零售渠道（Watsons/Guardian/Lotus's/AEON）、分销商、电商平台（Shopee/TikTok Shop/Lazada）、物流仓储、门店拓展
-- 清真/食品：Halal 产业、JAKIM 认证、食品饮料品牌、餐饮、农产品食品加工
-- 美妆/消费：美妆护肤、个护日化、服饰家居、母婴玩具等消费品行业动态
-- 农业/B2B：农业科技、种植养殖、制造业、工业品、大宗供应链、OEM/ODM
-- 3C数码：手机/穿戴/电脑/配件/智能家居等消费电子行业动态
-- 金融/科技：支付、数字银行、金融科技、SaaS、数字经济、创投融资
-- 展会/活动：展会、博览会、Pop-up 快闪、行业对接会、商会活动
+【category 判定（四维雷达标签，按情报的核心价值归类）】
+- 政策合规绿通：MIDA 投资优惠、JAKIM 清真认证、SIRIM/MC 标准、NPRA、关税与 RCEP、牌照与合规红线——核心价值是"算清省钱与认证周期账"
+- 社团与展会洞察：PUCM 等商会活动、MATRADE 官方对接与 INSP、MITEC 及行业展会、贸易代表团、地头蛇资源网络——核心价值是"对接路径与资源获取"
+- 标杆品牌出海追踪：农业科技、清真食品/FMCG、消费电子/3C、美妆护肤等赛道中，各类中企与跨国标杆品牌的选品、本地化、渠道与营销动作——核心价值是"拆解可复制的打法"
+- 贴地消费与渠道营销：三大种族节庆错峰营销、本地消费观演变、分销商分层、TikTok/Shopee 达人联盟实测、线下渠道玩法——核心价值是"可直接抄作业的解法"
 
 【importance_score 判定（1-5 整数）】
 - 5 分：头部品牌出海战役 / 重大政策落地 / 首个案例（极稀缺，每日≤1 条）
@@ -443,7 +455,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "大马清真产业 2030 总规划：JAKIM 认证国际化互认加速",
     summaryZh: "马来西亚发布清真产业 2030 总规划，目标清真出口突破 1500 亿令吉。JAKIM 已与沙特、阿联酋、印尼等 12 国签署清真认证互认协议，大马成为全球清真市场准入枢纽。",
     keyTakeaway: "建议出海消费品牌提前布局 JAKIM 清真认证（周期 45-90 天），借力大马互认体系一键打通东盟与中东 57 亿清真消费市场。",
-    category: "政策/贸易",
+    category: "政策合规绿通",
     tags: ["JAKIM清真", "Halal认证", "中马合作"],
     importanceScore: 5,
   },
@@ -457,7 +469,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "MIDA Principal Hub 绿色通道：中国品牌落地大马 45 天审批",
     summaryZh: "MIDA 将 Principal Hub 外资审批从 6 个月压缩至 45 天，符合资质的出海企业可享 10 年免税期。政策重点吸引 B2B 消费品牌、数字服务和 SaaS 企业落地大马作为东盟总部。",
     keyTakeaway: "年营收 >RM 500 万的 B2B 出海品牌建议申请 Principal Hub 资质，享受 10 年免税 + 100% 外资持股，审批窗口已大幅缩短。",
-    category: "政策/贸易",
+    category: "政策合规绿通",
     tags: ["MIDA政策", "Principal Hub", "B2B出海"],
     importanceScore: 4,
   },
@@ -471,7 +483,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "TikTok Shop 大马 GMV 暴涨 280%：跨境中国品牌主导 FMCG",
     summaryZh: "TikTok Shop 大马 GMV 同比增长 280%，中国跨境美妆、零食品牌占据 45% 市场份额。直播带货 + 本土仓发货模式成为 FMCG 品牌快速验证大马市场的核心渠道。",
     keyTakeaway: "建议美妆/零食出海品牌优先布局 TikTok Shop 大马本土店 + MFP 计划（马来西亚跨境合作伙伴），3 个月可验证市场需求，初期试错成本 <RM 5 万。",
-    category: "美妆/消费",
+    category: "标杆品牌出海追踪",
     tags: ["TikTok Shop", "FMCG", "达人营销", "跨境电商"],
     importanceScore: 4,
   },
@@ -485,7 +497,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "中马贸易破 2000 亿美元：制造业与跨境电商双轮驱动",
     summaryZh: "中马双边贸易额 2025 年突破 2000 亿美元，制造业零部件和跨境电商成为核心增长引擎。RCEP 关税削减政策红利释放，中国品牌进入大马的关税成本平均下降 15-20%。",
     keyTakeaway: "出海制造与消费品牌可借力 RCEP 原产地累积规则，在大马设区域分拨中心，享受关税减免 + 东盟 6 亿市场一体化流通红利。",
-    category: "政策/贸易",
+    category: "政策合规绿通",
     tags: ["中马贸易", "RCEP", "跨境电商", "供应链"],
     importanceScore: 3,
   },
@@ -499,7 +511,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "Shopee 大马启动中国跨境孵化计划：新品牌前 6 月零佣金",
     summaryZh: "Shopee 大马推出中国跨境品牌孵化计划，新入驻中国 FMCG 品牌享前 6 个月零佣金 + 专属流量扶持 + 本土运营顾问。目标 2026 年引入 500 个优质中国品牌。",
     keyTakeaway: "建议新锐消费品牌（美妆/家居/3C 配件）优先申请 Shopee 跨境孵化计划，6 个月零成本验证大马市场 PMF，再决定是否长期投入本土化运营。",
-    category: "渠道/电商",
+    category: "贴地消费与渠道营销",
     tags: ["Shopee", "跨境电商", "FMCG", "孵化计划"],
     importanceScore: 4,
   },
@@ -513,7 +525,7 @@ const FALLBACK_INTELLIGENCE: Array<RawFeedItem & AiResult> = [
     titleZh: "MATRADE 2026 出口促进：15 场贸易展会锁定中国品牌",
     summaryZh: "马来西亚贸易发展局（MATRADE）公布 2026 年 15 场对外贸易展会，中国为核心目标市场。大马本土分销商正主动寻找中国 FMCG、美妆和清真食品品牌开展独家代理合作。",
     keyTakeaway: "出海品牌可关注 MATRADE 官网贸易展会日程，通过 INternational Sourcing Programme (INSP) 对接大马本土分销商，省去 BD 成本，30 天内可签下区域独家代理协议。",
-    category: "展会/活动",
+    category: "社团与展会洞察",
     tags: ["MATRADE", "贸易展会", "渠道对接", "B2B出海"],
     importanceScore: 3,
   },
@@ -871,10 +883,10 @@ async function summarizeWithAI(item: RawFeedItem): Promise<AiResult | "rejected"
       return "rejected";
     }
 
-    // 归一化 category：行业八分类，非法值兜底为「政策/贸易」
+    // 归一化 category：四维雷达标签，非法值兜底为「政策合规绿通」
     const rawCat = String(parsed.category || "").trim();
-    const validCats: string[] = [...INDUSTRY_BUCKETS];
-    const category = validCats.includes(rawCat) ? rawCat : "政策/贸易";
+    const validCats: string[] = [...RADAR_TAGS];
+    const category = validCats.includes(rawCat) ? rawCat : "政策合规绿通";
     // 归一化 tags：必须是字符串数组
     let tags: string[] = [];
     if (Array.isArray(parsed.tags)) {
@@ -947,10 +959,15 @@ async function writeIntelligence(
       source_url: item.link,
       summary_zh: item.summaryZh,
       key_takeaway: item.keyTakeaway,
-      category: item.category || "政策/贸易",
+      category: item.category || "政策合规绿通",
       tags: Array.isArray(item.tags) ? item.tags : [],
-      // 优先 AI 提取的真实发布时间，降级用 RSS pubDate / 当前时间，避免旧闻标为最新
-      published_at: item.publishedAt || (item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()),
+      // 优先 AI 提取的真实发布时间，降级用 RSS pubDate / 当前时间；
+      // 未来时间戳一律钳制为当前时间（防脏数据置顶锁死排序）
+      published_at: (() => {
+        const raw = item.publishedAt || item.pubDate || "";
+        const t = raw ? new Date(raw).getTime() : NaN;
+        return !isNaN(t) && t <= Date.now() ? new Date(t).toISOString() : new Date().toISOString();
+      })(),
       importance_score: item.importanceScore || 3,
       is_published: true,
       is_featured: false,
@@ -1326,14 +1343,14 @@ async function handleCron(req: NextRequest) {
   const communityCount = finalItems.filter((it) => it.track === "community").length;
   const finalCatCounts = new Map<string, number>();
   for (const it of finalItems) finalCatCounts.set(it.category, (finalCatCounts.get(it.category) || 0) + 1);
-  const missingQuotaCats = QUOTA_CATS.filter((c) => (finalCatCounts.get(c) || 0) === 0);
+  const missingQuotaCats = RADAR_TAGS.filter((c) => (finalCatCounts.get(c) || 0) === 0);
 
   const duration = Date.now() - startedAt;
   console.log(
     `[cron] 完成！RSS ${rawItems.length} → URL去重 ${deduped.length} → 预AI拦截 ${preBlocked} → AI摘要 ${summarized.length} → 批次内合并 ${titleDeduped.length} → 写入前校验 ${dbDeduped.length}（拦截 ${dbDupRemoved}）→ 类目配平淘汰 ${quotaDropped.length} → 写入 ${inserted} → 自愈清理删除 ${cleanResult.deleted}，耗时 ${duration}ms`
   );
   console.log(
-    `[cron] 双轨观测：社区舆情 ${communityCount} 条（配额 ≤30%）；本轮保底类目缺 [${missingQuotaCats.join("、") || "无"}]；来源分布 ${JSON.stringify(sourceCounts)}`
+    `[cron] 双轨观测：社区舆情 ${communityCount} 条（配额 ≤30%）；本轮雷达标签缺 [${missingQuotaCats.join("、") || "无"}]；来源分布 ${JSON.stringify(sourceCounts)}`
   );
 
   // 构建内存数据（无论 DB 写入是否成功，都返回给前端渲染）

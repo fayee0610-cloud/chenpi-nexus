@@ -208,9 +208,77 @@ export interface MalaysiaIntelligence {
   createdAt: string;     // 入库时间
   isPublished: boolean;
   isFeatured?: boolean;
-  category?: string;     // 行业赛道八分类：政策/贸易 | 渠道/电商 | 清真/食品 | 美妆/消费 | 农业/B2B | 3C数码 | 金融/科技 | 展会/活动
+  category?: string;     // 四维雷达标签：政策合规绿通 | 社团与展会洞察 | 标杆品牌出海追踪 | 贴地消费与渠道营销（旧八分类值在 dataApi 读层归一化）
   tags?: string[];       // 结构化标签（如 JAKIM清真 / FMCG / 达人营销）
   importanceScore?: number; // AI 评估情报价值 1-5
+}
+
+// ===== 置顶专栏位：大马商业文化与底层常识周专题（主编手记） =====
+// 按 ISO 周数轮换展示，每周自动切换一期；内容为在地文化干货（非时事新闻）
+export interface GtmWeeklySpecial {
+  week: string;        // 期号标识（如 "W01"）
+  title: string;       // 专题标题
+  tag: string;         // 栏目标签
+  summary: string;     // 一句话导读
+  points: string[];    // 干货要点（3-4 条）
+}
+
+export const GTM_WEEKLY_SPECIALS: GtmWeeklySpecial[] = [
+  {
+    week: "W01",
+    title: "三大民族节日营销红线：什么时候能催单，什么时候必须闭嘴",
+    tag: "主编手记 · 在地常识",
+    summary: "开斋节、农历新年、屠妖节的消费节奏完全不同，押错节点的促销不仅无效，还可能触犯文化禁忌。",
+    points: [
+      "开斋节前 2 周是马来家庭消费峰值（服饰/食品/家居翻新），节日期间催单反遭反感，Raya 后 1 个月才是回调期",
+      "农历新年对华裔 ≠ 全民节日：马来/印度顾客对 CNY 大促无感，别把全国预算押在一个节日上",
+      "屠妖节营销必须避开印度裔社群内的宗教符号误用，用颜色与团圆叙事更安全",
+      "公共假期错峰：大马 11 个州假期不同步，全国统一大促节奏是伪命题，分州排期才有转化",
+    ],
+  },
+  {
+    week: "W02",
+    title: "华商圈供应链潜规则：口头信用、账期文化与「拿货价」的真相",
+    tag: "主编手记 · 在地常识",
+    summary: "大马华商批发圈靠关系信用运转，不懂账期规则的中国品牌要么被压款，要么被排除在圈子外。",
+    points: [
+      "批发圈默认 30-60 天账期，首次合作强收现金会被视为不信任信号，可用「前 3 单现结、之后转月结」过渡",
+      "「拿货价」分三档：散户价 / 熟客价 / 档口合作价，价差可达 15-25%，进入档口圈靠引荐而非陌拜",
+      "吉隆坡何清园（Kenanga）与槟城是两大服装/杂货批发枢纽，卖点需区别对待",
+      "华商圈信「面子账」：公开场合压价等于撕破脸，还价要走私下茶叙流程",
+    ],
+  },
+  {
+    week: "W03",
+    title: "Halal 不是贴纸：清真认证背后的仓储、物流与员工隐藏要求",
+    tag: "主编手记 · 在地常识",
+    summary: "很多中企拿到 JAKIM 证书才发现货架进不去——清真是体系认证，不只是产品认证。",
+    points: [
+      "JAKIM 要求生产环节无猪肉/酒精交叉污染，代工厂需持独立清真资质，租用普通产线可能白花钱",
+      "仓储与物流：清真商品与含猪源成分商品同仓混放会被商超拒收，3PL 必须明确分仓能力",
+      "员工要求：关键岗位（品控/仓储）对穆斯林员工比例与培训记录有实际要求",
+      "认证有效期 2 年 + 年审，续证周期要提前 3 个月启动，断证期间货架立刻下架",
+    ],
+  },
+  {
+    week: "W04",
+    title: "分销商分层指南：从 Mamak 杂货铺到连锁药妆，各层赚多少钱",
+    tag: "主编手记 · 在地常识",
+    summary: "大马分销体系层级比中国更复杂，搞错层级定价，毛利会被中间层吃掉 30% 以上。",
+    points: [
+      "层级结构：进口商 → 大盘商（Silent Wholesaler）→ 区域批发 → 零售，每层毛利 8-15%",
+      "连锁药妆（Watsons/Guardian）走直供模式但收上架费与促销费，综合扣点 30-40%",
+      "Mamak 杂货铺与独立药店覆盖偏远州属，需经区域批发商，直营反而触达不了",
+      "东马（沙巴/砂拉越）物流成本高 20-35%，多数品牌交由独立代理，定价需单独核算",
+    ],
+  },
+];
+
+// 按 ISO 周数从专题池中取本期置顶专栏（循环轮换）
+export function getCurrentWeeklySpecial(now = new Date()): GtmWeeklySpecial {
+  const start = new Date(now.getFullYear(), 0, 1);
+  const weekIndex = Math.floor((now.getTime() - start.getTime()) / (7 * 24 * 3600 * 1000));
+  return GTM_WEEKLY_SPECIALS[weekIndex % GTM_WEEKLY_SPECIALS.length];
 }
 
 // ========== 1. 个人简介与 Hero 区 ==========

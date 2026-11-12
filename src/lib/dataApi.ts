@@ -991,11 +991,24 @@ function safeParseTags(raw: string): string[] {
   return raw.split(",").map((s: string) => s.trim()).filter(Boolean);
 }
 
-// 旧分类体系（四分类）向后映射到行业八分类；旧数据随滚动淘汰自然消失
+// 四维雷达标签（与 route.ts RADAR_TAGS、前端 CATEGORY_TABS 三方对齐）
+const RADAR_TAGS = ["政策合规绿通", "社团与展会洞察", "标杆品牌出海追踪", "贴地消费与渠道营销"];
+
+// 旧分类体系 → 四维雷达标签归一化（旧八分类/旧四分类数据随滚动淘汰自然消失）
 function normalizeLegacyIntelCategory(cat: string): string {
-  if (cat === "渠道/分销") return "渠道/电商";
-  if (cat === "消费趋势") return "美妆/消费";
-  return cat;
+  const raw = (cat || "").trim();
+  if (RADAR_TAGS.includes(raw)) return raw;
+  // 行业八分类（v5/v6）→ 雷达标签
+  if (raw === "政策/贸易") return "政策合规绿通";
+  if (raw === "展会/活动") return "社团与展会洞察";
+  if (raw === "渠道/电商") return "贴地消费与渠道营销";
+  // 清真/食品、美妆/消费、农业/B2B、3C数码、金融/科技 → 品牌追踪
+  if (["清真/食品", "美妆/消费", "农业/B2B", "3C数码", "金融/科技"].includes(raw)) return "标杆品牌出海追踪";
+  // 旧四分类
+  if (raw === "渠道/分销") return "贴地消费与渠道营销";
+  if (raw === "消费趋势") return "标杆品牌出海追踪";
+  if (raw === "宏观政策") return "政策合规绿通";
+  return "政策合规绿通";
 }
 
 export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaIntelligence[]> {
@@ -1003,10 +1016,12 @@ export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaInt
   try {
     // 按 published_at DESC 排序（新闻原始发布时间倒序），确保真实时序最新的情报排在最前
     // 同批抓取的多条新闻各自保留不同的原发布时间，自然拉开时序避免挤压
+    // 防呆：lte 过滤未来时间戳脏数据，防止异常日期永久置顶锁死排序
     const { data, error } = await supabase
       .from("malaysia_intelligence")
       .select("*")
       .eq("is_published", true)
+      .lte("published_at", new Date().toISOString())
       .order("published_at", { ascending: false })
       .limit(limit);
 
@@ -1029,7 +1044,7 @@ export async function fetchMalaysiaIntelligence(limit = 12): Promise<MalaysiaInt
       createdAt: row.created_at || "",
       isPublished: row.is_published !== false,
       isFeatured: row.is_featured ?? false,
-      category: normalizeLegacyIntelCategory(row.category) || "政策/贸易",
+      category: normalizeLegacyIntelCategory(row.category) || "政策合规绿通",
       tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === "string" ? safeParseTags(row.tags) : []),
       importanceScore: typeof row.importance_score === "number" ? row.importance_score : 3,
     })) as MalaysiaIntelligence[];

@@ -20,7 +20,7 @@ import {
   Tag,
 } from "lucide-react";
 import { fetchMalaysiaIntelligence } from "@/lib/dataApi";
-import { type MalaysiaIntelligence } from "@/data/siteData";
+import { type MalaysiaIntelligence, getCurrentWeeklySpecial } from "@/data/siteData";
 import LoadMoreButton from "@/components/LoadMoreButton";
 
 // 来源媒体对应的主题色
@@ -118,8 +118,8 @@ const DEFAULT_LIMIT = 6;
 const EXPANDED_LIMIT = 18;
 const FETCH_POOL = 60;
 
-// v6 保底类目清单：与后端 QUOTA_CATS 对齐（核心出海板块前台至少可见 1 条）
-const QUOTA_DISPLAY_CATS = ["政策/贸易", "清真/食品", "美妆/消费", "农业/B2B", "3C数码", "渠道/电商"];
+// v7 四维雷达标签清单：与后端 RADAR_TAGS / dataApi 归一化对齐（旧分类数据读层已归一化）
+const QUOTA_DISPLAY_CATS = ["政策合规绿通", "社团与展会洞察", "标杆品牌出海追踪", "贴地消费与渠道营销"];
 
 // v6 保底配额展示补位：全部视图的默认窗口（18 条）若缺失某保底类目，
 // 将该类目最新 1 条提升入窗口（等量置换窗口尾部最旧条目，不丢弃数据，仅顺延）
@@ -146,8 +146,24 @@ function backfillQuota(pool: MalaysiaIntelligence[]): MalaysiaIntelligence[] {
   return [...kept, ...picks, ...rest];
 }
 
-// 分类筛选 Tab（与后端 category 字段对齐：行业赛道八分类）
-const CATEGORY_TABS = ["全部", "政策/贸易", "清真/食品", "美妆/消费", "农业/B2B", "3C数码", "渠道/电商", "金融/科技", "展会/活动"];
+// 分类筛选 Tab（GTM 四维雷达：与后端 RADAR_TAGS / dataApi 归一化三方对齐）
+const CATEGORY_TABS = ["全部", "政策合规绿通", "社团与展会洞察", "标杆品牌出海追踪", "贴地消费与渠道营销"];
+
+// 四维雷达标签图标
+const RADAR_ICONS: Record<string, string> = {
+  "政策合规绿通": "🛡️",
+  "社团与展会洞察": "🤝",
+  "标杆品牌出海追踪": "🏆",
+  "贴地消费与渠道营销": "🛒",
+};
+
+// 四维雷达标签徽章配色（卡片分类 tag 与详情弹窗共用）
+const RADAR_BADGE: Record<string, string> = {
+  "政策合规绿通": "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  "社团与展会洞察": "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
+  "标杆品牌出海追踪": "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  "贴地消费与渠道营销": "border-pink-500/30 bg-pink-500/10 text-pink-300",
+};
 
 // AI 情报价值打分标签（1-5 分）
 function getImportanceBadge(score?: number): { label: string; className: string } | null {
@@ -183,6 +199,8 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
   const [selectedItem, setSelectedItem] = useState<MalaysiaIntelligence | null>(null); // 详情弹窗
   const [activeCategory, setActiveCategory] = useState<string>("全部"); // 分类筛选
   const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set()); // 刚抓取的新情报高亮
+  const [specialOpen, setSpecialOpen] = useState(false); // 置顶专栏展开状态
+  const weeklySpecial = getCurrentWeeklySpecial(); // 本周置顶专栏（按周轮换）
 
   const loadData = async (silent = false): Promise<MalaysiaIntelligence[]> => {
     try {
@@ -427,6 +445,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                     : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                 }`}
               >
+                {cat !== "全部" && RADAR_ICONS[cat] && <span>{RADAR_ICONS[cat]}</span>}
                 {cat}
                 <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${
                   activeCategory === cat ? "bg-purple-500/30 text-purple-100" : "bg-zinc-800 text-zinc-500"
@@ -436,6 +455,36 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* 置顶专栏位：大马商业文化周专题（按周轮换，主编手记） */}
+      {!isHomeMode && items.length > 0 && (
+        <div className="mb-8 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.07] via-zinc-900/40 to-zinc-900/40 p-5">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+              📌 置顶专栏 · {weeklySpecial.week}
+            </span>
+            <span className="text-[10px] text-zinc-500">{weeklySpecial.tag}</span>
+          </div>
+          <h3 className="mb-1.5 text-base font-bold leading-snug text-zinc-100">{weeklySpecial.title}</h3>
+          <p className="mb-3 text-xs leading-relaxed text-zinc-400">{weeklySpecial.summary}</p>
+          {specialOpen && (
+            <ul className="mb-3 space-y-1.5">
+              {weeklySpecial.points.map((p, i) => (
+                <li key={i} className="flex gap-2 text-xs leading-relaxed text-zinc-300">
+                  <span className="shrink-0 text-emerald-400">▸</span>
+                  {p}
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            onClick={() => setSpecialOpen(!specialOpen)}
+            className="text-[11px] font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+          >
+            {specialOpen ? "收起 ▲" : "展开本周干货 ▼"}
+          </button>
         </div>
       )}
 
@@ -475,7 +524,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                         {item.sourceName}
                       </span>
                       {item.category && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${RADAR_BADGE[item.category] || "border-purple-500/30 bg-purple-500/10 text-purple-300"}`}>
                           <Tag className="h-2.5 w-2.5" />
                           {item.category}
                         </span>
@@ -700,7 +749,7 @@ export default function InformationHub({ showLimit }: { showLimit?: number }) {
                   );
                 })()}
                 {selectedItem.category && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-medium text-purple-300">
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${RADAR_BADGE[selectedItem.category] || "border-purple-500/30 bg-purple-500/10 text-purple-300"}`}>
                     <Tag className="h-3 w-3" />
                     {selectedItem.category}
                   </span>
